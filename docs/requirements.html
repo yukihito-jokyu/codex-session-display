@@ -1,0 +1,1810 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>要件定義書 — codex-session-display</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+
+  :root {
+    --primary: #cc785c;
+    --primary-active: #a9583e;
+    --primary-disabled: #e6dfd8;
+    --ink: #141413;
+    --body: #3d3d3a;
+    --body-strong: #252523;
+    --muted: #6c6a64;
+    --muted-soft: #8e8b82;
+    --hairline: #e6dfd8;
+    --hairline-soft: #ebe6df;
+    --canvas: #faf9f5;
+    --surface-soft: #f5f0e8;
+    --surface-card: #efe9de;
+    --surface-cream-strong: #e8e0d2;
+    --surface-dark: #181715;
+    --surface-dark-elevated: #252320;
+    --surface-dark-soft: #1f1e1b;
+    --on-primary: #ffffff;
+    --on-dark: #faf9f5;
+    --on-dark-soft: #a09d96;
+    --accent-teal: #5db8a6;
+    --accent-amber: #e8a55a;
+    --success: #5db872;
+    --warning: #d4a017;
+    --error: #c64545;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--canvas);
+    color: var(--body);
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 16px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Typography ── */
+  .display-xl { font-family: 'Cormorant Garamond', serif; font-size: 64px; font-weight: 500; line-height: 1.05; letter-spacing: -0.02em; color: var(--ink); }
+  .display-lg { font-family: 'Cormorant Garamond', serif; font-size: 48px; font-weight: 500; line-height: 1.1; letter-spacing: -0.02em; color: var(--ink); }
+  .display-md { font-family: 'Cormorant Garamond', serif; font-size: 36px; font-weight: 500; line-height: 1.15; letter-spacing: -0.01em; color: var(--ink); }
+  .display-sm { font-family: 'Cormorant Garamond', serif; font-size: 28px; font-weight: 500; line-height: 1.2; letter-spacing: -0.005em; color: var(--ink); }
+  .title-lg { font-family: 'Inter', sans-serif; font-size: 22px; font-weight: 500; line-height: 1.3; color: var(--ink); }
+  .title-md { font-family: 'Inter', sans-serif; font-size: 18px; font-weight: 500; line-height: 1.4; color: var(--ink); }
+  .title-sm { font-family: 'Inter', sans-serif; font-size: 16px; font-weight: 500; line-height: 1.4; color: var(--ink); }
+  .body-md { font-family: 'Inter', sans-serif; font-size: 16px; font-weight: 400; line-height: 1.55; }
+  .body-sm { font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 400; line-height: 1.55; }
+  .caption { font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 500; line-height: 1.4; }
+  .caption-uppercase { font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 500; line-height: 1.4; letter-spacing: 1.5px; text-transform: uppercase; }
+  .code { font-family: 'JetBrains Mono', ui-monospace, monospace; font-size: 14px; font-weight: 400; line-height: 1.6; }
+
+  /* ── Layout ── */
+  .page-container { max-width: 1200px; margin: 0 auto; padding: 0 32px; }
+
+  /* ── Top Nav ── */
+  .top-nav {
+    position: sticky; top: 0; z-index: 100;
+    background: var(--canvas);
+    border-bottom: 1px solid var(--hairline);
+    height: 64px;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 32px;
+  }
+  .top-nav-brand {
+    display: flex; align-items: center; gap: 10px;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 22px; font-weight: 600; color: var(--ink);
+  }
+  .top-nav-brand .spike { color: var(--primary); font-size: 20px; }
+  .top-nav-links { display: flex; gap: 24px; }
+  .top-nav-links a {
+    font-size: 14px; font-weight: 500; color: var(--muted);
+    text-decoration: none; transition: color 0.15s;
+  }
+  .top-nav-links a:hover { color: var(--ink); }
+  .top-nav-links a.active { color: var(--ink); }
+
+  /* ── Hero ── */
+  .hero {
+    padding: 96px 0;
+    text-align: center;
+  }
+  .hero .badge-coral {
+    display: inline-block;
+    background: var(--primary); color: var(--on-primary);
+    font-size: 12px; font-weight: 500; letter-spacing: 1.5px; text-transform: uppercase;
+    padding: 4px 12px; border-radius: 9999px; margin-bottom: 24px;
+  }
+  .hero h1 { margin-bottom: 20px; }
+  .hero .subtitle {
+    font-size: 18px; color: var(--muted); max-width: 640px; margin: 0 auto 32px;
+    line-height: 1.6;
+  }
+  .hero .meta-row {
+    display: flex; justify-content: center; gap: 32px; flex-wrap: wrap;
+  }
+  .hero .meta-item { font-size: 14px; color: var(--muted); }
+  .hero .meta-item strong { color: var(--body-strong); }
+
+  /* ── Section ── */
+  .section { padding: 80px 0; }
+  .section + .section { border-top: 1px solid var(--hairline); }
+  .section-header { margin-bottom: 48px; }
+  .section-header .section-num {
+    font-family: 'Inter', sans-serif; font-size: 13px; font-weight: 500;
+    color: var(--primary); letter-spacing: 1.5px; text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  .section-header h2 { margin-bottom: 12px; }
+  .section-header p { color: var(--muted); max-width: 680px; }
+
+  /* ── Table ── */
+  .req-table {
+    width: 100%; border-collapse: collapse; margin: 24px 0;
+    font-size: 14px;
+  }
+  .req-table th {
+    text-align: left; padding: 12px 16px;
+    background: var(--surface-soft); color: var(--ink);
+    font-weight: 500; font-size: 13px; letter-spacing: 0.3px;
+    border-bottom: 2px solid var(--hairline);
+  }
+  .req-table td {
+    padding: 12px 16px; border-bottom: 1px solid var(--hairline-soft);
+    vertical-align: top;
+  }
+  .req-table tr:hover td { background: var(--surface-soft); }
+  .req-table code {
+    font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    background: var(--surface-card); padding: 2px 6px; border-radius: 4px;
+    color: var(--primary-active);
+  }
+
+  /* ── Card ── */
+  .card {
+    background: var(--surface-card); border-radius: 12px; padding: 32px;
+  }
+  .card-dark {
+    background: var(--surface-dark); color: var(--on-dark); border-radius: 12px; padding: 32px;
+  }
+  .card + .card { margin-top: 16px; }
+
+  .card-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin: 32px 0; }
+  .card-grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 24px; margin: 32px 0; }
+
+  .info-card {
+    background: var(--surface-card); border-radius: 12px; padding: 24px;
+  }
+  .info-card .label {
+    font-size: 12px; font-weight: 500; letter-spacing: 1.5px; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 8px;
+  }
+  .info-card .value { font-size: 18px; font-weight: 500; color: var(--ink); }
+  .info-card .value.mono { font-family: 'JetBrains Mono', monospace; font-size: 15px; }
+
+  /* ── Code Block ── */
+  .code-block {
+    background: var(--surface-dark); border-radius: 12px; padding: 24px;
+    overflow-x: auto;
+  }
+  .code-block pre {
+    font-family: 'JetBrains Mono', monospace; font-size: 13px;
+    line-height: 1.7; color: var(--on-dark);
+  }
+  .code-block .line-num { color: var(--muted-soft); user-select: none; margin-right: 16px; }
+  .code-block .kw { color: var(--accent-teal); }
+  .code-block .str { color: var(--accent-amber); }
+  .code-block .comment { color: var(--muted-soft); font-style: italic; }
+  .code-block .tag { color: var(--primary); }
+
+  /* ── Badge ── */
+  .badge-pill {
+    display: inline-block; background: var(--surface-card); color: var(--ink);
+    font-size: 13px; font-weight: 500; padding: 4px 12px; border-radius: 9999px;
+  }
+  .badge-teal { background: #e8f5f0; color: #3a8a76; }
+  .badge-amber { background: #fdf3e4; color: #a06e1e; }
+
+  /* ── Flow Diagram ── */
+  .flow-diagram {
+    background: var(--surface-dark); border-radius: 12px; padding: 40px;
+    overflow-x: auto; position: relative;
+  }
+  .flow-node {
+    display: inline-block; padding: 10px 20px; border-radius: 8px;
+    font-size: 13px; font-weight: 500; white-space: nowrap;
+    text-align: center; position: relative;
+  }
+  .flow-node.harness {
+    background: var(--surface-dark-elevated); color: var(--on-dark);
+    border: 1px solid rgba(255,255,255,0.12);
+  }
+  .flow-node.branch {
+    background: rgba(93,184,166,0.15); color: var(--accent-teal);
+    border: 1px solid rgba(93,184,166,0.3);
+  }
+  .flow-node.event {
+    background: rgba(232,165,90,0.15); color: var(--accent-amber);
+    border: 1px solid rgba(232,165,90,0.3);
+  }
+  .flow-node.meta-node {
+    background: rgba(204,120,92,0.15); color: var(--primary);
+    border: 1px solid rgba(204,120,92,0.3);
+  }
+
+  .flow-vertical {
+    display: flex; flex-direction: column; align-items: center; gap: 0;
+  }
+  .flow-row { display: flex; align-items: center; gap: 16px; margin: 6px 0; }
+  .flow-arrow { color: var(--muted-soft); font-size: 20px; text-align: center; }
+  .flow-branch-arrow { color: var(--accent-teal); font-size: 16px; }
+
+  /* ── Mockup Frame ── */
+  .mockup-frame {
+    border-radius: 12px; overflow: hidden; border: 1px solid var(--hairline);
+    background: var(--canvas);
+  }
+  .mockup-titlebar {
+    background: var(--surface-soft); padding: 10px 16px;
+    display: flex; align-items: center; gap: 8px;
+    border-bottom: 1px solid var(--hairline);
+  }
+  .mockup-dot { width: 10px; height: 10px; border-radius: 50%; }
+  .mockup-dot.red { background: #e5534b; }
+  .mockup-dot.yellow { background: #d4a017; }
+  .mockup-dot.green { background: #5db872; }
+  .mockup-titlebar-text { font-size: 13px; color: var(--muted); margin-left: 8px; }
+
+  /* ── Session List Mockup ── */
+  .session-list-mock { padding: 24px; }
+  .session-list-header {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--hairline);
+  }
+  .session-row {
+    display: grid; grid-template-columns: 2fr 1.5fr 0.8fr 1fr 1fr 1.2fr 1fr;
+    gap: 12px; padding: 14px 16px; border-radius: 8px;
+    font-size: 13px; align-items: center; cursor: pointer;
+    transition: background 0.15s;
+  }
+  .session-row:hover { background: var(--surface-soft); }
+  .session-row.selected { background: var(--surface-card); outline: 2px solid var(--primary); }
+  .session-row-header {
+    font-weight: 500; color: var(--muted); font-size: 12px;
+    letter-spacing: 0.5px; text-transform: uppercase;
+    border-bottom: 2px solid var(--hairline); padding-bottom: 10px;
+    cursor: default;
+  }
+  .session-row-header:hover { background: transparent; }
+  .session-id { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--primary); }
+  .session-branch { font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--accent-teal); }
+  .session-time { color: var(--muted); font-size: 12px; }
+
+  /* ── Detail Screen Mockup ── */
+  .detail-mock { display: flex; flex-direction: column; height: 600px; }
+  .detail-header {
+    background: var(--surface-soft); padding: 16px 24px;
+    border-bottom: 1px solid var(--hairline);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .detail-header-left { display: flex; align-items: center; gap: 16px; }
+  .detail-header-left .back-btn {
+    width: 32px; height: 32px; border-radius: 8px;
+    background: var(--canvas); border: 1px solid var(--hairline);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 16px; color: var(--muted); cursor: pointer;
+  }
+  .detail-header-meta { display: flex; gap: 20px; }
+  .detail-header-meta span { font-size: 13px; color: var(--muted); }
+  .detail-header-meta span strong { color: var(--body-strong); }
+  .detail-body { display: flex; flex: 1; overflow: hidden; }
+  .detail-canvas {
+    flex: 1; background: var(--canvas); padding: 24px; overflow: auto;
+    border-right: 1px solid var(--hairline);
+  }
+  .detail-sidebar {
+    width: 320px; display: flex; flex-direction: column; background: var(--surface-soft);
+  }
+  .detail-sidebar-section {
+    padding: 20px; border-bottom: 1px solid var(--hairline);
+  }
+  .detail-sidebar-section h4 {
+    font-size: 12px; font-weight: 500; letter-spacing: 1.5px; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 16px;
+  }
+  .stat-row { display: flex; justify-content: space-between; padding: 6px 0; font-size: 13px; }
+  .stat-row .stat-label { color: var(--muted); }
+  .stat-row .stat-value { color: var(--ink); font-weight: 500; }
+
+  /* ── Token Graph Mockup ── */
+  .token-graph { padding: 20px; }
+  .token-graph h4 {
+    font-size: 12px; font-weight: 500; letter-spacing: 1.5px; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 16px;
+  }
+  .graph-area {
+    height: 140px; position: relative;
+    border-left: 1px solid var(--hairline);
+    border-bottom: 1px solid var(--hairline);
+  }
+  .graph-line {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    height: 100%;
+  }
+  .graph-labels {
+    display: flex; justify-content: space-between;
+    font-size: 11px; color: var(--muted-soft); margin-top: 4px;
+  }
+  .graph-legend { display: flex; gap: 16px; margin-top: 12px; font-size: 12px; }
+  .graph-legend span { display: flex; align-items: center; gap: 4px; }
+  .legend-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+
+  /* ── Detail Panel (bottom) ── */
+  .detail-panel {
+    border-top: 1px solid var(--hairline);
+    background: var(--surface-soft); padding: 20px 24px;
+  }
+  .detail-panel-header {
+    display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;
+  }
+  .detail-panel-header h4 { font-size: 14px; font-weight: 500; color: var(--ink); }
+  .detail-panel-content {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 16px;
+  }
+  .detail-panel-field { }
+  .detail-panel-field .field-label { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .detail-panel-field .field-value {
+    font-size: 13px; color: var(--body-strong);
+    background: var(--canvas); padding: 8px 12px; border-radius: 6px;
+    border: 1px solid var(--hairline);
+  }
+  .detail-panel-field .field-value.mono {
+    font-family: 'JetBrains Mono', monospace; font-size: 12px;
+    white-space: pre-wrap; word-break: break-all;
+  }
+
+  /* ── React Flow Harness Mockup ── */
+  .reactflow-mock {
+    position: relative; min-height: 500px; padding: 16px;
+  }
+  .rf-node {
+    padding: 10px 16px; border-radius: 8px; font-size: 12px;
+    position: relative; white-space: nowrap;
+  }
+  .rf-node-sm {
+    padding: 6px 12px; border-radius: 6px; font-size: 11px;
+  }
+  .rf-harness-node {
+    background: var(--canvas); border: 2px solid var(--primary);
+    color: var(--ink); font-weight: 500;
+  }
+  .rf-harness-node.event {
+    border-color: var(--accent-amber);
+  }
+  .rf-harness-node.meta {
+    border-color: var(--accent-teal);
+  }
+  .rf-branch-node {
+    background: var(--surface-card); border: 1px dashed var(--muted);
+    color: var(--muted);
+  }
+  .rf-edge {
+    width: 2px; height: 24px; background: var(--hairline); margin: 0 auto;
+  }
+  .rf-edge.branch {
+    height: auto; width: 1px; background: var(--accent-teal);
+    opacity: 0.5;
+  }
+
+  .harness-flow {
+    display: flex; align-items: flex-start; gap: 0;
+    justify-content: center;
+  }
+  .harness-main {
+    display: flex; flex-direction: column; align-items: center; gap: 0;
+    min-width: 200px;
+  }
+  .harness-branch-left {
+    display: flex; flex-direction: column; align-items: flex-end;
+    gap: 0; padding-right: 60px; min-width: 180px;
+  }
+  .harness-branch-right {
+    display: flex; flex-direction: column; align-items: flex-start;
+    gap: 0; padding-left: 60px; min-width: 180px;
+  }
+
+  .h-spacer { height: 8px; }
+  .branch-connector {
+    width: 40px; height: 1px; background: var(--accent-teal);
+    opacity: 0.4; align-self: center;
+  }
+
+  /* ── Harness SVG Mockup ── */
+  .harness-svg-container {
+    background: var(--canvas);
+    border-radius: 8px;
+    padding: 24px;
+    min-height: 420px;
+    position: relative;
+  }
+  .harness-svg-container svg text {
+    font-family: 'Inter', sans-serif;
+  }
+
+  /* ── API Section ── */
+  .api-endpoint {
+    background: var(--surface-dark); border-radius: 12px; padding: 24px;
+    margin: 24px 0;
+  }
+  .api-endpoint .method {
+    display: inline-block; padding: 4px 10px; border-radius: 4px;
+    font-family: 'JetBrains Mono', monospace; font-size: 12px; font-weight: 500;
+  }
+  .api-endpoint .method.get { background: #e8f5f0; color: #3a8a76; }
+  .api-endpoint .method.post { background: #e8f0e8; color: #3a7647; }
+  .api-endpoint .path {
+    font-family: 'JetBrains Mono', monospace; font-size: 14px;
+    color: var(--on-dark); margin-left: 12px;
+  }
+  .api-endpoint .desc {
+    color: var(--on-dark-soft); font-size: 14px; margin-top: 12px;
+  }
+
+  /* ── Screen Transition ── */
+  .screen-transition {
+    display: flex; align-items: center; justify-content: center;
+    gap: 24px; padding: 40px; flex-wrap: wrap;
+  }
+  .screen-box {
+    background: var(--surface-card); border-radius: 12px; padding: 24px 32px;
+    text-align: center;
+  }
+  .screen-box .screen-title { font-size: 15px; font-weight: 500; color: var(--ink); margin-bottom: 6px; }
+  .screen-box .screen-desc { font-size: 12px; color: var(--muted); }
+  .screen-arrow { font-size: 24px; color: var(--muted-soft); }
+
+  /* ── Button ── */
+  .btn-primary {
+    display: inline-block; background: var(--primary); color: var(--on-primary);
+    font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 500;
+    padding: 12px 20px; border-radius: 8px; text-decoration: none;
+    border: none; cursor: pointer;
+  }
+  .btn-secondary {
+    display: inline-block; background: var(--canvas); color: var(--ink);
+    font-family: 'Inter', sans-serif; font-size: 14px; font-weight: 500;
+    padding: 12px 20px; border-radius: 8px; text-decoration: none;
+    border: 1px solid var(--hairline); cursor: pointer;
+  }
+
+  /* ── Color Swatch ── */
+  .color-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; margin: 24px 0; }
+  .color-swatch {
+    border-radius: 8px; overflow: hidden; border: 1px solid var(--hairline);
+  }
+  .color-swatch .swatch-color { height: 48px; }
+  .color-swatch .swatch-info { padding: 8px 10px; background: var(--canvas); }
+  .color-swatch .swatch-name { font-size: 12px; font-weight: 500; color: var(--ink); }
+  .color-swatch .swatch-hex { font-size: 11px; color: var(--muted); font-family: 'JetBrains Mono', monospace; }
+
+  /* ── Callout ── */
+  .callout {
+    background: var(--surface-soft); border-left: 3px solid var(--primary);
+    border-radius: 0 8px 8px 0; padding: 16px 20px; margin: 24px 0;
+  }
+  .callout-title { font-size: 14px; font-weight: 500; color: var(--ink); margin-bottom: 4px; }
+  .callout-body { font-size: 14px; color: var(--muted); }
+
+  /* ── List ── */
+  .req-list { list-style: none; margin: 16px 0; }
+  .req-list li {
+    padding: 8px 0; border-bottom: 1px solid var(--hairline-soft);
+    font-size: 14px; display: flex; gap: 8px;
+  }
+  .req-list li::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--primary); flex-shrink: 0; margin-top: 8px; }
+
+  /* ── Panel Layout Mockup ── */
+  .panel-layout {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    grid-template-rows: auto 1fr auto;
+    height: 600px;
+    border-radius: 12px;
+    overflow: hidden;
+    border: 1px solid var(--hairline);
+  }
+  .panel-header {
+    grid-column: 1 / -1;
+    background: var(--surface-soft);
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--hairline);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .panel-canvas {
+    background: var(--canvas);
+    overflow: auto;
+    border-right: 1px solid var(--hairline);
+  }
+  .panel-sidebar {
+    display: flex; flex-direction: column;
+    background: var(--surface-soft);
+    overflow-y: auto;
+  }
+  .panel-bottom {
+    grid-column: 1 / -1;
+    background: var(--surface-soft);
+    border-top: 1px solid var(--hairline);
+    padding: 16px 20px;
+  }
+
+  /* ── Responsive ── */
+  @media (max-width: 1024px) {
+    .card-grid { grid-template-columns: repeat(2, 1fr); }
+    .session-row { grid-template-columns: 1.5fr 1fr 0.6fr 1fr 1fr; }
+    .session-row > :nth-child(6), .session-row > :nth-child(7) { display: none; }
+  }
+  @media (max-width: 768px) {
+    .card-grid, .card-grid-2 { grid-template-columns: 1fr; }
+    .display-xl { font-size: 36px; }
+    .display-lg { font-size: 32px; }
+    .display-md { font-size: 28px; }
+    .top-nav-links { display: none; }
+    .panel-layout { grid-template-columns: 1fr; height: auto; }
+    .panel-canvas { height: 400px; border-right: none; border-bottom: 1px solid var(--hairline); }
+    .panel-sidebar { height: 300px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ════════════════════════════════════════════════════ -->
+<!-- TOP NAV -->
+<!-- ════════════════════════════════════════════════════ -->
+<nav class="top-nav">
+  <div class="top-nav-brand">
+    <span class="spike">&#x2731;</span> codex-session-display
+  </div>
+  <div class="top-nav-links">
+    <a href="#overview">概要</a>
+    <a href="#features">機能要件</a>
+    <a href="#screens">画面</a>
+    <a href="#api">API</a>
+    <a href="#nonfunctional">非機能要件</a>
+    <a href="#architecture">アーキテクチャ</a>
+  </div>
+</nav>
+
+<!-- ════════════════════════════════════════════════════ -->
+<!-- HERO -->
+<!-- ════════════════════════════════════════════════════ -->
+<section class="hero">
+  <div class="page-container">
+    <div class="badge-coral">Requirements Document</div>
+    <h1 class="display-lg">要件定義書</h1>
+    <p class="subtitle">
+      Codex CLIのセッションログ（JSONL）を解析・可視化し、<br>
+      開発者がエージェントの行動分析とトークン消費分析を行えるようにする。
+    </p>
+    <div class="meta-row">
+      <span class="meta-item"><strong>プラットフォーム:</strong> React + Go</span>
+      <span class="meta-item"><strong>対象:</strong> Codex CLI v0.131.0</span>
+      <span class="meta-item"><strong>対象ユーザー:</strong> 開発者自身</span>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════ -->
+<!-- 1. システム概要 -->
+<!-- ════════════════════════════════════════════════════ -->
+<section class="section" id="overview">
+  <div class="page-container">
+    <div class="section-header">
+      <div class="section-num">Section 01</div>
+      <h2 class="display-md">システム概要</h2>
+    </div>
+
+    <div class="card-grid">
+      <div class="info-card">
+        <div class="label">目的</div>
+        <div class="value" style="font-size:15px; line-height:1.6; font-weight:400;">
+          JSONLを解析・可視化し、エージェントの行動分析とトークン消費分析を可能にする
+        </div>
+      </div>
+      <div class="info-card">
+        <div class="label">プラットフォーム</div>
+        <div class="value">React + Go Web App</div>
+        <div style="font-size:13px; color:var(--muted); margin-top:4px;">将来 Wails でデスクトップアプリ移行前提</div>
+      </div>
+      <div class="info-card">
+        <div class="label">データソース</div>
+        <div class="value mono" style="font-size:14px;">~/.codex/sessions</div>
+        <div style="font-size:13px; color:var(--muted); margin-top:4px;">JSONL形式（1行1JSONレコード）</div>
+      </div>
+    </div>
+
+    <h3 class="title-md" style="margin-top:48px; margin-bottom:16px;">前提条件</h3>
+    <ul class="req-list">
+      <li>Codex CLI（v0.131.0）のセッションファイルが <code>~/.codex/sessions</code> に格納されていること</li>
+      <li>対象ファイル形式はJSONL（1行1JSONレコード）</li>
+      <li>ローカル環境でのみ動作し、外部サーバーへのデータ送信は行わない</li>
+    </ul>
+
+    <h3 class="title-md" style="margin-top:48px; margin-bottom:16px;">対象外事項</h3>
+    <div class="card-grid-2">
+      <div class="info-card" style="border-left: 3px solid var(--hairline);">
+        <div class="title-sm" style="margin-bottom:4px;">リアルタイム監視</div>
+        <div class="body-sm" style="color:var(--muted);">セッション実行中のライブ表示は行わない</div>
+      </div>
+      <div class="info-card" style="border-left: 3px solid var(--hairline);">
+        <div class="title-sm" style="margin-bottom:4px;">JSONLの編集・操作</div>
+        <div class="body-sm" style="color:var(--muted);">読み取り専用。ファイルの変更・削除は行わない</div>
+      </div>
+      <div class="info-card" style="border-left: 3px solid var(--hairline);">
+        <div class="title-sm" style="margin-bottom:4px;">複数セッションの同時表示</div>
+        <div class="body-sm" style="color:var(--muted);">一度に1セッションのみ表示する</div>
+      </div>
+      <div class="info-card" style="border-left: 3px solid var(--hairline);">
+        <div class="title-sm" style="margin-bottom:4px;">他ツール対応 / 認証 / 多言語</div>
+        <div class="body-sm" style="color:var(--muted);">Claude Code等の他ツール、ログイン機能、多言語対応は対象外</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════ -->
+<!-- 2. 機能要件 -->
+<!-- ════════════════════════════════════════════════════ -->
+<section class="section" id="features">
+  <div class="page-container">
+    <div class="section-header">
+      <div class="section-num">Section 02</div>
+      <h2 class="display-md">機能要件</h2>
+    </div>
+
+    <!-- 2.1 セッション一覧 -->
+    <h3 class="display-sm" style="margin-bottom:24px;">2.1 セッション一覧・選択</h3>
+
+    <table class="req-table">
+      <thead><tr><th>要件</th><th>内容</th></tr></thead>
+      <tbody>
+        <tr><td>自動読込</td><td><code>~/.codex/sessions</code> ディレクトリ配下のセッションを自動で検出する</td></tr>
+        <tr><td>一覧表示</td><td>セッション一覧をUIに表示する</td></tr>
+        <tr><td>セッション選択</td><td>ユーザーが特定のセッションを選択して詳細を表示する</td></tr>
+        <tr><td>単一セッション表示</td><td>複数セッションの同時表示は行わない</td></tr>
+      </tbody>
+    </table>
+
+    <!-- ── 画面モック: セッション一覧 ── -->
+    <div class="callout">
+      <div class="callout-title">画面イメージ — セッション一覧画面</div>
+      <div class="callout-body">セッションID、作業ディレクトリ、ブランチ、タイムスタンプ等を一覧表示。行をクリックしてセッション詳細へ遷移。</div>
+    </div>
+    <div class="mockup-frame" style="margin-bottom:48px;">
+      <div class="mockup-titlebar">
+        <div class="mockup-dot red"></div>
+        <div class="mockup-dot yellow"></div>
+        <div class="mockup-dot green"></div>
+        <span class="mockup-titlebar-text">codex-session-display — セッション一覧</span>
+      </div>
+      <div class="session-list-mock">
+        <div class="session-list-header">
+          <div>
+            <div class="title-md" style="margin-bottom:4px;">セッション一覧</div>
+            <div class="body-sm" style="color:var(--muted);">~/.codex/sessions — 6件のセッションを検出</div>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <div style="background:var(--canvas); border:1px solid var(--hairline); border-radius:8px; padding:8px 14px; font-size:13px; color:var(--muted); width:240px;">セッションを検索...</div>
+          </div>
+        </div>
+        <div class="session-row session-row-header">
+          <span>セッションID</span><span>作業ディレクトリ</span><span>CLI ver.</span><span>起動元</span><span>プロバイダー</span><span>ブランチ</span><span>タイムスタンプ</span>
+        </div>
+        <div class="session-row selected">
+          <span class="session-id">019e5514-ed44-78b2-...</span>
+          <span style="font-size:12px; color:var(--body);">~/projects/backend-dev-val</span>
+          <span style="font-size:12px;">0.131.0</span>
+          <span style="font-size:12px;">codex-tui</span>
+          <span style="font-size:12px;">openai</span>
+          <span class="session-branch">feature/5</span>
+          <span class="session-time">2026-05-23 22:44</span>
+        </div>
+        <div class="session-row">
+          <span class="session-id">019e55a0-cf31-7b2a-...</span>
+          <span style="font-size:12px; color:var(--body);">~/projects/api-gateway</span>
+          <span style="font-size:12px;">0.131.0</span>
+          <span style="font-size:12px;">codex-tui</span>
+          <span style="font-size:12px;">openai</span>
+          <span class="session-branch">main</span>
+          <span class="session-time">2026-05-23 18:12</span>
+        </div>
+        <div class="session-row">
+          <span class="session-id">019e5492-ab03-7891-...</span>
+          <span style="font-size:12px; color:var(--body);">~/projects/frontend-app</span>
+          <span style="font-size:12px;">0.131.0</span>
+          <span style="font-size:12px;">codex-tui</span>
+          <span style="font-size:12px;">openai</span>
+          <span class="session-branch">feature/auth</span>
+          <span class="session-time">2026-05-22 14:30</span>
+        </div>
+        <div class="session-row">
+          <span class="session-id">019e53c7-df81-7012-...</span>
+          <span style="font-size:12px; color:var(--body);">~/projects/ml-pipeline</span>
+          <span style="font-size:12px;">0.131.0</span>
+          <span style="font-size:12px;">codex-tui</span>
+          <span style="font-size:12px;">openai</span>
+          <span class="session-branch">develop</span>
+          <span class="session-time">2026-05-21 09:55</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- ディレクトリ構造によるグループ表示 -->
+    <h4 class="title-md" style="margin-top:32px; margin-bottom:12px;">ディレクトリ構造によるグループ表示</h4>
+    <p class="body-md" style="color:var(--muted); margin-bottom:16px;">
+      セッションファイルは <code>~/.codex/sessions/YYYY/MM/DD/</code> のディレクトリ構造で格納されているため、一覧画面では年→月→日のツリー構造でグループ化して表示する。
+    </p>
+    <ul class="req-list">
+      <li>各階層（年/月/日）は折りたたみ可能とする</li>
+      <li>各階層のヘッダーに含まれるセッション件数を表示する</li>
+      <li>デフォルトでは最新の年/月/日を展開済みとする</li>
+    </ul>
+
+    <!-- セッション一覧の表示項目 -->
+    <h4 class="title-md" style="margin-top:32px; margin-bottom:12px;">セッション一覧の表示項目</h4>
+    <p class="body-md" style="color:var(--muted); margin-bottom:16px;">
+      一覧には <code>session_meta</code> レコードから以下の情報を表示する。未解析のセッションでは解析が必要な項目に「解析前」と表示する。
+    </p>
+    <table class="req-table">
+      <thead><tr><th>表示項目</th><th>データソース</th><th>解析前の表示</th><th>備考</th></tr></thead>
+      <tbody>
+        <tr><td>セッションID</td><td>ファイル名から抽出</td><td>表示可能</td><td>UUID</td></tr>
+        <tr><td>作業ディレクトリ</td><td><code>payload.cwd</code></td><td>「解析前」</td><td></td></tr>
+        <tr><td>CLIバージョン</td><td><code>payload.cli_version</code></td><td>「解析前」</td><td>例: "0.131.0"</td></tr>
+        <tr><td>起動元</td><td><code>payload.originator</code></td><td>「解析前」</td><td>例: "codex-tui"</td></tr>
+        <tr><td>モデルプロバイダー</td><td><code>payload.model_provider</code></td><td>「解析前」</td><td>例: "openai"</td></tr>
+        <tr><td>ブランチ</td><td><code>payload.git.branch</code></td><td>「解析前」</td><td></td></tr>
+        <tr><td>タイムスタンプ</td><td>ファイルパスから推測</td><td>表示可能（色薄）</td><td></td></tr>
+        <tr><td>ファイルサイズ</td><td>ファイルシステム</td><td>表示可能</td><td></td></tr>
+      </tbody>
+    </table>
+
+    <!-- 2.2 JSONL解析 -->
+    <h3 class="display-sm" style="margin-top:48px; margin-bottom:24px;">2.2 JSONL解析</h3>
+
+    <table class="req-table">
+      <thead><tr><th>要件</th><th>内容</th></tr></thead>
+      <tbody>
+        <tr><td>解析タイミング</td><td>セッションを開いた時にJSONLを解析する</td></tr>
+        <tr><td>解析結果の保存</td><td>解析結果をReact Flowのnode/edge形式のJSONとして <code>~/.codex-display</code> に保存する</td></tr>
+        <tr><td>再解析判定</td><td>JSONLファイルの編集日時が解析結果の保存日時より新しい場合、再解析する</td></tr>
+        <tr><td>ファイルサイズ</td><td>50MB程度までのファイルを想定する</td></tr>
+        <tr><td>対象バージョン</td><td>Codex CLI v0.131.0のJSONLフォーマットに対応。柔軟に変更可能な構成とする</td></tr>
+      </tbody>
+    </table>
+
+    <!-- JSONLレコード型 -->
+    <h4 class="title-md" style="margin-top:32px; margin-bottom:16px;">JSONLレコード型 — 第1段階: トップレベル type による大分類</h4>
+
+    <table class="req-table">
+      <thead><tr><th>トップレベル <code>type</code></th><th><code>payload.type</code> の有無</th><th>概要</th></tr></thead>
+      <tbody>
+        <tr><td><code>session_meta</code></td><td>なし（1件のみ）</td><td>セッションのメタ情報（ID、CWD、モデル、Git情報等）</td></tr>
+        <tr><td><code>turn_context</code></td><td>なし（ターンごとに1件）</td><td>ターンのコンテキスト（モデル、ポリシー、ユーザー指示等）</td></tr>
+        <tr><td><code>event_msg</code></td><td>あり</td><td>イベントメッセージ。詳細は第2段階へ</td></tr>
+        <tr><td><code>response_item</code></td><td>あり</td><td>レスポンスアイテム。詳細は第2段階へ</td></tr>
+      </tbody>
+    </table>
+
+    <h4 class="title-md" style="margin-top:32px; margin-bottom:16px;">JSONLレコード型 — 第2段階: payload.type による詳細分類</h4>
+
+    <table class="req-table">
+      <thead><tr><th>トップレベル</th><th><code>payload.type</code></th><th>テキストフィールド</th><th>概要</th></tr></thead>
+      <tbody>
+        <tr><td><code>event_msg</code></td><td><code>user_message</code></td><td><code>payload.message</code></td><td>ユーザーの入力</td></tr>
+        <tr><td><code>event_msg</code></td><td><code>agent_message</code></td><td><code>payload.message</code></td><td>エージェントの発言（Markdown形式）</td></tr>
+        <tr><td><code>event_msg</code></td><td><code>agent_reasoning</code></td><td><code>payload.text</code></td><td>推論プロセスのテキスト</td></tr>
+        <tr><td><code>event_msg</code></td><td><code>task_started</code></td><td>—</td><td>タスク開始イベント</td></tr>
+        <tr><td><code>event_msg</code></td><td><code>item_completed</code></td><td>—</td><td>アイテム完了イベント</td></tr>
+        <tr><td><code>event_msg</code></td><td><code>task_complete</code></td><td><code>payload.last_agent_message</code></td><td>タスク完了イベント</td></tr>
+        <tr><td><code>event_msg</code></td><td><code>token_count</code></td><td>—</td><td>トークン使用量</td></tr>
+        <tr><td><code>response_item</code></td><td><code>message</code></td><td><code>payload.content[].text</code></td><td>LLM APIメッセージ（role で分岐）</td></tr>
+        <tr><td><code>response_item</code></td><td><code>reasoning</code></td><td><code>payload.summary[].text</code></td><td>推論サマリー</td></tr>
+        <tr><td><code>response_item</code></td><td><code>function_call</code></td><td><code>payload.arguments</code></td><td>ツール呼び出し（call_id で紐付け）</td></tr>
+        <tr><td><code>response_item</code></td><td><code>function_call_output</code></td><td><code>payload.output</code></td><td>ツール呼び出し結果（call_id で対応）</td></tr>
+      </tbody>
+    </table>
+
+    <!-- 主要 payload フィールドの詳細 -->
+    <h4 class="title-md" style="margin-top:32px; margin-bottom:16px;">主要 payload フィールドの詳細</h4>
+
+    <h5 class="title-sm" style="margin:16px 0 8px; color:var(--primary);">session_meta（payload.type なし）</h5>
+    <table class="req-table">
+      <thead><tr><th>フィールド</th><th>型</th><th>内容</th></tr></thead>
+      <tbody>
+        <tr><td><code>id</code></td><td>string (UUID)</td><td>セッションID</td></tr>
+        <tr><td><code>cwd</code></td><td>string</td><td>作業ディレクトリ</td></tr>
+        <tr><td><code>cli_version</code></td><td>string</td><td>CLIバージョン（例: "0.131.0"）</td></tr>
+        <tr><td><code>originator</code></td><td>string</td><td>起動元（例: "codex-tui"）</td></tr>
+        <tr><td><code>model_provider</code></td><td>string</td><td>モデルプロバイダー（例: "openai"）</td></tr>
+        <tr><td><code>base_instructions</code></td><td>object</td><td><code>{ "text": "..." }</code>（~20K文字）</td></tr>
+        <tr><td><code>git</code></td><td>object</td><td><code>{ commit_hash, branch, repository_url }</code></td></tr>
+        <tr><td><code>timestamp</code></td><td>string (ISO 8601)</td><td>セッション開始時刻</td></tr>
+      </tbody>
+    </table>
+
+    <h5 class="title-sm" style="margin:16px 0 8px; color:var(--primary);">turn_context（payload.type なし）</h5>
+    <table class="req-table">
+      <thead><tr><th>フィールド</th><th>型</th><th>内容</th></tr></thead>
+      <tbody>
+        <tr><td><code>turn_id</code></td><td>string (UUID)</td><td>ターンID</td></tr>
+        <tr><td><code>model</code></td><td>string</td><td>モデル名（例: "zai/glm-5.1"）</td></tr>
+        <tr><td><code>approval_policy</code></td><td>string</td><td>承認ポリシー（例: "on-request"）</td></tr>
+        <tr><td><code>collaboration_mode</code></td><td>object</td><td><code>{ mode, settings }</code> — <code>developer_instructions</code>（~8K文字）を含む</td></tr>
+        <tr><td><code>user_instructions</code></td><td>string</td><td>ユーザー指示（~4.7K文字）</td></tr>
+        <tr><td><code>effort</code></td><td>string</td><td>エフォート（例: "medium"）</td></tr>
+        <tr><td><code>personality</code></td><td>string</td><td>ペルソナリティ（例: "pragmatic"）</td></tr>
+      </tbody>
+    </table>
+
+    <h5 class="title-sm" style="margin:16px 0 8px; color:var(--primary);">event_msg.type=task_started</h5>
+    <table class="req-table">
+      <thead><tr><th>フィールド</th><th>型</th><th>内容</th></tr></thead>
+      <tbody>
+        <tr><td><code>turn_id</code></td><td>string (UUID)</td><td>ターンID</td></tr>
+        <tr><td><code>started_at</code></td><td>int (Unixエポック秒)</td><td>タスク開始時刻</td></tr>
+        <tr><td><code>model_context_window</code></td><td>int</td><td>コンテキストウィンドウサイズ（例: 258400）</td></tr>
+        <tr><td><code>collaboration_mode_kind</code></td><td>string</td><td>コラボレーションモード（例: "default", "plan"）</td></tr>
+      </tbody>
+    </table>
+
+    <h5 class="title-sm" style="margin:16px 0 8px; color:var(--primary);">event_msg.type=task_complete</h5>
+    <table class="req-table">
+      <thead><tr><th>フィールド</th><th>型</th><th>内容</th></tr></thead>
+      <tbody>
+        <tr><td><code>turn_id</code></td><td>string (UUID)</td><td>ターンID</td></tr>
+        <tr><td><code>completed_at</code></td><td>int (Unixエポック秒)</td><td>タスク完了時刻</td></tr>
+        <tr><td><code>duration_ms</code></td><td>int</td><td>所要時間（ミリ秒）</td></tr>
+        <tr><td><code>time_to_first_token_ms</code></td><td>int</td><td>初回トークン生成時間（ミリ秒）</td></tr>
+        <tr><td><code>last_agent_message</code></td><td>string</td><td>エージェントの最終メッセージ</td></tr>
+      </tbody>
+    </table>
+
+    <h5 class="title-sm" style="margin:16px 0 8px; color:var(--primary);">event_msg.type=item_completed</h5>
+    <table class="req-table">
+      <thead><tr><th>フィールド</th><th>型</th><th>内容</th></tr></thead>
+      <tbody>
+        <tr><td><code>thread_id</code></td><td>string</td><td>セッションID</td></tr>
+        <tr><td><code>turn_id</code></td><td>string (UUID)</td><td>ターンID</td></tr>
+        <tr><td><code>item</code></td><td>object</td><td><code>{ id, text, type }</code> — Plan型の場合、<code>item.text</code> にプラン全文</td></tr>
+        <tr><td><code>completed_at_ms</code></td><td>int (Unixミリ秒)</td><td>完了時刻</td></tr>
+      </tbody>
+    </table>
+
+    <h5 class="title-sm" style="margin:16px 0 8px; color:var(--primary);">event_msg.type=token_count</h5>
+    <table class="req-table">
+      <thead><tr><th>フィールド</th><th>型</th><th>内容</th></tr></thead>
+      <tbody>
+        <tr><td><code>info</code></td><td>object</td><td><code>{ last_token_usage, model_context_window, total_token_usage }</code></td></tr>
+        <tr><td><code>rate_limits</code></td><td>null / 不存在</td><td><code>info</code> と同階層（<code>info</code> の中ではない）</td></tr>
+      </tbody>
+    </table>
+
+    <h5 class="title-sm" style="margin:16px 0 8px; color:var(--primary);">response_item.type=message</h5>
+    <table class="req-table">
+      <thead><tr><th>フィールド</th><th>型</th><th>内容</th></tr></thead>
+      <tbody>
+        <tr><td><code>role</code></td><td>string</td><td><code>"developer"</code> / <code>"user"</code> / <code>"assistant"</code></td></tr>
+        <tr><td><code>content</code></td><td>オブジェクト配列</td><td><code>[{ "type": "input_text"|"output_text", "text": "..." }]</code></td></tr>
+      </tbody>
+    </table>
+
+    <h5 class="title-sm" style="margin:16px 0 8px; color:var(--primary);">response_item.type=function_call</h5>
+    <table class="req-table">
+      <thead><tr><th>フィールド</th><th>型</th><th>内容</th></tr></thead>
+      <tbody>
+        <tr><td><code>name</code></td><td>string</td><td>ツール名（例: "exec_command"）</td></tr>
+        <tr><td><code>arguments</code></td><td>string (JSON)</td><td>ツール引数のJSON文字列</td></tr>
+        <tr><td><code>call_id</code></td><td>string</td><td><code>"call_" + UUID</code> 形式のID</td></tr>
+      </tbody>
+    </table>
+
+    <h5 class="title-sm" style="margin:16px 0 8px; color:var(--primary);">response_item.type=function_call_output</h5>
+    <table class="req-table">
+      <thead><tr><th>フィールド</th><th>型</th><th>内容</th></tr></thead>
+      <tbody>
+        <tr><td><code>call_id</code></td><td>string</td><td>対応する <code>function_call</code> と同じID</td></tr>
+        <tr><td><code>output</code></td><td>string</td><td>実行結果文字列</td></tr>
+      </tbody>
+    </table>
+
+    <!-- 2.3 可視化 -->
+    <h3 class="display-sm" style="margin-top:64px; margin-bottom:24px;">2.3 可視化（React Flow）</h3>
+
+    <h4 class="title-md" style="margin-bottom:12px;">2.3.1 ハーネス構造</h4>
+    <p class="body-md" style="color:var(--muted); margin-bottom:24px;">
+      縦方向のメインフロー（ハーネス）を中心に、コンテキスト情報が分岐するツリー構造で表示する。
+    </p>
+
+    <!-- ── 画面モック: ハーネス構造 ── -->
+    <div class="callout">
+      <div class="callout-title">画面イメージ — ハーネス構造の概念図</div>
+      <div class="callout-body">ハーネス上（中央縦方向）にメインフロー、左右に分岐ノードを配置。function_call/function_call_outputはバッチでグループ化。</div>
+    </div>
+    <div class="mockup-frame" style="margin-bottom:32px;">
+      <div class="mockup-titlebar">
+        <div class="mockup-dot red"></div>
+        <div class="mockup-dot yellow"></div>
+        <div class="mockup-dot green"></div>
+        <span class="mockup-titlebar-text">ハーネス構造 — 基本パターン</span>
+      </div>
+      <div class="harness-svg-container" style="min-height:820px;">
+        <svg width="100%" height="820" viewBox="0 0 800 820" xmlns="http://www.w3.org/2000/svg">
+          <!-- Harness center line (decorative) -->
+          <line x1="340" y1="30" x2="340" y2="800" stroke="#e6dfd8" stroke-width="1" stroke-dasharray="4,4"/>
+
+          <!-- session_meta -->
+          <rect x="255" y="10" width="170" height="36" rx="8" fill="#efe9de" stroke="#cc785c" stroke-width="2"/>
+          <text x="340" y="33" text-anchor="middle" fill="#141413" font-size="13" font-weight="500">session_meta</text>
+          <!-- Arrow -->
+          <line x1="340" y1="46" x2="340" y2="68" stroke="#6c6a64" stroke-width="1.5"/>
+          <polygon points="336,65 344,65 340,72" fill="#6c6a64"/>
+
+          <!-- task_started -->
+          <rect x="255" y="72" width="170" height="36" rx="8" fill="#181715" stroke="#e8a55a" stroke-width="2"/>
+          <text x="340" y="95" text-anchor="middle" fill="#faf9f5" font-size="13" font-weight="500">task_started</text>
+          <!-- Arrow -->
+          <line x1="340" y1="108" x2="340" y2="130" stroke="#6c6a64" stroke-width="1.5"/>
+          <polygon points="336,127 344,127 340,134" fill="#6c6a64"/>
+
+          <!-- Branch: response_item(developer) → LEFT -->
+          <rect x="30" y="100" width="190" height="32" rx="6" fill="#efe9de" stroke="#5db8a6" stroke-width="1" stroke-dasharray="3,3"/>
+          <text x="125" y="120" text-anchor="middle" fill="#3a8a76" font-size="11">response_item(developer)</text>
+          <line x1="220" y1="116" x2="255" y2="116" stroke="#5db8a6" stroke-width="1" stroke-dasharray="3,3"/>
+
+          <!-- Branch: response_item(user) → LEFT -->
+          <rect x="40" y="140" width="180" height="32" rx="6" fill="#efe9de" stroke="#5db8a6" stroke-width="1" stroke-dasharray="3,3"/>
+          <text x="130" y="160" text-anchor="middle" fill="#3a8a76" font-size="11">response_item(user)</text>
+          <line x1="220" y1="156" x2="255" y2="156" stroke="#5db8a6" stroke-width="1" stroke-dasharray="3,3"/>
+
+          <!-- turn_context -->
+          <rect x="255" y="138" width="170" height="36" rx="8" fill="#181715" stroke="#faf9f5" stroke-width="1"/>
+          <text x="340" y="161" text-anchor="middle" fill="#faf9f5" font-size="13" font-weight="500">turn_context</text>
+
+          <!-- Branch: instructions from turn_context → RIGHT -->
+          <rect x="470" y="110" width="160" height="28" rx="6" fill="#efe9de" stroke="#5db8a6" stroke-width="1" stroke-dasharray="3,3"/>
+          <text x="550" y="128" text-anchor="middle" fill="#3a8a76" font-size="10">base_instructions</text>
+          <line x1="425" y1="145" x2="470" y2="124" stroke="#5db8a6" stroke-width="1" stroke-dasharray="3,3"/>
+
+          <rect x="470" y="143" width="160" height="28" rx="6" fill="#efe9de" stroke="#5db8a6" stroke-width="1" stroke-dasharray="3,3"/>
+          <text x="550" y="161" text-anchor="middle" fill="#3a8a76" font-size="10">developer_instructions</text>
+          <line x1="425" y1="156" x2="470" y2="157" stroke="#5db8a6" stroke-width="1" stroke-dasharray="3,3"/>
+
+          <rect x="470" y="176" width="160" height="28" rx="6" fill="#efe9de" stroke="#5db8a6" stroke-width="1" stroke-dasharray="3,3"/>
+          <text x="550" y="194" text-anchor="middle" fill="#3a8a76" font-size="10">user_instructions</text>
+          <line x1="425" y1="164" x2="470" y2="190" stroke="#5db8a6" stroke-width="1" stroke-dasharray="3,3"/>
+
+          <!-- Arrow down -->
+          <line x1="340" y1="174" x2="340" y2="206" stroke="#6c6a64" stroke-width="1.5"/>
+          <polygon points="336,203 344,203 340,210" fill="#6c6a64"/>
+
+          <!-- user_message (branch LEFT) -->
+          <rect x="50" y="210" width="170" height="32" rx="6" fill="#efe9de" stroke="#5db8a6" stroke-width="1" stroke-dasharray="3,3"/>
+          <text x="135" y="230" text-anchor="middle" fill="#3a8a76" font-size="11">user_message</text>
+          <line x1="220" y1="226" x2="255" y2="236" stroke="#5db8a6" stroke-width="1" stroke-dasharray="3,3"/>
+
+          <!-- agent_reasoning -->
+          <rect x="255" y="214" width="170" height="36" rx="8" fill="#faf9f5" stroke="#cc785c" stroke-width="2"/>
+          <text x="340" y="237" text-anchor="middle" fill="#141413" font-size="13" font-weight="500">agent_reasoning</text>
+          <!-- Arrow -->
+          <line x1="340" y1="250" x2="340" y2="272" stroke="#6c6a64" stroke-width="1.5"/>
+          <polygon points="336,269 344,269 340,276" fill="#6c6a64"/>
+
+          <!-- function_call batch -->
+          <rect x="255" y="276" width="170" height="36" rx="8" fill="#efe9de" stroke="#e8a55a" stroke-width="2"/>
+          <text x="340" y="299" text-anchor="middle" fill="#141413" font-size="13" font-weight="500">function_call ×N</text>
+
+          <!-- Branch arrows for function_call batch -->
+          <rect x="510" y="270" width="170" height="28" rx="6" fill="#efe9de" stroke="#e8a55a" stroke-width="1" stroke-dasharray="3,3"/>
+          <text x="595" y="288" text-anchor="middle" fill="#a06e1e" font-size="10">exec_command</text>
+          <line x1="425" y1="286" x2="510" y2="284" stroke="#e8a55a" stroke-width="1" stroke-dasharray="3,3"/>
+          <rect x="510" y="302" width="170" height="28" rx="6" fill="#efe9de" stroke="#e8a55a" stroke-width="1" stroke-dasharray="3,3"/>
+          <text x="595" y="320" text-anchor="middle" fill="#a06e1e" font-size="10">apply_diff</text>
+          <line x1="425" y1="298" x2="510" y2="316" stroke="#e8a55a" stroke-width="1" stroke-dasharray="3,3"/>
+
+          <!-- Arrow -->
+          <line x1="340" y1="312" x2="340" y2="334" stroke="#6c6a64" stroke-width="1.5"/>
+          <polygon points="336,331 344,331 340,338" fill="#6c6a64"/>
+
+          <!-- agent_message + response_item(assistant) -->
+          <rect x="240" y="338" width="200" height="36" rx="8" fill="#faf9f5" stroke="#cc785c" stroke-width="2"/>
+          <text x="340" y="355" text-anchor="middle" fill="#141413" font-size="12" font-weight="500">agent_message</text>
+          <text x="340" y="368" text-anchor="middle" fill="#6c6a64" font-size="10">+ response_item(asst.)</text>
+          <!-- Arrow -->
+          <line x1="340" y1="374" x2="340" y2="396" stroke="#6c6a64" stroke-width="1.5"/>
+          <polygon points="336,393 344,393 340,400" fill="#6c6a64"/>
+
+          <!-- function_call_output batch -->
+          <rect x="248" y="400" width="184" height="36" rx="8" fill="#efe9de" stroke="#e8a55a" stroke-width="2"/>
+          <text x="340" y="423" text-anchor="middle" fill="#141413" font-size="13" font-weight="500">function_call_output ×N</text>
+
+          <!-- Branch arrows for output batch -->
+          <rect x="510" y="396" width="170" height="28" rx="6" fill="#efe9de" stroke="#e8a55a" stroke-width="1" stroke-dasharray="3,3"/>
+          <text x="595" y="414" text-anchor="middle" fill="#a06e1e" font-size="10">stdout/stderr</text>
+          <line x1="432" y1="412" x2="510" y2="410" stroke="#e8a55a" stroke-width="1" stroke-dasharray="3,3"/>
+          <rect x="510" y="428" width="170" height="28" rx="6" fill="#efe9de" stroke="#e8a55a" stroke-width="1" stroke-dasharray="3,3"/>
+          <text x="595" y="446" text-anchor="middle" fill="#a06e1e" font-size="10">diff result</text>
+          <line x1="432" y1="424" x2="510" y2="442" stroke="#e8a55a" stroke-width="1" stroke-dasharray="3,3"/>
+
+          <!-- Arrow: last output → harness -->
+          <line x1="340" y1="436" x2="340" y2="468" stroke="#6c6a64" stroke-width="1.5"/>
+          <polygon points="336,465 344,465 340,472" fill="#6c6a64"/>
+
+          <!-- item_completed -->
+          <rect x="255" y="472" width="170" height="36" rx="8" fill="#181715" stroke="#e8a55a" stroke-width="2"/>
+          <text x="340" y="495" text-anchor="middle" fill="#faf9f5" font-size="13" font-weight="500">item_completed</text>
+          <!-- Arrow -->
+          <line x1="340" y1="508" x2="340" y2="530" stroke="#6c6a64" stroke-width="1.5"/>
+          <polygon points="336,527 344,527 340,534" fill="#6c6a64"/>
+
+          <!-- token_count -->
+          <rect x="255" y="534" width="170" height="36" rx="8" fill="#181715" stroke="#5db8a6" stroke-width="2"/>
+          <text x="340" y="557" text-anchor="middle" fill="#faf9f5" font-size="13" font-weight="500">token_count</text>
+
+          <!-- Dots: next turn -->
+          <text x="340" y="600" text-anchor="middle" fill="#8e8b82" font-size="24">···</text>
+          <text x="340" y="618" text-anchor="middle" fill="#8e8b82" font-size="11">次ターン: task_complete → task_started</text>
+
+          <!-- task_complete -->
+          <rect x="255" y="640" width="170" height="36" rx="8" fill="#181715" stroke="#e8a55a" stroke-width="2"/>
+          <text x="340" y="663" text-anchor="middle" fill="#faf9f5" font-size="13" font-weight="500">task_complete</text>
+
+          <!-- Legend -->
+          <rect x="30" y="710" width="740" height="100" rx="8" fill="#f5f0e8"/>
+          <text x="50" y="735" fill="#141413" font-size="12" font-weight="500">凡例</text>
+          <rect x="50" y="748" width="14" height="14" rx="3" fill="#faf9f5" stroke="#cc785c" stroke-width="2"/>
+          <text x="72" y="760" fill="#3d3d3a" font-size="11">ハーネス上のノード</text>
+          <rect x="200" y="748" width="14" height="14" rx="3" fill="#181715" stroke="#e8a55a" stroke-width="2"/>
+          <text x="222" y="760" fill="#3d3d3a" font-size="11">イベント系ノード</text>
+          <rect x="370" y="748" width="14" height="14" rx="3" fill="#efe9de" stroke="#5db8a6" stroke-width="1" stroke-dasharray="3,3"/>
+          <text x="392" y="760" fill="#3d3d3a" font-size="11">分岐ノード（ハーネス外）</text>
+          <rect x="580" y="748" width="14" height="14" rx="3" fill="#181715" stroke="#5db8a6" stroke-width="2"/>
+          <text x="602" y="760" fill="#3d3d3a" font-size="11">メタ系ノード</text>
+        </svg>
+      </div>
+    </div>
+
+    <!-- Batch patterns -->
+    <h4 class="title-md" style="margin-top:32px; margin-bottom:16px;">バッチ実行パターン</h4>
+
+    <div class="callout">
+      <div class="callout-title">画面イメージ — バッチ実行パターンの違い</div>
+      <div class="callout-body">パターンA（最頻出: ~94%）は agent_message + response_item(assistant) が挟まる。パターンB（~6%）は response_item(assistant) のみ。</div>
+    </div>
+
+    <div class="card-grid-2">
+      <div class="mockup-frame">
+        <div class="mockup-titlebar">
+          <div class="mockup-dot red"></div><div class="mockup-dot yellow"></div><div class="mockup-dot green"></div>
+          <span class="mockup-titlebar-text">パターンA — バッチサイズ1（最頻出）</span>
+        </div>
+        <div style="padding:24px; background:var(--canvas);">
+          <div style="display:flex; flex-direction:column; align-items:center; gap:4px;">
+            <div class="rf-node rf-harness-node event" style="width:180px;">function_call</div>
+            <div style="color:var(--muted-soft); font-size:18px;">↓</div>
+            <div class="rf-node rf-harness-node" style="width:180px;">agent_message</div>
+            <div class="rf-node rf-harness-node" style="width:180px; margin-top:4px;">response_item(asst.)</div>
+            <div style="color:var(--muted-soft); font-size:18px;">↓</div>
+            <div class="rf-node rf-harness-node event" style="width:180px;">function_call_output</div>
+          </div>
+        </div>
+      </div>
+      <div class="mockup-frame">
+        <div class="mockup-titlebar">
+          <div class="mockup-dot red"></div><div class="mockup-dot yellow"></div><div class="mockup-dot green"></div>
+          <span class="mockup-titlebar-text">パターンB — バッチサイズ1</span>
+        </div>
+        <div style="padding:24px; background:var(--canvas);">
+          <div style="display:flex; flex-direction:column; align-items:center; gap:4px;">
+            <div class="rf-node rf-harness-node event" style="width:180px;">function_call</div>
+            <div style="color:var(--muted-soft); font-size:18px;">↓</div>
+            <div class="rf-node rf-harness-node" style="width:180px; opacity:0.6;">response_item(asst.) <span style="font-size:10px; color:var(--muted);">空テキスト</span></div>
+            <div style="color:var(--muted-soft); font-size:18px;">↓</div>
+            <div class="rf-node rf-harness-node event" style="width:180px;">function_call_output</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2.3.2-2.3.7 -->
+    <h4 class="title-md" style="margin-top:48px; margin-bottom:16px;">2.3.2–2.3.7 ノード種別と配置</h4>
+
+    <div class="card-grid-2">
+      <div>
+        <div class="title-sm" style="margin-bottom:12px; color:var(--primary);">ハーネス上のノード</div>
+        <div class="card" style="padding:20px;">
+          <div style="display:flex; flex-wrap:wrap; gap:6px;">
+            <span class="badge-pill">session_meta</span>
+            <span class="badge-pill">task_started</span>
+            <span class="badge-pill">turn_context</span>
+            <span class="badge-pill">agent_reasoning</span>
+            <span class="badge-pill">agent_message</span>
+            <span class="badge-pill">response_item(asst.)</span>
+            <span class="badge-pill">item_completed</span>
+            <span class="badge-pill">token_count</span>
+            <span class="badge-pill">task_complete</span>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="title-sm" style="margin-bottom:12px; color:var(--accent-teal);">ハーネス外（分岐）のノード</div>
+        <div class="card" style="padding:20px;">
+          <div style="display:flex; flex-wrap:wrap; gap:6px;">
+            <span class="badge-pill badge-teal">response_item(developer)</span>
+            <span class="badge-pill badge-teal">response_item(user)</span>
+            <span class="badge-pill badge-teal">user_message</span>
+            <span class="badge-pill badge-teal">base_instructions</span>
+            <span class="badge-pill badge-teal">developer_instructions</span>
+            <span class="badge-pill badge-teal">user_instructions</span>
+            <span class="badge-pill badge-teal">reasoning</span>
+            <span class="badge-pill badge-teal">function_call</span>
+            <span class="badge-pill badge-teal">function_call_output</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <h4 class="title-md" style="margin-top:32px; margin-bottom:12px;">ノードのカテゴリ</h4>
+    <table class="req-table">
+      <thead><tr><th>カテゴリ</th><th>対象タイプ</th><th>備考</th></tr></thead>
+      <tbody>
+        <tr><td><span class="badge-pill">Turn系</span></td><td>session_meta, turn_context, user_message, agent_message</td><td>セッション・ターンの区切り</td></tr>
+        <tr><td><span class="badge-pill">メッセージ系</span></td><td>response_item(message, role=*)</td><td>roleにより配置先が異なる</td></tr>
+        <tr><td><span class="badge-pill badge-amber">Action系</span></td><td>function_call, function_call_output</td><td>ツール呼び出しと結果。バッチで連続発生</td></tr>
+        <tr><td><span class="badge-pill badge-teal">思考系</span></td><td>reasoning, agent_reasoning</td><td>同じ推論の2つの表現を1ノードに統合</td></tr>
+        <tr><td><span class="badge-pill">イベント系</span></td><td>task_started, item_completed, task_complete</td><td>タスク進捗</td></tr>
+        <tr><td><span class="badge-pill">メタ系</span></td><td>token_count</td><td>トークン使用量</td></tr>
+        <tr><td><span class="badge-pill badge-teal">コンテキスト系</span></td><td>base/developer/user_instructions</td><td>ハーネスから分岐。折りたたみ表示</td></tr>
+      </tbody>
+    </table>
+
+    <!-- reasoning統合 -->
+    <div class="callout" style="margin-top:24px;">
+      <div class="callout-title">reasoning の二重表現の扱い（§2.3.5）</div>
+      <div class="callout-body"><code>reasoning</code>（response_item）と <code>agent_reasoning</code>（event_msg）は同じ推論の2つの表現。両方を統合して1つのハーネスノードとし、クリック展開時に両方の情報を表示する。</div>
+    </div>
+
+    <!-- 2.3.6 ノードの詳細表示 -->
+    <h4 class="title-md" style="margin-top:32px; margin-bottom:12px;">§2.3.6 ノードの詳細表示</h4>
+    <table class="req-table">
+      <thead><tr><th>ノード種別</th><th>表示方法</th></tr></thead>
+      <tbody>
+        <tr><td>ツール呼び出し（<code>function_call</code>, <code>function_call_output</code>）</td><td>ノードとして表示し、クリックで詳細を展開</td></tr>
+        <tr><td>推論（<code>reasoning</code> / <code>agent_reasoning</code>）</td><td>ハーネス上の1ノードに統合表示、クリックで詳細展開（§2.3.5参照）</td></tr>
+        <tr><td><code>base_instructions</code>（~20K文字）</td><td>折りたたみ可能。デフォルトは非表示</td></tr>
+        <tr><td><code>developer_instructions</code>（~8K文字）</td><td>折りたたみ可能。デフォルトは非表示</td></tr>
+        <tr><td><code>user_instructions</code>（~4.7K文字）</td><td>折りたたみ可能。デフォルトは非表示</td></tr>
+        <tr><td>未知タイプ</td><td>generic node として表示。クリックで生データを展開</td></tr>
+      </tbody>
+    </table>
+
+    <!-- 2.3.7 response_item(type=message) の role 扱い -->
+    <h4 class="title-md" style="margin-top:32px; margin-bottom:12px;">§2.3.7 response_item(type=message) の role 扱い</h4>
+    <p class="body-md" style="color:var(--muted); margin-bottom:16px;">
+      <code>response_item.type=message</code> は <code>role</code> により配置先が異なる。ハーネス上では <code>event_msg</code> の表現をメインとし、<code>response_item</code> 側は補助情報として扱う。
+    </p>
+    <table class="req-table">
+      <thead><tr><th>role</th><th>件数</th><th>出現位置</th><th>ハーネス上の扱い</th></tr></thead>
+      <tbody>
+        <tr><td><code>developer</code></td><td>2</td><td><code>task_started</code> と <code>turn_context</code> の前後</td><td><strong>ハーネス外（分岐）</strong>のコンテキストノード</td></tr>
+        <tr><td><code>user</code></td><td>セッション・ターンにより変動</td><td><code>task_started</code> と <code>turn_context</code> の前後</td><td><strong>ハーネス外（分岐）</strong>のノード</td></tr>
+        <tr><td><code>assistant</code></td><td>~55</td><td><code>function_call</code> バッチと <code>function_call_output</code> バッチの間</td><td><strong>ハーネス上</strong>のノード（<code>agent_message</code> と同位置）</td></tr>
+      </tbody>
+    </table>
+    <div class="callout" style="margin-top:12px;">
+      <div class="callout-body"><code>message(role=user)</code> には AGENTS.md のようなコンテキスト情報が含まれる一方、<code>event_msg.user_message</code> はユーザーの実際の入力のみを含む。<code>message(role=assistant)</code> はバッチ中間に挟まる場合、空テキストであることが多い。</div>
+    </div>
+
+    <!-- 2.3.8 token_count の直前イベント紐付け -->
+    <h4 class="title-md" style="margin-top:32px; margin-bottom:12px;">§2.3.8 token_count の直前イベント紐付け</h4>
+    <p class="body-md" style="color:var(--muted); margin-bottom:16px;">
+      <code>token_count</code> はハーネス上の独立ノードとはせず、<strong>直前のイベントに紐付くバッジ</strong>として表示する。
+    </p>
+    <ul class="req-list">
+      <li><code>token_count</code> は <code>turn_id</code> を持たない。出現位置から属するターンを判定する</li>
+      <li>直前のイベントノード（通常は <code>function_call</code> または <code>agent_message</code>）の右側にトークンバッジを表示</li>
+      <li>バッジには <code>info.total_token_usage.total_tokens</code>（セッション累計値）を表示</li>
+      <li>バッジをクリックすると下部パネルに内訳（input/output/cached/reasoning）を展開</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════ -->
+<!-- 画面構成 -->
+<!-- ════════════════════════════════════════════════════ -->
+<section class="section" id="screens">
+  <div class="page-container">
+    <div class="section-header">
+      <div class="section-num">Section 03</div>
+      <h2 class="display-md">画面構成・ユースケース</h2>
+    </div>
+
+    <!-- 画面遷移 -->
+    <h3 class="display-sm" style="margin-bottom:24px;">画面遷移</h3>
+
+    <div class="screen-transition">
+      <div class="screen-box">
+        <div class="screen-title">起動</div>
+        <div class="screen-desc">Go + React</div>
+      </div>
+      <div class="screen-arrow">→</div>
+      <div class="screen-box" style="border:2px solid var(--primary);">
+        <div class="screen-title">セッション一覧画面</div>
+        <div class="screen-desc">~/.codex/sessions</div>
+      </div>
+      <div class="screen-arrow">→ 選択 →</div>
+      <div class="screen-box" style="border:2px solid var(--primary);">
+        <div class="screen-title">セッション詳細画面</div>
+        <div class="screen-desc">ハーネス + 統計 + グラフ</div>
+      </div>
+      <div class="screen-arrow">→</div>
+      <div class="screen-box" style="opacity:0.5;">
+        <div class="screen-title">一覧に戻る</div>
+      </div>
+    </div>
+
+    <!-- ── 画面モック: セッション詳細画面（全体） ── -->
+    <h3 class="display-sm" style="margin-top:64px; margin-bottom:24px;">セッション詳細画面 — パネル構成</h3>
+
+    <div class="callout">
+      <div class="callout-title">画面イメージ — セッション詳細画面の全体レイアウト</div>
+      <div class="callout-body">左にReact Flowキャンバス、右上に統計情報、右下にトークングラフ、下にノード詳細パネル。React Flowはズーム・パン操作可能。</div>
+    </div>
+
+    <div class="mockup-frame" style="margin-bottom:48px;">
+      <div class="mockup-titlebar">
+        <div class="mockup-dot red"></div>
+        <div class="mockup-dot yellow"></div>
+        <div class="mockup-dot green"></div>
+        <span class="mockup-titlebar-text">codex-session-display — セッション詳細</span>
+      </div>
+      <div class="panel-layout">
+        <!-- Header -->
+        <div class="panel-header">
+          <div class="detail-header-left">
+            <div class="back-btn">←</div>
+            <div>
+              <div style="font-size:14px; font-weight:500; color:var(--ink);">セッション 019e5514-ed44-78b2-bf88-233d6e4273bf</div>
+              <div style="font-size:12px; color:var(--muted); margin-top:2px;">~/projects/backend-dev-val</div>
+            </div>
+          </div>
+          <div class="detail-header-meta">
+            <span><strong>ブランチ:</strong> feature/5</span>
+            <span><strong>モデル:</strong> openai</span>
+            <span><strong>CLI:</strong> v0.131.0</span>
+            <span><strong>開始:</strong> 2026-05-23 22:44</span>
+          </div>
+          <div style="display:flex; gap:8px;">
+            <span class="btn-secondary" style="font-size:12px; padding:6px 12px;">PNG出力</span>
+          </div>
+        </div>
+
+        <!-- Canvas area -->
+        <div class="panel-canvas" style="padding:16px; position:relative;">
+          <div style="text-align:center; color:var(--muted-soft); font-size:12px; margin-bottom:12px;">React Flow キャンバス（ズーム・パン操作可能）</div>
+          <!-- Mini harness preview -->
+          <div style="display:flex; flex-direction:column; align-items:center; gap:2px; padding:8px;">
+            <div style="padding:6px 16px; border-radius:6px; background:var(--surface-card); border:1px solid var(--primary); font-size:11px; font-weight:500; color:var(--ink);">session_meta</div>
+            <div style="font-size:12px; color:var(--muted-soft);">↓</div>
+            <div style="padding:6px 16px; border-radius:6px; background:var(--surface-dark); color:var(--on-dark); font-size:11px; border:1px solid var(--accent-amber);">task_started</div>
+            <div style="font-size:12px; color:var(--muted-soft);">↓</div>
+            <div style="padding:6px 16px; border-radius:6px; background:var(--surface-dark); color:var(--on-dark); font-size:11px;">turn_context</div>
+            <div style="font-size:12px; color:var(--muted-soft);">↓</div>
+            <div style="padding:6px 16px; border-radius:6px; background:var(--surface-card); border:1px solid var(--primary); font-size:11px; font-weight:500; color:var(--ink);">agent_reasoning</div>
+            <div style="font-size:12px; color:var(--muted-soft);">↓</div>
+            <div style="padding:6px 16px; border-radius:6px; background:var(--surface-card); border:2px solid var(--accent-amber); font-size:11px; color:var(--ink);">function_call ×3</div>
+            <div style="font-size:12px; color:var(--muted-soft);">↓</div>
+            <div style="padding:6px 16px; border-radius:6px; background:var(--surface-card); border:1px solid var(--primary); font-size:11px; font-weight:500; color:var(--ink);">agent_message</div>
+            <div style="font-size:12px; color:var(--muted-soft);">↓</div>
+            <div style="padding:6px 16px; border-radius:6px; background:var(--surface-card); border:2px solid var(--accent-amber); font-size:11px; color:var(--ink);">function_call_output ×3</div>
+            <div style="font-size:12px; color:var(--muted-soft);">↓</div>
+            <div style="padding:6px 16px; border-radius:6px; background:var(--surface-dark); color:var(--on-dark); font-size:11px; border:1px solid var(--accent-amber);">item_completed</div>
+            <div style="font-size:12px; color:var(--muted-soft);">↓</div>
+            <div style="padding:6px 16px; border-radius:6px; background:var(--surface-dark); color:var(--on-dark); font-size:11px; border:1px solid var(--accent-teal);">token_count</div>
+            <div style="color:var(--muted-soft); font-size:16px; letter-spacing:8px;">···</div>
+            <div style="padding:6px 16px; border-radius:6px; background:var(--surface-dark); color:var(--on-dark); font-size:11px; border:1px solid var(--accent-amber);">task_complete</div>
+          </div>
+        </div>
+
+        <!-- Sidebar -->
+        <div class="panel-sidebar">
+          <!-- Stats -->
+          <div class="detail-sidebar-section">
+            <h4>統計情報</h4>
+            <div class="stat-row"><span class="stat-label">所要時間</span><span class="stat-value">20分54秒</span></div>
+            <div class="stat-row"><span class="stat-label">総トークン数</span><span class="stat-value">2,679,135</span></div>
+            <div class="stat-row"><span class="stat-label">ツール呼び出し回数</span><span class="stat-value">67</span></div>
+            <div class="stat-row"><span class="stat-label">初回トークン生成</span><span class="stat-value">3.2秒</span></div>
+            <div class="stat-row"><span class="stat-label">コンテキスト上限</span><span class="stat-value">258,400</span></div>
+          </div>
+
+          <!-- Token graph -->
+          <div class="token-graph" style="flex:1;">
+            <h4>トークン使用量推移</h4>
+            <div class="graph-area">
+              <svg width="100%" height="100%" viewBox="0 0 260 130" preserveAspectRatio="none">
+                <defs>
+                  <linearGradient id="graphGrad" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stop-color="#cc785c" stop-opacity="0.3"/>
+                    <stop offset="100%" stop-color="#cc785c" stop-opacity="0"/>
+                  </linearGradient>
+                </defs>
+                <!-- Grid lines -->
+                <line x1="0" y1="32" x2="260" y2="32" stroke="#e6dfd8" stroke-width="0.5"/>
+                <line x1="0" y1="65" x2="260" y2="65" stroke="#e6dfd8" stroke-width="0.5"/>
+                <line x1="0" y1="97" x2="260" y2="97" stroke="#e6dfd8" stroke-width="0.5"/>
+                <!-- Area -->
+                <path d="M0,120 L26,110 L52,100 L78,85 L104,70 L130,55 L156,45 L182,35 L208,25 L234,18 L260,12 L260,130 L0,130Z" fill="url(#graphGrad)"/>
+                <!-- Line -->
+                <polyline points="0,120 26,110 52,100 78,85 104,70 130,55 156,45 182,35 208,25 234,18 260,12" fill="none" stroke="#cc785c" stroke-width="2"/>
+                <!-- Dots -->
+                <circle cx="78" cy="85" r="3" fill="#cc785c"/>
+                <circle cx="156" cy="45" r="3" fill="#cc785c"/>
+                <circle cx="234" cy="18" r="3" fill="#cc785c"/>
+              </svg>
+            </div>
+            <div class="graph-labels">
+              <span>22:45</span><span>22:50</span><span>22:55</span><span>23:00</span>
+            </div>
+            <div class="graph-legend">
+              <span><span class="legend-dot" style="background:var(--primary);"></span> total_tokens</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bottom panel: Node detail -->
+        <div class="panel-bottom">
+          <div class="detail-panel-header">
+            <h4>ノード詳細 — <span style="color:var(--primary);">function_call ×3</span></h4>
+            <span style="font-size:12px; color:var(--muted); cursor:pointer;">閉じる ✕</span>
+          </div>
+          <div class="detail-panel-content">
+            <div class="detail-panel-field">
+              <div class="field-label">ツール名</div>
+              <div class="field-value mono">exec_command</div>
+            </div>
+            <div class="detail-panel-field">
+              <div class="field-label">引数 (JSON)</div>
+              <div class="field-value mono" style="font-size:11px;">{"command": "cargo test --lib"}</div>
+            </div>
+            <div class="detail-panel-field">
+              <div class="field-label">call_id</div>
+              <div class="field-value mono" style="font-size:11px;">call_b3a7f2e1-...</div>
+            </div>
+            <div class="detail-panel-field">
+              <div class="field-label">実行結果</div>
+              <div class="field-value mono" style="font-size:11px; color:var(--success);">running 12 tests... ok</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Use Cases -->
+    <h3 class="display-sm" style="margin-top:48px; margin-bottom:24px;">ユースケース</h3>
+
+    <div class="card-grid">
+      <div class="info-card">
+        <div class="badge-pill badge-amber" style="margin-bottom:12px;">UC-1</div>
+        <div class="title-sm" style="margin-bottom:8px;">セッション一覧の閲覧</div>
+        <div class="body-sm" style="color:var(--muted);">
+          アプリ起動 → セッション一覧自動表示 → ID、ブランチ、タイムスタンプ等を確認
+        </div>
+      </div>
+      <div class="info-card">
+        <div class="badge-pill badge-amber" style="margin-bottom:12px;">UC-2</div>
+        <div class="title-sm" style="margin-bottom:8px;">セッションのハーネス表示</div>
+        <div class="body-sm" style="color:var(--muted);">
+          セッション選択 → JSONL解析 → React Flowハーネス表示 → ノードクリックで詳細確認
+        </div>
+      </div>
+      <div class="info-card">
+        <div class="badge-pill badge-amber" style="margin-bottom:12px;">UC-3</div>
+        <div class="title-sm" style="margin-bottom:8px;">トークン消費の分析</div>
+        <div class="body-sm" style="color:var(--muted);">
+          別パネルでトークン推移グラフ確認 → 統計情報（所要時間、総トークン数等）確認
+        </div>
+      </div>
+      <div class="info-card">
+        <div class="badge-pill badge-amber" style="margin-bottom:12px;">UC-4</div>
+        <div class="title-sm" style="margin-bottom:8px;">解析結果のエクスポート</div>
+        <div class="body-sm" style="color:var(--muted);">
+          セッション詳細画面でエクスポート操作 → React Flowの可視化結果が画像として保存
+        </div>
+      </div>
+    </div>
+
+    <!-- §2.7 セッション比較 -->
+    <div class="callout" style="margin-top:32px;">
+      <div class="callout-title">§2.6 エクスポート / §2.7 セッション比較（nice to have）</div>
+      <div class="callout-body">
+        <strong>エクスポート:</strong> 可視化結果を画像（PNG）としてエクスポート可能にする。<br>
+        <strong>セッション比較:</strong> 複数セッション間の比較機能を将来実装する可能性がある。必須要件ではない。
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════ -->
+<!-- トークン使用量グラフ -->
+<!-- ════════════════════════════════════════════════════ -->
+<section class="section">
+  <div class="page-container">
+    <div class="section-header">
+      <div class="section-num">Section 04</div>
+      <h2 class="display-md">トークン使用量グラフ</h2>
+    </div>
+
+    <p class="body-md" style="color:var(--muted); margin-bottom:24px;">
+      React Flowキャンバス外の別パネルに、<code>token_count</code> イベントの <code>info</code> フィールドからトークン使用量の推移を描画する。
+    </p>
+
+    <div class="card-grid-2">
+      <div>
+        <h4 class="title-sm" style="margin-bottom:12px;">データソース</h4>
+        <table class="req-table">
+          <thead><tr><th>フィールド</th><th>型</th><th>内容</th></tr></thead>
+          <tbody>
+            <tr><td><code>info.last_token_usage</code></td><td>object</td><td>直近のトークン使用量</td></tr>
+            <tr><td><code>info.model_context_window</code></td><td>int</td><td>コンテキストウィンドウサイズ</td></tr>
+            <tr><td><code>info.total_token_usage</code></td><td>object</td><td>累計トークン使用量</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div>
+        <h4 class="title-sm" style="margin-bottom:12px;">内訳サブフィールド</h4>
+        <table class="req-table">
+          <thead><tr><th>サブフィールド</th><th>内容</th></tr></thead>
+          <tbody>
+            <tr><td><code>input_tokens</code></td><td>入力トークン数</td></tr>
+            <tr><td><code>cached_input_tokens</code></td><td>キャッシュ済み入力</td></tr>
+            <tr><td><code>output_tokens</code></td><td>出力トークン数</td></tr>
+            <tr><td><code>reasoning_output_tokens</code></td><td>推論出力</td></tr>
+            <tr><td><code>total_tokens</code></td><td>合計 <span class="badge-pill badge-amber" style="font-size:10px;">主要値</span></td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <!-- §2.4.1 ターンごとのトークン使用量 -->
+    <h4 class="title-md" style="margin-top:48px; margin-bottom:12px;">§2.4.1 ターンごとのトークン使用量</h4>
+    <p class="body-md" style="color:var(--muted); margin-bottom:16px;">
+      各ターンのトークン消費量をサマリー表示する。各ターンの消費量 = そのターンに属する最後の <code>token_count</code> の <code>total_token_usage</code> − 前ターンの最後の <code>token_count</code> の <code>total_token_usage</code>（Turn 1の場合は 0 を減算）。
+    </p>
+    <ul class="req-list">
+      <li>消費トークン合計（<code>total_tokens</code>）</li>
+      <li><code>input_tokens</code> / <code>output_tokens</code> / <code>reasoning_output_tokens</code> の内訳</li>
+      <li>ターン内の <code>token_count</code> 出現回数</li>
+      <li>ターンの <code>collaboration_mode</code>（plan / default 等）</li>
+    </ul>
+
+    <!-- §2.4.2 token_countごとのトークン使用量 -->
+    <h4 class="title-md" style="margin-top:32px; margin-bottom:12px;">§2.4.2 token_countごとのトークン使用量</h4>
+    <p class="body-md" style="color:var(--muted); margin-bottom:16px;">
+      各 <code>token_count</code> イベントの <code>last_token_usage</code> を行列表で表示する。
+    </p>
+    <ul class="req-list">
+      <li>各行に <code>last_token_usage</code> の内訳を表示: <code>total_tokens</code>, <code>input_tokens</code>, <code>output_tokens</code>, <code>cached_input_tokens</code>, <code>reasoning_output_tokens</code></li>
+      <li>行頭に連番とターン番号を表示</li>
+      <li>ターン境界をセパレータで区切る（Turn 1 / Turn 2 ...）</li>
+      <li>フッターにセッション累計（最後の <code>token_count</code> の <code>total_token_usage</code>）を表示</li>
+      <li>リストはスクロール可能とする</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════ -->
+<!-- 統計情報 -->
+<!-- ════════════════════════════════════════════════════ -->
+<section class="section">
+  <div class="page-container">
+    <div class="section-header">
+      <div class="section-num">Section 05</div>
+      <h2 class="display-md">統計情報</h2>
+    </div>
+
+    <div class="card-grid">
+      <div class="info-card">
+        <div class="label">所要時間</div>
+        <div class="value">20分54秒</div>
+        <div class="body-sm" style="color:var(--muted); margin-top:4px;">task_started.started_at 〜 task_complete.completed_at</div>
+      </div>
+      <div class="info-card">
+        <div class="label">総トークン数</div>
+        <div class="value">2,679,135</div>
+        <div class="body-sm" style="color:var(--muted); margin-top:4px;">token_count.info.total_token_usage.total_tokens</div>
+      </div>
+      <div class="info-card">
+        <div class="label">ツール呼び出し回数</div>
+        <div class="value">67</div>
+        <div class="body-sm" style="color:var(--muted); margin-top:4px;">response_item.type=function_call の件数</div>
+      </div>
+      <div class="info-card">
+        <div class="label">token_count回数</div>
+        <div class="value">55</div>
+        <div class="body-sm" style="color:var(--muted); margin-top:4px;">event_msg.type=token_count の件数</div>
+      </div>
+      <div class="info-card">
+        <div class="label">初回トークン生成</div>
+        <div class="value">3.2秒</div>
+        <div class="body-sm" style="color:var(--muted); margin-top:4px;">task_complete.time_to_first_token_ms</div>
+      </div>
+      <div class="info-card">
+        <div class="label">ターン数</div>
+        <div class="value">2</div>
+        <div class="body-sm" style="color:var(--muted); margin-top:4px;">task_started の件数</div>
+      </div>
+      <div class="info-card">
+        <div class="label">タスク所要時間</div>
+        <div class="value">各タスク</div>
+        <div class="body-sm" style="color:var(--muted); margin-top:4px;">task_complete.duration_ms</div>
+      </div>
+      <div class="info-card">
+        <div class="label">コンテキスト上限</div>
+        <div class="value">258,400</div>
+        <div class="body-sm" style="color:var(--muted); margin-top:4px;">task_started.model_context_window</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════ -->
+<!-- API -->
+<!-- ════════════════════════════════════════════════════ -->
+<section class="section" id="api">
+  <div class="page-container">
+    <div class="section-header">
+      <div class="section-num">Section 06</div>
+      <h2 class="display-md">API仕様</h2>
+      <p class="body-md" style="color:var(--muted);">GoバックエンドはReactフロントエンドにREST APIを提供する。</p>
+    </div>
+
+    <!-- GET /api/sessions -->
+    <div class="api-endpoint">
+      <div style="display:flex; align-items:center;">
+        <span class="method get">GET</span>
+        <span class="path">/api/sessions</span>
+      </div>
+      <div class="desc">セッション一覧を取得する。</div>
+      <div style="margin-top:16px;">
+        <div style="font-size:12px; color:var(--on-dark-soft); margin-bottom:8px;">レスポンス例:</div>
+        <div style="background:var(--surface-dark-soft); border-radius:8px; padding:16px; overflow-x:auto;">
+          <pre class="code" style="color:var(--on-dark); font-size:12px; line-height:1.7;">{
+  <span style="color:var(--on-dark-soft);">"sessions"</span>: [
+    {
+      <span style="color:var(--on-dark-soft);">"id"</span>: <span style="color:var(--accent-amber);">"019e5514-ed44-78b2-bf88-233d6e4273bf"</span>,
+      <span style="color:var(--on-dark-soft);">"file_path"</span>: <span style="color:var(--accent-amber);">"2026/05/23/rollout-2026-05-23T22-44-55-...jsonl"</span>,
+      <span style="color:var(--on-dark-soft);">"cwd"</span>: <span style="color:var(--accent-amber);">"/Users/.../backend-dev-val"</span>,
+      <span style="color:var(--on-dark-soft);">"cli_version"</span>: <span style="color:var(--accent-amber);">"0.131.0"</span>,
+      <span style="color:var(--on-dark-soft);">"originator"</span>: <span style="color:var(--accent-amber);">"codex-tui"</span>,
+      <span style="color:var(--on-dark-soft);">"model_provider"</span>: <span style="color:var(--accent-amber);">"openai"</span>,
+      <span style="color:var(--on-dark-soft);">"branch"</span>: <span style="color:var(--accent-amber);">"feature/5"</span>,
+      <span style="color:var(--on-dark-soft);">"timestamp"</span>: <span style="color:var(--accent-amber);">"2026-05-23T13:44:55.385Z"</span>,
+      <span style="color:var(--on-dark-soft);">"file_size"</span>: 378000,
+      <span style="color:var(--on-dark-soft);">"file_modified_at"</span>: <span style="color:var(--accent-amber);">"2026-05-23T14:30:00.000Z"</span>,
+      <span style="color:var(--on-dark-soft);">"parsed"</span>: <span style="color:var(--accent-teal);">true</span>
+    }
+  ]
+}</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- GET /api/sessions/:id -->
+    <div class="api-endpoint">
+      <div style="display:flex; align-items:center;">
+        <span class="method get">GET</span>
+        <span class="path">/api/sessions/:id</span>
+      </div>
+      <div class="desc">指定セッションの解析結果（React Flow形式）を取得する。キャッシュが存在しない、またはJSONLが新しければ再解析する。</div>
+      <div style="margin-top:16px;">
+        <div style="font-size:12px; color:var(--on-dark-soft); margin-bottom:8px;">レスポンス例:</div>
+        <div style="background:var(--surface-dark-soft); border-radius:8px; padding:16px; overflow-x:auto;">
+          <pre class="code" style="color:var(--on-dark); font-size:12px; line-height:1.7;">{
+  <span style="color:var(--on-dark-soft);">"id"</span>: <span style="color:var(--accent-amber);">"019e5514-ed44-78b2-bf88-233d6e4273bf"</span>,
+  <span style="color:var(--on-dark-soft);">"parsed_at"</span>: <span style="color:var(--accent-amber);">"2026-05-23T15:00:00.000Z"</span>,
+  <span style="color:var(--on-dark-soft);">"nodes"</span>: [
+    { <span style="color:var(--on-dark-soft);">"id"</span>: <span style="color:var(--accent-amber);">"node-1"</span>, <span style="color:var(--on-dark-soft);">"type"</span>: <span style="color:var(--accent-amber);">"sessionMeta"</span>, <span style="color:var(--on-dark-soft);">"position"</span>: { <span style="color:var(--on-dark-soft);">"x"</span>: 0, <span style="color:var(--on-dark-soft);">"y"</span>: 0 }, <span style="color:var(--on-dark-soft);">"data"</span>: { ... } }
+  ],
+  <span style="color:var(--on-dark-soft);">"edges"</span>: [
+    { <span style="color:var(--on-dark-soft);">"id"</span>: <span style="color:var(--accent-amber);">"edge-1"</span>, <span style="color:var(--on-dark-soft);">"source"</span>: <span style="color:var(--accent-amber);">"node-1"</span>, <span style="color:var(--on-dark-soft);">"target"</span>: <span style="color:var(--accent-amber);">"node-2"</span>, <span style="color:var(--on-dark-soft);">"type"</span>: <span style="color:var(--accent-amber);">"default"</span> }
+  ],
+  <span style="color:var(--on-dark-soft);">"statistics"</span>: {
+    <span style="color:var(--on-dark-soft);">"duration_ms"</span>: 1254000,
+    <span style="color:var(--on-dark-soft);">"total_tokens"</span>: 2679135,
+    <span style="color:var(--on-dark-soft);">"tool_call_count"</span>: 67,
+    <span style="color:var(--on-dark-soft);">"token_count_count"</span>: 55,
+    <span style="color:var(--on-dark-soft);">"context_window_size"</span>: 258400,
+    <span style="color:var(--on-dark-soft);">"turn_count"</span>: 2,
+    <span style="color:var(--on-dark-soft);">"turns"</span>: [
+      {
+        <span style="color:var(--on-dark-soft);">"index"</span>: 1,
+        <span style="color:var(--on-dark-soft);">"collaboration_mode_kind"</span>: <span style="color:var(--accent-amber);">"plan"</span>,
+        <span style="color:var(--on-dark-soft);">"duration_ms"</span>: 115515,
+        <span style="color:var(--on-dark-soft);">"time_to_first_token_ms"</span>: 9593,
+        <span style="color:var(--on-dark-soft);">"consumed_tokens"</span>: { <span style="color:var(--on-dark-soft);">"total_tokens"</span>: 133610, ... }
+      }
+    ]
+  },
+  <span style="color:var(--on-dark-soft);">"token_counts"</span>: [
+    {
+      <span style="color:var(--on-dark-soft);">"index"</span>: 1,
+      <span style="color:var(--on-dark-soft);">"turn_index"</span>: 1,
+      <span style="color:var(--on-dark-soft);">"bound_to_node_id"</span>: <span style="color:var(--accent-amber);">"node-5"</span>,
+      <span style="color:var(--on-dark-soft);">"last_token_usage"</span>: { <span style="color:var(--on-dark-soft);">"total_tokens"</span>: 15778, ... },
+      <span style="color:var(--on-dark-soft);">"total_token_usage"</span>: { <span style="color:var(--on-dark-soft);">"total_tokens"</span>: 15778, ... }
+    }
+  ]
+}</pre>
+        </div>
+      </div>
+    </div>
+
+    <!-- POST /api/sessions/:id/export -->
+    <div class="api-endpoint">
+      <div style="display:flex; align-items:center;">
+        <span class="method post">POST</span>
+        <span class="path">/api/sessions/:id/export</span>
+      </div>
+      <div class="desc">指定セッションの可視化結果を画像としてエクスポートする。</div>
+      <div style="margin-top:16px;">
+        <div style="font-size:12px; color:var(--on-dark-soft); margin-bottom:8px;">リクエストボディ:</div>
+        <div style="background:var(--surface-dark-soft); border-radius:8px; padding:16px; overflow-x:auto;">
+          <pre class="code" style="color:var(--on-dark); font-size:12px; line-height:1.7;">{
+  <span style="color:var(--on-dark-soft);">"format"</span>: <span style="color:var(--accent-amber);">"png"</span>,
+  <span style="color:var(--on-dark-soft);">"width"</span>: 1920,
+  <span style="color:var(--on-dark-soft);">"height"</span>: 1080
+}</pre>
+        </div>
+        <div style="font-size:12px; color:var(--on-dark-soft); margin-top:12px;">レスポンス: 画像ファイル（バイナリ）</div>
+      </div>
+    </div>
+
+    <!-- Error responses -->
+    <h4 class="title-md" style="margin-top:32px; margin-bottom:16px;">エラーレスポンス</h4>
+    <div style="background:var(--surface-dark); border-radius:8px; padding:16px; margin-bottom:16px;">
+      <pre class="code" style="color:var(--on-dark); font-size:12px;">{
+  <span style="color:var(--on-dark-soft);">"error"</span>: <span style="color:var(--accent-amber);">"セッションファイルの読み込みに失敗しました"</span>,
+  <span style="color:var(--on-dark-soft);">"code"</span>: <span style="color:var(--accent-amber);">"FILE_READ_ERROR"</span>
+}</pre>
+    </div>
+    <table class="req-table">
+      <thead><tr><th>HTTP</th><th>code</th><th>内容</th></tr></thead>
+      <tbody>
+        <tr><td><span class="badge-pill">404</span></td><td><code>SESSION_NOT_FOUND</code></td><td>指定IDのセッションが存在しない</td></tr>
+        <tr><td><span class="badge-pill">422</span></td><td><code>PARSE_ERROR</code></td><td>JSONLの解析に失敗（破損・形式不正）</td></tr>
+        <tr><td><span class="badge-pill">413</span></td><td><code>FILE_TOO_LARGE</code></td><td>ファイルサイズが50MBを超過</td></tr>
+        <tr><td><span class="badge-pill">500</span></td><td><code>FILE_READ_ERROR</code></td><td>ファイルの読み込みに失敗</td></tr>
+        <tr><td><span class="badge-pill">500</span></td><td><code>INTERNAL_ERROR</code></td><td>内部エラー</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════ -->
+<!-- 非機能要件 -->
+<!-- ════════════════════════════════════════════════════ -->
+<section class="section" id="nonfunctional">
+  <div class="page-container">
+    <div class="section-header">
+      <div class="section-num">Section 07</div>
+      <h2 class="display-md">非機能要件</h2>
+    </div>
+
+    <h3 class="title-lg" style="margin-bottom:16px;">基本要件</h3>
+    <table class="req-table">
+      <thead><tr><th>項目</th><th>要件</th></tr></thead>
+      <tbody>
+        <tr><td>データ配置</td><td>ローカル完結。外部サーバーへのデータ送信を行わない</td></tr>
+        <tr><td>解析結果保存先</td><td><code>~/.codex-display</code></td></tr>
+        <tr><td>ファイルサイズ上限</td><td>50MB程度</td></tr>
+        <tr><td>機密情報</td><td>マスキング機能は不要</td></tr>
+        <tr><td>Codexバージョン</td><td>v0.131.0固定。柔軟に変更可能な構成とする</td></tr>
+      </tbody>
+    </table>
+
+    <h3 class="title-lg" style="margin-top:48px; margin-bottom:16px;">性能目標</h3>
+    <div class="card-grid">
+      <div class="info-card">
+        <div class="label">50MBファイル解析</div>
+        <div class="value" style="color:var(--primary);">10秒以内</div>
+      </div>
+      <div class="info-card">
+        <div class="label">キャッシュ済み表示</div>
+        <div class="value" style="color:var(--primary);">1秒以内</div>
+      </div>
+      <div class="info-card">
+        <div class="label">React Flow初期描画</div>
+        <div class="value" style="color:var(--primary);">2秒以内</div>
+      </div>
+      <div class="info-card">
+        <div class="label">ノード詳細展開</div>
+        <div class="value" style="color:var(--primary);">500ms以内</div>
+      </div>
+    </div>
+
+    <h3 class="title-lg" style="margin-top:48px; margin-bottom:16px;">エラーケース</h3>
+    <table class="req-table">
+      <thead><tr><th>ケース</th><th>挙動</th></tr></thead>
+      <tbody>
+        <tr><td>JSONLファイルが破損</td><td>エラーメッセージ表示。パースできた部分まで表示</td></tr>
+        <tr><td>ファイルサイズ50MB超過</td><td>エラーメッセージ表示。解析を中止</td></tr>
+        <tr><td>セッションが空（0バイト）</td><td>エラーメッセージ表示</td></tr>
+        <tr><td><code>~/.codex/sessions</code> が存在しない</td><td>ディレクトリ作成 または エラーメッセージ表示</td></tr>
+        <tr><td>不正なJSONレコードが含まれる</td><td>該当レコードをスキップし警告表示。解析は継続</td></tr>
+        <tr><td>未知のレコード型が含まれる</td><td>generic node として表示。解析は継続</td></tr>
+        <tr><td><code>~/.codex-display</code> への書き込み失敗</td><td>エラーログ出力。キャッシュなしで動作継続</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════ -->
+<!-- アーキテクチャ -->
+<!-- ════════════════════════════════════════════════════ -->
+<section class="section" id="architecture">
+  <div class="page-container">
+    <div class="section-header">
+      <div class="section-num">Section 08</div>
+      <h2 class="display-md">アーキテクチャ概要</h2>
+    </div>
+
+    <h3 class="title-lg" style="margin-bottom:24px;">構成</h3>
+    <table class="req-table">
+      <thead><tr><th>レイヤー</th><th>技術</th><th>役割</th></tr></thead>
+      <tbody>
+        <tr><td>フロントエンド</td><td>React + React Flow</td><td>JSONL解析結果の可視化</td></tr>
+        <tr><td>バックエンド</td><td>Go</td><td>JSONL読込・解析・React Flow形式への変換・API提供</td></tr>
+        <tr><td>データソース</td><td><code>~/.codex/sessions</code></td><td>CodexセッションJSONLファイル</td></tr>
+        <tr><td>キャッシュ</td><td><code>~/.codex-display</code></td><td>解析結果JSON（React Flow形式）</td></tr>
+      </tbody>
+    </table>
+
+    <h3 class="title-lg" style="margin-top:48px; margin-bottom:24px;">データフロー</h3>
+
+    <!-- ── 画面モック: データフロー図 ── -->
+    <div class="callout">
+      <div class="callout-title">データフロー図</div>
+      <div class="callout-body">JSONL → Go Backend（解析） → キャッシュ → React Frontend（表示）</div>
+    </div>
+    <div class="card-dark" style="text-align:center; padding:48px;">
+      <div style="display:flex; align-items:center; justify-content:center; gap:24px; flex-wrap:wrap;">
+        <div style="background:var(--surface-dark-elevated); border:1px solid rgba(255,255,255,0.12); border-radius:12px; padding:20px 28px; text-align:center;">
+          <div style="font-size:12px; color:var(--on-dark-soft); margin-bottom:4px;">データソース</div>
+          <div class="code" style="color:var(--on-dark); font-size:13px;">~/.codex/sessions/*.jsonl</div>
+        </div>
+        <div style="color:var(--primary); font-size:28px;">→</div>
+        <div style="background:var(--surface-dark-elevated); border:1px solid var(--primary); border-radius:12px; padding:20px 28px; text-align:center;">
+          <div style="font-size:12px; color:var(--on-dark-soft); margin-bottom:4px;">バックエンド</div>
+          <div style="color:var(--on-dark); font-size:14px; font-weight:500;">Go（解析・変換）</div>
+        </div>
+        <div style="color:var(--primary); font-size:28px;">→</div>
+        <div style="background:var(--surface-dark-elevated); border:1px solid rgba(255,255,255,0.12); border-radius:12px; padding:20px 28px; text-align:center;">
+          <div style="font-size:12px; color:var(--on-dark-soft); margin-bottom:4px;">キャッシュ</div>
+          <div class="code" style="color:var(--on-dark); font-size:13px;">~/.codex-display/*.json</div>
+        </div>
+        <div style="color:var(--primary); font-size:28px;">→</div>
+        <div style="background:var(--surface-dark-elevated); border:1px solid var(--accent-teal); border-radius:12px; padding:20px 28px; text-align:center;">
+          <div style="font-size:12px; color:var(--on-dark-soft); margin-bottom:4px;">フロントエンド</div>
+          <div style="color:var(--on-dark); font-size:14px; font-weight:500;">React Flow 表示</div>
+        </div>
+      </div>
+    </div>
+
+    <h3 class="title-lg" style="margin-top:48px; margin-bottom:16px;">Goバックエンドの役割</h3>
+    <ul class="req-list">
+      <li><code>~/.codex/sessions</code> ディレクトリのスキャン</li>
+      <li>JSONLファイルの読込・パース</li>
+      <li>JSONLレコードからReact Flowのnode/edgeへの変換</li>
+      <li>解析結果のJSON保存・読込（<code>~/.codex-display</code>）</li>
+      <li>再解析判定（JSONLと解析結果JSONの日時比較）</li>
+      <li>ReactフロントエンドへのAPI提供</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════════════════ -->
+<!-- FOOTER -->
+<!-- ════════════════════════════════════════════════════ -->
+<footer style="background:var(--surface-dark); color:var(--on-dark-soft); padding:48px 32px; margin-top:80px;">
+  <div class="page-container" style="text-align:center;">
+    <div style="font-family:'Cormorant Garamond',serif; font-size:20px; color:var(--on-dark); margin-bottom:8px;">
+      <span style="color:var(--primary);">&#x2731;</span> codex-session-display
+    </div>
+    <div class="body-sm">要件定義書 v1.0 — Codex CLI v0.131.0</div>
+  </div>
+</footer>
+
+</body>
+</html>
