@@ -1,0 +1,544 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>セッション一覧 - codex-session-display</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f1117;
+      color: #e1e4e8;
+      min-height: 100vh;
+    }
+
+    /* Header */
+    .app-header {
+      background: #161b22;
+      border-bottom: 1px solid #30363d;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .app-header h1 {
+      font-size: 18px;
+      font-weight: 600;
+      color: #f0f6fc;
+    }
+    .app-header .version {
+      font-size: 12px;
+      color: #8b949e;
+      background: #21262d;
+      padding: 2px 8px;
+      border-radius: 12px;
+    }
+
+    /* Main */
+    .main-content {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    /* Toolbar */
+    .toolbar {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .toolbar .info {
+      font-size: 14px;
+      color: #8b949e;
+    }
+    .toolbar .info strong {
+      color: #f0f6fc;
+    }
+    .search-box {
+      margin-left: auto;
+      background: #0d1117;
+      border: 1px solid #30363d;
+      border-radius: 6px;
+      padding: 8px 12px;
+      color: #e1e4e8;
+      font-size: 14px;
+      width: 300px;
+    }
+    .search-box::placeholder { color: #484f58; }
+    .search-box:focus { outline: none; border-color: #58a6ff; }
+
+    /* ===== Date Group Tree ===== */
+    .date-tree {
+      background: #161b22;
+      border: 1px solid #30363d;
+      border-radius: 8px;
+      overflow: hidden;
+    }
+
+    /* Year */
+    .year-group { border-bottom: 1px solid #21262d; }
+    .year-group:last-child { border-bottom: none; }
+    .year-header {
+      padding: 12px 16px;
+      background: #1c2128;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .year-header:hover { background: #21262d; }
+    .year-header .arrow {
+      font-size: 10px;
+      color: #484f58;
+      transition: transform 0.15s;
+      width: 16px;
+      text-align: center;
+    }
+    .year-header .arrow.open { transform: rotate(90deg); }
+    .year-header .label {
+      font-size: 14px;
+      font-weight: 600;
+      color: #f0f6fc;
+    }
+    .year-header .count {
+      font-size: 12px;
+      color: #484f58;
+      margin-left: 4px;
+    }
+
+    /* Month */
+    .month-group { border-top: 1px solid #21262d; }
+    .month-header {
+      padding: 10px 16px 10px 40px;
+      background: #181d24;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .month-header:hover { background: #1c2128; }
+    .month-header .arrow {
+      font-size: 10px;
+      color: #484f58;
+      transition: transform 0.15s;
+      width: 16px;
+      text-align: center;
+    }
+    .month-header .arrow.open { transform: rotate(90deg); }
+    .month-header .label {
+      font-size: 13px;
+      font-weight: 600;
+      color: #c9d1d9;
+    }
+    .month-header .count {
+      font-size: 12px;
+      color: #484f58;
+      margin-left: 4px;
+    }
+
+    /* Day */
+    .day-group { border-top: 1px solid #1c2128; }
+    .day-header {
+      padding: 8px 16px 8px 64px;
+      background: #14181e;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .day-header:hover { background: #181d24; }
+    .day-header .arrow {
+      font-size: 10px;
+      color: #484f58;
+      transition: transform 0.15s;
+      width: 16px;
+      text-align: center;
+    }
+    .day-header .arrow.open { transform: rotate(90deg); }
+    .day-header .label {
+      font-size: 12px;
+      font-weight: 600;
+      color: #8b949e;
+    }
+    .day-header .count {
+      font-size: 11px;
+      color: #484f58;
+      margin-left: 4px;
+    }
+
+    /* Session rows inside day */
+    .session-list { background: #0f1117; }
+
+    /* Session row */
+    .session-row {
+      display: grid;
+      grid-template-columns: 1fr 200px 120px 80px 100px 100px 160px 80px;
+      align-items: center;
+      padding: 10px 16px 10px 88px;
+      border-top: 1px solid #161b22;
+      cursor: pointer;
+      transition: background 0.15s;
+      gap: 8px;
+    }
+    .session-row:hover { background: #161b22; }
+    .session-row:first-child { border-top: none; }
+
+    /* Column header row */
+    .col-header {
+      display: grid;
+      grid-template-columns: 1fr 200px 120px 80px 100px 100px 160px 80px;
+      padding: 10px 16px 10px 88px;
+      background: #111620;
+      border-top: 1px solid #1c2128;
+      gap: 8px;
+      position: sticky;
+      top: 0;
+      z-index: 2;
+    }
+    .col-header span {
+      font-size: 10px;
+      font-weight: 600;
+      color: #484f58;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    /* Cell styles */
+    .session-id {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 12px;
+      color: #58a6ff;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .cwd {
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 12px;
+      color: #8b949e;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .branch {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: #1c3450;
+      color: #58a6ff;
+      padding: 2px 8px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-family: 'SF Mono', monospace;
+    }
+    .branch::before {
+      content: "⌥";
+      font-size: 10px;
+      opacity: 0.7;
+    }
+    .tag {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 500;
+    }
+    .tag-version {
+      background: #1c2128;
+      color: #8b949e;
+      border: 1px solid #30363d;
+    }
+    .tag-originator {
+      background: #1c2d1c;
+      color: #3fb950;
+      border: 1px solid #238636;
+    }
+    .tag-provider {
+      background: #2a1f3d;
+      color: #bc8cff;
+      border: 1px solid #6e40c9;
+    }
+    .timestamp {
+      font-size: 12px;
+      color: #8b949e;
+      white-space: nowrap;
+    }
+    .file-size {
+      font-size: 12px;
+      color: #8b949e;
+    }
+
+    /* Unparsed state */
+    .unparsed {
+      color: #484f58;
+      font-style: italic;
+      font-size: 12px;
+    }
+    .session-row.unparsed-row .session-id {
+      color: #484f58;
+    }
+
+    /* Parse status indicator */
+    .parse-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      font-weight: 500;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .parse-status.parsed {
+      background: #1c2d1c;
+      color: #3fb950;
+    }
+    .parse-status.unparsed-status {
+      background: #2d1518;
+      color: #f85149;
+    }
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <h1>Codex Session Display</h1>
+    <span class="version">v0.1.0</span>
+  </header>
+
+  <div class="main-content">
+    <div class="toolbar">
+      <span class="info"><strong>7</strong> 件のセッションが見つかりました</span>
+      <span class="info" style="color: #484f58;">ソース: ~/.codex/sessions</span>
+      <input type="text" class="search-box" placeholder="セッションID、ブランチ、ディレクトリで検索...">
+    </div>
+
+    <div class="date-tree">
+      <!-- ===== 2026年 ===== -->
+      <div class="year-group">
+        <div class="year-header" onclick="toggleGroup(this)">
+          <span class="arrow open">▶</span>
+          <span class="label">2026</span>
+          <span class="count">— 7件</span>
+        </div>
+
+        <!-- 5月 -->
+        <div class="month-group" style="display:block">
+          <div class="month-header" onclick="toggleGroup(this)">
+            <span class="arrow open">▶</span>
+            <span class="label">5月</span>
+            <span class="count">— 5件</span>
+          </div>
+
+          <!-- 23日 -->
+          <div class="day-group" style="display:block">
+            <div class="day-header" onclick="toggleGroup(this)">
+              <span class="arrow open">▶</span>
+              <span class="label">23日 (金)</span>
+              <span class="count">— 2件</span>
+            </div>
+            <div class="col-header" style="display:block">
+              <span>セッションID</span>
+              <span>作業ディレクトリ</span>
+              <span>ブランチ</span>
+              <span>CLI</span>
+              <span>起動元</span>
+              <span>プロバイダー</span>
+              <span>タイムスタンプ</span>
+              <span>サイズ</span>
+            </div>
+            <div class="session-list" style="display:block">
+              <!-- Parsed session -->
+              <div class="session-row" onclick="window.location.href='session-detail.html'">
+                <span class="session-id">019e5514-ed44-78b2-bf88-233d6e4273bf</span>
+                <span class="cwd" title="/Users/dev/projects/backend-dev-val">/Users/dev/projects/backend-dev-val</span>
+                <span class="branch">feature/5</span>
+                <span class="tag tag-version">0.131.0</span>
+                <span class="tag tag-originator">codex-tui</span>
+                <span class="tag tag-provider">openai</span>
+                <span class="timestamp">22:44:55</span>
+                <span class="file-size">378 KB</span>
+              </div>
+              <!-- Unparsed session -->
+              <div class="session-row unparsed-row" onclick="window.location.href='session-detail.html'">
+                <span class="session-id">019e5a3c-f112-45d1-a903-e8b7c4f23a19</span>
+                <span class="unparsed">解析前</span>
+                <span class="unparsed">—</span>
+                <span class="unparsed">—</span>
+                <span class="unparsed">—</span>
+                <span class="unparsed">—</span>
+                <span class="timestamp" style="color:#484f58">18:12:03</span>
+                <span class="file-size">1.2 MB</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 22日 -->
+          <div class="day-group" style="display:block">
+            <div class="day-header" onclick="toggleGroup(this)">
+              <span class="arrow open">▶</span>
+              <span class="label">22日 (木)</span>
+              <span class="count">— 1件</span>
+            </div>
+            <div class="col-header" style="display:block">
+              <span>セッションID</span>
+              <span>作業ディレクトリ</span>
+              <span>ブランチ</span>
+              <span>CLI</span>
+              <span>起動元</span>
+              <span>プロバイダー</span>
+              <span>タイムスタンプ</span>
+              <span>サイズ</span>
+            </div>
+            <div class="session-list" style="display:block">
+              <div class="session-row" onclick="window.location.href='session-detail.html'">
+                <span class="session-id">019e4b7a-cc39-6ef0-bd12-a5c3e7f89102</span>
+                <span class="cwd" title="/Users/dev/projects/frontend-dashboard">/Users/dev/projects/frontend-dashboard</span>
+                <span class="branch">fix/auth-bug</span>
+                <span class="tag tag-version">0.131.0</span>
+                <span class="tag tag-originator">codex-tui</span>
+                <span class="tag tag-provider">openai</span>
+                <span class="timestamp">14:35:21</span>
+                <span class="file-size">524 KB</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 21日 -->
+          <div class="day-group" style="display:block">
+            <div class="day-header" onclick="toggleGroup(this)">
+              <span class="arrow open">▶</span>
+              <span class="label">21日 (水)</span>
+              <span class="count">— 1件</span>
+            </div>
+            <div class="col-header" style="display:block">
+              <span>セッションID</span>
+              <span>作業ディレクトリ</span>
+              <span>ブランチ</span>
+              <span>CLI</span>
+              <span>起動元</span>
+              <span>プロバイダー</span>
+              <span>タイムスタンプ</span>
+              <span>サイズ</span>
+            </div>
+            <div class="session-list" style="display:block">
+              <!-- Unparsed session -->
+              <div class="session-row unparsed-row" onclick="window.location.href='session-detail.html'">
+                <span class="session-id">019e3d2f-ab81-4c92-80e5-f1d6a0b3c784</span>
+                <span class="unparsed">解析前</span>
+                <span class="unparsed">—</span>
+                <span class="unparsed">—</span>
+                <span class="unparsed">—</span>
+                <span class="unparsed">—</span>
+                <span class="timestamp" style="color:#484f58">09:58:44</span>
+                <span class="file-size">2.8 MB</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- 20日 -->
+          <div class="day-group" style="display:block">
+            <div class="day-header" onclick="toggleGroup(this)">
+              <span class="arrow open">▶</span>
+              <span class="label">20日 (火)</span>
+              <span class="count">— 1件</span>
+            </div>
+            <div class="col-header" style="display:block">
+              <span>セッションID</span>
+              <span>作業ディレクトリ</span>
+              <span>ブランチ</span>
+              <span>CLI</span>
+              <span>起動元</span>
+              <span>プロバイダー</span>
+              <span>タイムスタンプ</span>
+              <span>サイズ</span>
+            </div>
+            <div class="session-list" style="display:block">
+              <div class="session-row" onclick="window.location.href='session-detail.html'">
+                <span class="session-id">019e28eb-7f04-b1a3-c5d9-e2f4a6b8c012</span>
+                <span class="cwd" title="/Users/dev/projects/infra-terraform">/Users/dev/projects/infra-terraform</span>
+                <span class="branch">staging</span>
+                <span class="tag tag-version">0.131.0</span>
+                <span class="tag tag-originator">codex-tui</span>
+                <span class="tag tag-provider">openai</span>
+                <span class="timestamp">11:22:07</span>
+                <span class="file-size">156 KB</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4月 -->
+        <div class="month-group" style="display:block">
+          <div class="month-header" onclick="toggleGroup(this)">
+            <span class="arrow">▶</span>
+            <span class="label">4月</span>
+            <span class="count">— 2件</span>
+          </div>
+
+          <!-- 15日 (collapsed) -->
+          <div class="day-group" style="display:none">
+            <div class="day-header" onclick="toggleGroup(this)">
+              <span class="arrow">▶</span>
+              <span class="label">15日 (火)</span>
+              <span class="count">— 2件</span>
+            </div>
+            <div class="col-header" style="display:none">
+              <span>セッションID</span>
+              <span>作業ディレクトリ</span>
+              <span>ブランチ</span>
+              <span>CLI</span>
+              <span>起動元</span>
+              <span>プロバイダー</span>
+              <span>タイムスタンプ</span>
+              <span>サイズ</span>
+            </div>
+            <div class="session-list" style="display:none">
+              <div class="session-row" onclick="window.location.href='session-detail.html'">
+                <span class="session-id">019d8c4a-3e71-4b82-a1d5-f7c9e3b5a028</span>
+                <span class="cwd" title="/Users/dev/projects/data-importer">/Users/dev/projects/data-importer</span>
+                <span class="branch">main</span>
+                <span class="tag tag-version">0.130.2</span>
+                <span class="tag tag-originator">codex-tui</span>
+                <span class="tag tag-provider">openai</span>
+                <span class="timestamp">16:42:11</span>
+                <span class="file-size">4.1 MB</span>
+              </div>
+              <div class="session-row unparsed-row" onclick="window.location.href='session-detail.html'">
+                <span class="session-id">019d8b13-9a26-4f50-b8c2-d4e6a0c2b714</span>
+                <span class="unparsed">解析前</span>
+                <span class="unparsed">—</span>
+                <span class="unparsed">—</span>
+                <span class="unparsed">—</span>
+                <span class="unparsed">—</span>
+                <span class="timestamp" style="color:#484f58">08:15:33</span>
+                <span class="file-size">890 KB</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function toggleGroup(header) {
+      const arrow = header.querySelector('.arrow');
+      const parent = header.parentElement;
+      const children = parent.querySelectorAll(':scope > .month-group, :scope > .day-group, :scope > .col-header, :scope > .session-list');
+
+      const isOpen = arrow.classList.contains('open');
+      if (isOpen) {
+        arrow.classList.remove('open');
+        children.forEach(c => c.style.display = 'none');
+      } else {
+        arrow.classList.add('open');
+        children.forEach(c => c.style.display = 'block');
+      }
+    }
+  </script>
+</body>
+</html>
