@@ -53,26 +53,26 @@ TokenBreakdownに加えて、キャッシュされた入力トークン数（Cac
 
 #### 2.1.4 ターン統計（TurnStatistics）
 
-| フィールド            | 型             | 説明                                 |
-| --------------------- | -------------- | ------------------------------------ |
-| Index                 | 整数           | ターンのインデックス（0始まり）      |
-| CollaborationModeKind | 文字列         | コラボレーションモードの種類         |
-| DurationMs            | 整数           | ターンの所要時間（ミリ秒）           |
-| TimeToFirstTokenMs    | 整数           | 初回トークン生成までの時間（ミリ秒） |
-| TokenCountCount       | 整数           | ターン内のtoken_countイベント数      |
-| ConsumedTokens        | TokenBreakdown | ターンで消費されたトークンの内訳     |
+| フィールド            | 型             | 説明                                                                                                                                                                                                                                      |
+| --------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Index                 | 整数           | ターンのインデックス（0始まり）                                                                                                                                                                                                           |
+| CollaborationModeKind | 文字列         | コラボレーションモードの種類                                                                                                                                                                                                              |
+| DurationMs            | 整数           | ターンの所要時間（ミリ秒）                                                                                                                                                                                                                |
+| TimeToFirstTokenMs    | 整数           | 初回トークン生成までの時間（ミリ秒）                                                                                                                                                                                                      |
+| TokenCountCount       | 整数           | ターン内のtoken_countイベント数                                                                                                                                                                                                           |
+| ConsumedTokens        | TokenBreakdown | ターンで消費されたトークンの内訳。当ターン内最後のtoken_countのtotal_token_usageから前ターン内最後のtoken_countのtotal_token_usageを減じた差分（各トークン種別ごとに計算）。最初のターンの場合は当ターンのtotal_token_usageをそのまま使用 |
 
 #### 2.1.5 セッション全体の統計（Statistics）
 
-| フィールド        | 型                   | 説明                               |
-| ----------------- | -------------------- | ---------------------------------- |
-| DurationMs        | 整数                 | セッション全体の所要時間（ミリ秒） |
-| TotalTokens       | 整数                 | セッション全体の合計トークン数     |
-| ToolCallCount     | 整数                 | ツール呼び出しの総回数             |
-| TokenCountCount   | 整数                 | token_countイベントの総数          |
-| ContextWindowSize | 整数                 | コンテキストウィンドウサイズ       |
-| TurnCount         | 整数                 | ターン数                           |
-| Turns             | TurnStatisticsの配列 | 各ターンの統計情報                 |
+| フィールド        | 型                   | 説明                                                                                                 |
+| ----------------- | -------------------- | ---------------------------------------------------------------------------------------------------- |
+| DurationMs        | 整数                 | 最初のターンのstarted_atから最後のターンのcompleted_atまでの差分（ミリ秒）。ターン間のギャップを含む |
+| TotalTokens       | 整数                 | 最後のtoken_countイベントのtotal_token_usage.total_tokensと等価                                      |
+| ToolCallCount     | 整数                 | response_item(function_call)のレコード件数                                                           |
+| TokenCountCount   | 整数                 | 全ターンのtoken_countイベントの合計件数                                                              |
+| ContextWindowSize | 整数                 | task_startedイベントのmodel_context_windowフィールドの値                                             |
+| TurnCount         | 整数                 | ターン数                                                                                             |
+| Turns             | TurnStatisticsの配列 | 各ターンの統計情報                                                                                   |
 
 #### 2.1.6 トークンカウントエントリ（TokenCountEntry）
 
