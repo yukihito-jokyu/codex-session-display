@@ -64,15 +64,15 @@ TokenBreakdownに加えて、キャッシュされた入力トークン数（Cac
 
 #### 2.1.5 セッション全体の統計（Statistics）
 
-| フィールド        | 型                   | 説明                                                                                                 |
-| ----------------- | -------------------- | ---------------------------------------------------------------------------------------------------- |
+| フィールド        | 型                   | 説明                                                                                                                                                                      |
+| ----------------- | -------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | DurationMs        | 整数                 | 最初のターンのstarted_atから最後のターンのcompleted_atまでの差分（ミリ秒）。started_atとcompleted_atは秒単位のため、パーサーで×1000して計算する。ターン間のギャップを含む |
-| TotalTokens       | 整数                 | 最後のtoken_countイベントのtotal_token_usage.total_tokensと等価                                      |
-| ToolCallCount     | 整数                 | response_item(function_call)のレコード件数                                                           |
-| TokenCountCount   | 整数                 | 全ターンのtoken_countイベントの合計件数                                                              |
-| ContextWindowSize | 整数                 | task_startedイベントのmodel_context_windowフィールドの値                                             |
-| TurnCount         | 整数                 | ターン数                                                                                             |
-| Turns             | TurnStatisticsの配列 | 各ターンの統計情報                                                                                   |
+| TotalTokens       | 整数                 | 最後のtoken_countイベントのtotal_token_usage.total_tokensと等価                                                                                                           |
+| ToolCallCount     | 整数                 | response_item(function_call)のレコード件数                                                                                                                                |
+| TokenCountCount   | 整数                 | 全ターンのtoken_countイベントの合計件数                                                                                                                                   |
+| ContextWindowSize | 整数                 | task_startedイベントのmodel_context_windowフィールドの値                                                                                                                  |
+| TurnCount         | 整数                 | ターン数                                                                                                                                                                  |
+| Turns             | TurnStatisticsの配列 | 各ターンの統計情報                                                                                                                                                        |
 
 #### 2.1.6 トークンカウントエントリ（TokenCountEntry）
 
@@ -178,17 +178,17 @@ event_msg はサブタイプによって含まれるフィールドが異なる�
 
 #### 2.2.7 response_item のデータ構造
 
-| フィールド       | 対象サブタイプ                      | 説明                                                                              |
-| ---------------- | ----------------------------------- | --------------------------------------------------------------------------------- |
-| Role             | message                             | メッセージのロール（developer / user / assistant）                                |
-| Content          | message                             | メッセージの内容配列。各要素は `type`（input_text / output_text）と `text` を持つ |
-| Summary          | reasoning                           | 推論サマリーの配列。各要素は `type`（summary_text）と `text` を持つ               |
-| Content          | reasoning                           | 推論の本文（現在は常にnull）                                                      |
-| EncryptedContent | reasoning                           | 暗号化された推論内容（現在は常にnull）                                            |
-| Name             | function_call                       | 呼び出す関数名                                                                    |
-| Arguments        | function_call                       | 関数の引数（JSON文字列）                                                          |
-| CallID           | function_call, function_call_output | 呼び出しと結果を紐付けるID                                                        |
-| Output           | function_call_output                | 関数の実行結果テキスト                                                            |
+| フィールド       | 対象サブタイプ                      | 説明                                                                                                                                              |
+| ---------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Role             | message                             | メッセージのロール（developer / user / assistant）                                                                                                |
+| Content          | message                             | メッセージの内容配列。各要素は `type` と `text` を持つ。`type` はロールに応じて決まる: developer / user → `input_text`、assistant → `output_text` |
+| Summary          | reasoning                           | 推論サマリーの配列。各要素は `type`（summary_text）と `text` を持つ                                                                               |
+| Content          | reasoning                           | 推論の本文（現在は常にnull）                                                                                                                      |
+| EncryptedContent | reasoning                           | 暗号化された推論内容（現在は常にnull）                                                                                                            |
+| Name             | function_call                       | 呼び出す関数名                                                                                                                                    |
+| Arguments        | function_call                       | 関数の引数（JSON文字列）                                                                                                                          |
+| CallID           | function_call, function_call_output | 呼び出しと結果を紐付けるID                                                                                                                        |
+| Output           | function_call_output                | 関数の実行結果テキスト                                                                                                                            |
 
 ### 2.3 パース処理フロー
 
