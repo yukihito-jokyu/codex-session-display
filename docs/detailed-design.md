@@ -66,7 +66,7 @@ TokenBreakdownに加えて、キャッシュされた入力トークン数（Cac
 
 | フィールド        | 型                   | 説明                                                                                                 |
 | ----------------- | -------------------- | ---------------------------------------------------------------------------------------------------- |
-| DurationMs        | 整数                 | 最初のターンのstarted_atから最後のターンのcompleted_atまでの差分（ミリ秒）。ターン間のギャップを含む |
+| DurationMs        | 整数                 | 最初のターンのstarted_atから最後のターンのcompleted_atまでの差分（ミリ秒）。started_atとcompleted_atは秒単位のため、パーサーで×1000して計算する。ターン間のギャップを含む |
 | TotalTokens       | 整数                 | 最後のtoken_countイベントのtotal_token_usage.total_tokensと等価                                      |
 | ToolCallCount     | 整数                 | response_item(function_call)のレコード件数                                                           |
 | TokenCountCount   | 整数                 | 全ターンのtoken_countイベントの合計件数                                                              |
@@ -154,10 +154,10 @@ event_msg はサブタイプによって含まれるフィールドが異なる�
 | --------------------- | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
 | Message / Text        | agent_message, agent_reasoning              | メッセージ本文                                                                                              |
 | TurnID                | task_started, task_complete, item_completed | ターンID                                                                                                    |
-| StartedAt             | task_started                                | ターン開始時刻（ミリ秒タイムスタンプ）                                                                      |
+| StartedAt             | task_started                                | ターン開始時刻（秒タイムスタンプ）                                                                          |
 | ModelContextWindow    | task_started                                | モデルのコンテキストウィンドウサイズ                                                                        |
 | CollaborationModeKind | task_started                                | コラボレーションモードの種類                                                                                |
-| CompletedAt           | task_complete                               | ターン完了時刻                                                                                              |
+| CompletedAt           | task_complete                               | ターン完了時刻（秒タイムスタンプ）                                                                          |
 | DurationMs            | task_complete                               | 所要時間（ミリ秒）                                                                                          |
 | TimeToFirstTokenMs    | task_complete                               | 初回トークンまでの時間                                                                                      |
 | LastAgentMessage      | task_complete                               | ターン完了時の最後のエージェントメッセージ。agent_messageと重複する場合がある                               |
@@ -165,6 +165,16 @@ event_msg はサブタイプによって含まれるフィールドが異なる�
 | CompletedAtMs         | item_completed                              | アイテム完了時刻（ミリ秒タイムスタンプ）。参照用                                                            |
 | ThreadID              | item_completed                              | スレッドID（セッションIDと同一の場合がある）。参照用                                                        |
 | Info                  | token_count                                 | `total_token_usage`（TokenDetail）, `last_token_usage`（TokenDetail）, `model_context_window`（整数）を含む |
+
+以下のフィールドは実データに存在するが、本プロジェクトでは使用しない。
+
+| フィールド           | 対象サブタイプ | 説明                       |
+| -------------------- | -------------- | -------------------------- |
+| RateLimits           | token_count    | レート制限情報（通常null） |
+| Images / LocalImages | user_message   | 画像添付情報               |
+| TextElements         | user_message   | テキスト要素               |
+| Phase                | agent_message  | フェーズ情報（通常null）   |
+| MemoryCitation       | agent_message  | メモリ引用（通常null）     |
 
 #### 2.2.7 response_item のデータ構造
 
