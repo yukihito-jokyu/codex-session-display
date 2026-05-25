@@ -99,15 +99,17 @@ JSONLファイルの1行は、トップレベルの `type` フィールドで以
 
 #### 2.2.2 event_msg のサブタイプ
 
-| payload.type      | 内容                                                       |
-| ----------------- | ---------------------------------------------------------- |
-| `user_message`    | ユーザーからのメッセージ                                   |
-| `agent_message`   | エージェントからのメッセージ                               |
-| `agent_reasoning` | エージェントの推論テキスト                                 |
-| `task_started`    | ターンの開始を示すイベント                                 |
-| `task_complete`   | ターンの完了を示すイベント。所要時間やトークン使用量を含む |
-| `token_count`     | トークン使用量のカウント                                   |
-| `item_completed`  | アイテム完了イベント                                       |
+| payload.type          | 内容                                                                  |
+| --------------------- | --------------------------------------------------------------------- |
+| `user_message`        | ユーザーからのメッセージ                                              |
+| `agent_message`       | エージェントからのメッセージ                                          |
+| `agent_reasoning`     | エージェントの推論テキスト                                            |
+| `task_started`        | ターンの開始を示すイベント                                            |
+| `task_complete`       | ターンの完了を示すイベント。所要時間やトークン使用量を含む            |
+| `turn_aborted`        | ターンの中断を示すイベント。task_completeと同等にターン終了として扱う |
+| `token_count`         | トークン使用量のカウント                                              |
+| `item_completed`      | アイテム完了イベント                                                  |
+| `thread_name_updated` | セッションタイトルの更新。thread_idでセッションと紐付く               |
 
 #### 2.2.3 response_item のサブタイプ
 
@@ -150,21 +152,24 @@ JSONLファイルの1行は、トップレベルの `type` フィールドで以
 
 event_msg はサブタイプによって含まれるフィールドが異なる。共通フィールドは `Type`（イベント種別）のみ。主なフィールドを以下に示す。
 
-| フィールド            | 対象サブタイプ                              | 説明                                                                                                        |
-| --------------------- | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| Message / Text        | agent_message, agent_reasoning              | メッセージ本文                                                                                              |
-| TurnID                | task_started, task_complete, item_completed | ターンID                                                                                                    |
-| StartedAt             | task_started                                | ターン開始時刻（秒タイムスタンプ）                                                                          |
-| ModelContextWindow    | task_started                                | モデルのコンテキストウィンドウサイズ                                                                        |
-| CollaborationModeKind | task_started                                | コラボレーションモードの種類                                                                                |
-| CompletedAt           | task_complete                               | ターン完了時刻（秒タイムスタンプ）                                                                          |
-| DurationMs            | task_complete                               | 所要時間（ミリ秒）                                                                                          |
-| TimeToFirstTokenMs    | task_complete                               | 初回トークンまでの時間                                                                                      |
-| LastAgentMessage      | task_complete                               | ターン完了時の最後のエージェントメッセージ。agent_messageと重複する場合がある                               |
-| Item                  | item_completed                              | 完了したアイテムのID、テキスト、タイプ                                                                      |
-| CompletedAtMs         | item_completed                              | アイテム完了時刻（ミリ秒タイムスタンプ）。参照用                                                            |
-| ThreadID              | item_completed                              | スレッドID（セッションIDと同一の場合がある）。参照用                                                        |
-| Info                  | token_count                                 | `total_token_usage`（TokenDetail）, `last_token_usage`（TokenDetail）, `model_context_window`（整数）を含む |
+| フィールド            | 対象サブタイプ                                            | 説明                                                                                                        |
+| --------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Message / Text        | agent_message, agent_reasoning                            | メッセージ本文                                                                                              |
+| TurnID                | task_started, task_complete, turn_aborted, item_completed | ターンID                                                                                                    |
+| StartedAt             | task_started                                              | ターン開始時刻（秒タイムスタンプ）                                                                          |
+| ModelContextWindow    | task_started                                              | モデルのコンテキストウィンドウサイズ                                                                        |
+| CollaborationModeKind | task_started                                              | コラボレーションモードの種類                                                                                |
+| CompletedAt           | task_complete, turn_aborted                               | ターン完了時刻（秒タイムスタンプ）                                                                          |
+| DurationMs            | task_complete, turn_aborted                               | 所要時間（ミリ秒）                                                                                          |
+| TimeToFirstTokenMs    | task_complete                                             | 初回トークンまでの時間                                                                                      |
+| LastAgentMessage      | task_complete                                             | ターン完了時の最後のエージェントメッセージ。agent_messageと重複する場合がある                               |
+| Reason                | turn_aborted                                              | 中断理由                                                                                                    |
+| Item                  | item_completed                                            | 完了したアイテムのID、テキスト、タイプ                                                                      |
+| CompletedAtMs         | item_completed                                            | アイテム完了時刻（ミリ秒タイムスタンプ）。参照用                                                            |
+| ThreadID              | item_completed                                            | スレッドID（セッションIDと同一の場合がある）。参照用                                                        |
+| Info                  | token_count                                               | `total_token_usage`（TokenDetail）, `last_token_usage`（TokenDetail）, `model_context_window`（整数）を含む |
+| ThreadID              | thread_name_updated                                       | スレッドID（セッションIDと同一）。紐付けキーとして使用                                                      |
+| ThreadName            | thread_name_updated                                       | セッションのタイトル。LLMが自動生成                                                                         |
 
 以下のフィールドは実データに存在するが、本プロジェクトでは使用しない。
 
@@ -241,29 +246,31 @@ event_msg はサブタイプによって含まれるフィールドが異なる�
 
 #### 2.3.2 パース結果のデータ構造（ParsedSession）
 
-| フィールド  | 型                           | 説明                     |
-| ----------- | ---------------------------- | ------------------------ |
-| SessionMeta | SessionMetaPayloadまたはnull | セッションのメタデータ   |
-| Turns       | Turnの配列                   | ターンごとのデータ       |
-| RawRecords  | TypedRecordの配列            | 順序を保持した全レコード |
+| フィールド  | 型                           | 説明                                                     |
+| ----------- | ---------------------------- | -------------------------------------------------------- |
+| SessionMeta | SessionMetaPayloadまたはnull | セッションのメタデータ                                   |
+| ThreadName  | 文字列またはnull             | セッションのタイトル（thread_name_updatedのthread_name） |
+| Turns       | Turnの配列                   | ターンごとのデータ                                       |
+| RawRecords  | TypedRecordの配列            | 順序を保持した全レコード                                 |
 
 #### 2.3.3 ターンのデータ構造（Turn）
 
-| フィールド        | 型                           | 説明                             |
-| ----------------- | ---------------------------- | -------------------------------- |
-| Index             | 整数                         | ターンのインデックス             |
-| TurnID            | 文字列                       | ターンID                         |
-| TaskStarted       | EventMsgPayloadまたはnull    | task_startedイベント             |
-| TaskComplete      | EventMsgPayloadまたはnull    | task_completeイベント            |
-| TurnContext       | TurnContextPayloadまたはnull | ターンコンテキスト               |
-| Records           | TypedRecordの配列            | ターン内の全レコード（時系列順） |
-| Batches           | Batchの配列                  | 検出されたバッチ                 |
-| DeveloperMessages | TypedRecordの配列            | 開発者メッセージ                 |
-| UserMessages      | TypedRecordの配列            | ユーザーメッセージ               |
-| UserEventMsg      | TypedRecordまたはnull        | event_msg(user_message)          |
-| AgentReasonings   | TypedRecordの配列            | 推論テキストとサマリーのペア     |
-| AgentMessages     | TypedRecordの配列            | エージェントメッセージ           |
-| TokenCounts       | TokenCountWithBindingの配列  | 紐付け済みtoken_count            |
+| フィールド        | 型                           | 説明                                 |
+| ----------------- | ---------------------------- | ------------------------------------ |
+| Index             | 整数                         | ターンのインデックス                 |
+| TurnID            | 文字列                       | ターンID                             |
+| TaskStarted       | EventMsgPayloadまたはnull    | task_startedイベント                 |
+| TaskComplete      | EventMsgPayloadまたはnull    | task_complete / turn_abortedイベント |
+| Aborted           | 真偽値                       | turn_abortedで終了した場合true       |
+| TurnContext       | TurnContextPayloadまたはnull | ターンコンテキスト                   |
+| Records           | TypedRecordの配列            | ターン内の全レコード（時系列順）     |
+| Batches           | Batchの配列                  | 検出されたバッチ                     |
+| DeveloperMessages | TypedRecordの配列            | 開発者メッセージ                     |
+| UserMessages      | TypedRecordの配列            | ユーザーメッセージ                   |
+| UserEventMsg      | TypedRecordまたはnull        | event_msg(user_message)              |
+| AgentReasonings   | TypedRecordの配列            | 推論テキストとサマリーのペア         |
+| AgentMessages     | TypedRecordの配列            | エージェントメッセージ               |
+| TokenCounts       | TokenCountWithBindingの配列  | 紐付け済みtoken_count                |
 
 #### 2.3.4 型付きレコード（TypedRecord）
 
@@ -678,8 +685,10 @@ HTTPステータスが正常でない場合、ApiErrorをスローする。
 
 - task_started: label = "Turn {N} Started", icon = "▶"
 - task_complete: label = "Turn {N} Complete", icon = "■"
+- turn_aborted: label = "Turn {N} 中断", icon = "✕"
 - summary（開始時）: `"mode: {collaboration_mode_kind}\nstarted_at: {time}"`
 - summary（完了時）: `"所要時間: {duration}\n初回トークン: {ttft}"`
+- summary（中断時）: `"所要時間: {duration}\n理由: {reason}"`
 
 **TurnContextNode**（タイプ: turnContext）
 
@@ -984,13 +993,17 @@ SessionListPage
   │   └─ その他 → 未知タイプ（rawのまま保持）
   │   JSONパース失敗 → 警告ログ + スキップ
   │
-  ├─ Step 3: ターン分割
+  ├─ Step 3: ターン分割 + thread_name収集
   │   ├─ currentTurn = null
   │   ├─ session_meta → ターン外レコード
+  │   ├─ thread_name_updated → ParsedSession.ThreadName に設定（最新値で上書き）
   │   ├─ task_started → 新しい Turn を開始
   │   │   ├─ Turn{Index: turnIndex++, TurnID: payload.turn_id}
   │   │   └─ currentTurn = 新しいTurn
   │   ├─ task_complete → currentTurn.TaskComplete に設定
+  │   │   └─ currentTurn = null（ターン終了）
+  │   ├─ turn_aborted → currentTurn.TaskComplete に設定
+  │   │   ├─ Aborted = true（中断フラグ）
   │   │   └─ currentTurn = null（ターン終了）
   │   └─ その他 → currentTurn.Records に追加
   │       └─ currentTurn == null → ターン外レコードとして扱う
@@ -1039,7 +1052,15 @@ SessionListPage
       マッピングテーブルを用いて BoundToNodeID（文字列）に解決する
 ```
 
-### 5.2 破損ファイルの扱い
+### 5.2 対応対象外のセッションファイル
+
+Codex CLI v0.121.0 未満で生成されたセッションファイル（`task_started`/`task_complete` を含まない形式）は対応範囲外とする。
+
+- **セッション一覧**: 対応対象外のファイルも一覧に表示する
+- **セッション詳細**: パース時にエラーを返す（§6.1 `UNSUPPORTED_FORMAT` を参照）
+- **判定方法**: `session_meta` の `cli_version` が v0.121.0 未満かどうかで判定する
+
+### 5.3 破損ファイルの扱い
 
 - 1行のJSONパースに失敗 → 該当行をスキップ、警告ログを出力
 - `session_meta` が存在しない → 警告ログのみ、解析は継続（IDはファイル名から推測）
@@ -1054,13 +1075,14 @@ SessionListPage
 
 APIエラーは以下の構造で返す。
 
-| エラー               | ステータス | code              | メッセージ                                 |
-| -------------------- | ---------- | ----------------- | ------------------------------------------ |
-| セッション未検出     | 404        | SESSION_NOT_FOUND | 指定されたセッションが見つかりません       |
-| ファイルサイズ超過   | 413        | FILE_TOO_LARGE    | ファイルサイズが上限（50MB）を超えています |
-| パース失敗           | 422        | PARSE_ERROR       | セッションファイルの解析に失敗しました     |
-| ファイル読み込み失敗 | 500        | FILE_READ_ERROR   | セッションファイルの読み込みに失敗しました |
-| 内部エラー           | 500        | INTERNAL_ERROR    | 内部エラーが発生しました                   |
+| エラー               | ステータス | code               | メッセージ                                                                 |
+| -------------------- | ---------- | ------------------ | -------------------------------------------------------------------------- |
+| セッション未検出     | 404        | SESSION_NOT_FOUND  | 指定されたセッションが見つかりません                                       |
+| ファイルサイズ超過   | 413        | FILE_TOO_LARGE     | ファイルサイズが上限（50MB）を超えています                                 |
+| 非対応形式           | 422        | UNSUPPORTED_FORMAT | このセッションファイルの形式には対応していません（Codex CLI v0.121.0未満） |
+| パース失敗           | 422        | PARSE_ERROR        | セッションファイルの解析に失敗しました                                     |
+| ファイル読み込み失敗 | 500        | FILE_READ_ERROR    | セッションファイルの読み込みに失敗しました                                 |
+| 内部エラー           | 500        | INTERNAL_ERROR     | 内部エラーが発生しました                                                   |
 
 ### 6.2 フロントエンドエラー処理
 
