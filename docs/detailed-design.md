@@ -147,19 +147,23 @@ JSONLファイルの1行は、トップレベルの `type` フィールドで以
 
 #### 2.2.6 event_msg のデータ構造
 
-event_msg はサブタイプによって含まれるフィールドが異なる。共通フィールドは `Type`（イベント種別）と `TurnID`。主なフィールドを以下に示す。
+event_msg はサブタイプによって含まれるフィールドが異なる。共通フィールドは `Type`（イベント種別）のみ。主なフィールドを以下に示す。
 
-| フィールド            | 対象サブタイプ                 | 説明                                                             |
-| --------------------- | ------------------------------ | ---------------------------------------------------------------- |
-| Message / Text        | agent_message, agent_reasoning | メッセージ本文                                                   |
-| StartedAt             | task_started                   | ターン開始時刻（ミリ秒タイムスタンプ）                           |
-| ModelContextWindow    | task_started                   | モデルのコンテキストウィンドウサイズ                             |
-| CollaborationModeKind | task_started                   | コラボレーションモードの種類                                     |
-| CompletedAt           | task_complete                  | ターン完了時刻                                                   |
-| DurationMs            | task_complete                  | 所要時間（ミリ秒）                                               |
-| TimeToFirstTokenMs    | task_complete                  | 初回トークンまでの時間                                           |
-| Item                  | item_completed                 | 完了したアイテムのID、テキスト、タイプ                           |
-| Info                  | token_count                    | トークン使用量の詳細（直近・累計・コンテキストウィンドウサイズ） |
+| フィールド            | 対象サブタイプ                              | 説明                                                                                                        |
+| --------------------- | ------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Message / Text        | agent_message, agent_reasoning              | メッセージ本文                                                                                              |
+| TurnID                | task_started, task_complete, item_completed | ターンID                                                                                                    |
+| StartedAt             | task_started                                | ターン開始時刻（ミリ秒タイムスタンプ）                                                                      |
+| ModelContextWindow    | task_started                                | モデルのコンテキストウィンドウサイズ                                                                        |
+| CollaborationModeKind | task_started                                | コラボレーションモードの種類                                                                                |
+| CompletedAt           | task_complete                               | ターン完了時刻                                                                                              |
+| DurationMs            | task_complete                               | 所要時間（ミリ秒）                                                                                          |
+| TimeToFirstTokenMs    | task_complete                               | 初回トークンまでの時間                                                                                      |
+| LastAgentMessage      | task_complete                               | ターン完了時の最後のエージェントメッセージ。agent_messageと重複する場合がある                               |
+| Item                  | item_completed                              | 完了したアイテムのID、テキスト、タイプ                                                                      |
+| CompletedAtMs         | item_completed                              | アイテム完了時刻（ミリ秒タイムスタンプ）。参照用                                                            |
+| ThreadID              | item_completed                              | スレッドID（セッションIDと同一の場合がある）。参照用                                                        |
+| Info                  | token_count                                 | `total_token_usage`（TokenDetail）, `last_token_usage`（TokenDetail）, `model_context_window`（整数）を含む |
 
 #### 2.2.7 response_item のデータ構造
 
