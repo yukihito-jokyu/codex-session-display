@@ -167,15 +167,17 @@ event_msg はサブタイプによって含まれるフィールドが異なる�
 
 #### 2.2.7 response_item のデータ構造
 
-| フィールド | 対象サブタイプ                      | 説明                                                              |
-| ---------- | ----------------------------------- | ----------------------------------------------------------------- |
-| Role       | message                             | メッセージのロール（developer / user / assistant）                |
-| Content    | message                             | メッセージの内容配列。各要素は `type`（textなど）と `text` を持つ |
-| Summary    | reasoning                           | 推論サマリーの配列。各要素は `text` を持つ                        |
-| Name       | function_call                       | 呼び出す関数名                                                    |
-| Arguments  | function_call                       | 関数の引数（JSON文字列）                                          |
-| CallID     | function_call, function_call_output | 呼び出しと結果を紐付けるID                                        |
-| Output     | function_call_output                | 関数の実行結果テキスト                                            |
+| フィールド       | 対象サブタイプ                      | 説明                                                                              |
+| ---------------- | ----------------------------------- | --------------------------------------------------------------------------------- |
+| Role             | message                             | メッセージのロール（developer / user / assistant）                                |
+| Content          | message                             | メッセージの内容配列。各要素は `type`（input_text / output_text）と `text` を持つ |
+| Summary          | reasoning                           | 推論サマリーの配列。各要素は `type`（summary_text）と `text` を持つ               |
+| Content          | reasoning                           | 推論の本文（現在は常にnull）                                                      |
+| EncryptedContent | reasoning                           | 暗号化された推論内容（現在は常にnull）                                            |
+| Name             | function_call                       | 呼び出す関数名                                                                    |
+| Arguments        | function_call                       | 関数の引数（JSON文字列）                                                          |
+| CallID           | function_call, function_call_output | 呼び出しと結果を紐付けるID                                                        |
+| Output           | function_call_output                | 関数の実行結果テキスト                                                            |
 
 ### 2.3 パース処理フロー
 
