@@ -402,6 +402,12 @@ Build(session)
   │     └─ 2i. task_complete ノード生成 → ハーネススタックに push
   │
   ├─ 3. 各 token_count について、紐付け先ノードに TokenBadgeData を設定
+  │     ├─ a. レコード→ノードIDのマッピングテーブルを構築:
+  │     │      ノード生成時に TypedRecord → FlowNode.ID の対応を記録
+  │     ├─ b. token_count.BoundToRecord をマッピングテーブルで解決し
+  │     │      BoundToNodeID（文字列）を設定
+  │     └─ c. 紐付け先ノードの TokenBadgeData に
+  │            totalTokens と tokenCountIndex を設定
   │
   └─ 4. 全ノード・エッジを FlowGraph として返す
 ```
@@ -1006,8 +1012,14 @@ SessionListPage
           ├─ 直前のレコードを特定:
           │   turn.Records を逆順に走査し、
           │   最初の非-token_count レコードを取得
-          ├─ BoundToRecord = 直前レコード
+          ├─ BoundToRecord = 直前レコード（TypedRecordへの参照）
+          │   ※ 連続token_countの場合、複数のtoken_countが
+          │   同一レコードに紐付けられることを許容する
           └─ TurnIndex = turn.Index
+
+      ※ BoundToRecord はパース時点では TypedRecord への参照として保持し、
+      FlowGraph 生成フェーズ（§2.6 Step 3）でレコード→ノードIDの
+      マッピングテーブルを用いて BoundToNodeID（文字列）に解決する
 ```
 
 ### 5.2 破損ファイルの扱い
