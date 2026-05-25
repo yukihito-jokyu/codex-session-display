@@ -20,7 +20,7 @@ description: Issueを読み取り、ユーザーと議論し、詳細設計を�
 ## Knowledge
 
 - **詳細設計**: `docs/detailed-design.md` に記載されています
-- **JSONLサンプル**: `/Users/yukihito/.codex/sessions/2026/05/23/rollout-2026-05-23T22-44-55-019e5514-ed44-78b2-bf88-233d6e4273bf.jsonl` にあります
+- **JSONLサンプル**: `~/.codex/sessions/2026/05/23/rollout-2026-05-23T22-44-55-019e5514-ed44-78b2-bf88-233d6e4273bf.jsonl` にあります
 - **JSONLパース**: JSONLは膨大であるため、Pythonで読み取ることを推奨します
 
 ## Your task
