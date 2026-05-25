@@ -230,6 +230,7 @@ event_msg はサブタイプによって含まれるフィールドが異なる�
   │   ├─ response_item(reasoning) → 推論サマリー（後でペアリング）
   │   ├─ response_item(function_call) → ツール呼び出し（後でバッチ検出）
   │   ├─ response_item(function_call_output) → ツール結果（後でバッチ検出）
+  │   ├─ event_msg(item_completed) → アイテム完了イベント
   │   └─ event_msg(token_count) → トークンカウント
   │
   ├─ Step 5: reasoning ペアリング
@@ -270,6 +271,7 @@ event_msg はサブタイプによって含まれるフィールドが異なる�
 | UserEventMsg      | TypedRecordまたはnull        | event_msg(user_message)              |
 | AgentReasonings   | TypedRecordの配列            | 推論テキストとサマリーのペア         |
 | AgentMessages     | TypedRecordの配列            | エージェントメッセージ               |
+| ItemCompleted     | TypedRecordの配列            | アイテム完了イベント                 |
 | TokenCounts       | TokenCountWithBindingの配列  | 紐付け済みtoken_count                |
 
 #### 2.3.4 型付きレコード（TypedRecord）
@@ -282,18 +284,18 @@ event_msg はサブタイプによって含まれるフィールドが異なる�
 
 1ターン内で、エージェントが複数のツールを連続して呼び出し、その結果をまとめて受け取るパターンを「バッチ」と呼ぶ。バッチは以下の要素で構成される。
 
-| 要素          | 説明                                                  |
-| ------------- | ----------------------------------------------------- |
-| CallRecords   | 連続する function_call の配列                         |
-| OutputRecords | 対応する function_call_output の配列                  |
-| MiddleMessage | バッチ中間のエージェントメッセージ（存在する場合）    |
-| IsPatternB    | パターンB（response_itemのみでevent_msgなし）かどうか |
+| 要素          | 説明                                                     |
+| ------------- | -------------------------------------------------------- |
+| CallRecords   | 連続する function_call の配列                            |
+| OutputRecords | 対応する function_call_output の配列                     |
+| MiddleMessage | バッチ中間のエージェントメッセージ（存在する場合）       |
+| IsPatternB    | パターンB（中間メッセージが response_item のみ）かどうか |
 
 #### 2.4.2 バッチのパターン
 
-**パターンA**: function_call群 → agent_message（中間メッセージ）→ function_call_output群
+**パターンA**: function_call群 → agent_message → response_item(message, role=assistant) → function_call_output群
 
-**パターンB**: function_call群 → response_item(message, role=assistant) → function_call_output群
+**パターンB**: function_call群 → response_item(message, role=assistant) → function_call_output群（agent_messageなし）
 
 #### 2.4.3 検出処理
 
@@ -304,7 +306,8 @@ event_msg はサブタイプによって含まれるフィールドが異なる�
 1. レコード配列を先頭から走査する
 2. 連続する function_call を検出する（callBatch）
 3. callBatch の直後のレコードを確認:
-   a. agent_message → パターンA。中間メッセージとして保持
+   a. agent_message → パターンA。中間メッセージとして保持。
+      直後の response_item(message, role=assistant) があればスキップして次へ進む
    b. response_item(message, role=assistant) で agent_message なし → パターンB
    c. 上記以外 → 中間メッセージなし
 4. 連続する function_call_output を検出する（outputBatch）
@@ -421,7 +424,7 @@ Build(session)
   │     │   ├─ output[i] → output[i+1] へエッジ（バッチ内）
   │     │   └─ output[last] → ハーネスに戻るエッジ
   │     │
-  │     ├─ 2h. item_completed ノード生成（存在する場合）
+  │     ├─ 2h. turn.ItemCompleted から item_completed ノード生成（存在する場合）
   │     │
   │     └─ 2i. task_complete ノード生成 → ハーネススタックに push
   │
@@ -1022,6 +1025,7 @@ SessionListPage
   │       │   └─ role=assistant → バッチ中間として扱う
   │       ├─ response_item(function_call) → functionCalls に一時保持
   │       ├─ response_item(function_call_output) → functionOutputs に一時保持
+  │       ├─ event_msg(item_completed) → turn.ItemCompleted に追加
   │       └─ event_msg(token_count) → tokenCounts に追加
   │
   ├─ Step 5: reasoning ペアリング
