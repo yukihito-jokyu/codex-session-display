@@ -1,0 +1,26 @@
+# =============== Commit Messages ================
+
+# ==================== Emojis ====================
+# 🎉  :tada: 新しいファイルの作成[add]
+# ✨  :sparkles: 新機能・更新[update]
+# 🐛  :bug: バグ対応[fix]
+# 🔥  :fire: ファイルの削除[delete]
+# ♻️  :recycle: リファクタリング
+# 📚  :books: ドキュメント
+# 🎨  :art: デザインUI/UXの修正
+# ⚡️  :zap: パフォーマンス改善
+# 🔧  :wrench: ツールの追加・修正
+# 🚨  :rotating_light: テストの追加・修正
+# 🚧  :construction: WIP(作業途中)
+# 💩  :hankey: 非推奨追加
+# 🔖  :bookmark: バージョンタグ
+
+
+# ==================== Format ====================
+# :emoji: Subject branch number
+#
+# Commit body...
+
+# ==================== Example ===================
+# ブランチ名が feature/1の場合は最後に#1を付ける
+# 🎉 README.mdの作成 #1

@@ -1,0 +1,41 @@
+name: CI/CDパイプライン改善タスク
+description: CI/CDパイプラインにどのような変更を加えたいですか？
+labels: ["ci/cd"]
+body:
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 提案内容
+      description: CI/CDパイプラインに加えたい変更を詳しく説明してください
+      placeholder: 例：GitHub ActionsのワークフローにキャッシュのStep追加
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: purpose
+    attributes:
+      label: 🎯 目的・メリット
+      description: この変更の目的を選択してください（複数選択可）
+      options:
+        - label: ビルド時間の短縮
+        - label: セキュリティの向上
+        - label: コスト削減
+        - label: 開発体験(DX)の向上
+
+  - type: textarea
+    id: changes
+    attributes:
+      label: 🛠 具体的な変更案
+      description: 具体的にどのような変更を行うか記述してください
+      placeholder: |
+        例：
+        - キャッシュの導入
+        - 並列実行の設定
+        - 新しい静的解析ツールの導入
+
+  - type: textarea
+    id: expected_effect
+    attributes:
+      label: 📊 期待される効果
+      description: この変更によってどのような効果が期待されるか記述してください
+      placeholder: 例：現状5分かかっているビルドを3分以内に短縮する

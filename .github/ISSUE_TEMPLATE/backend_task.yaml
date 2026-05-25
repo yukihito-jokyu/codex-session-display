@@ -1,0 +1,31 @@
+name: バックエンド実装タスク
+description: 新しい機能や既存機能の改善を行うためのタスク
+labels: ["backend"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: 詳細説明
+      description: 機能の詳細、仕様、画面イメージなど
+      placeholder: 詳細な仕様や期待動作を記述
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 作業手順（考慮事項）
+      description: 作業を進める際のステップや確認事項を事前に考える
+      placeholder: |
+        - 設計書を確認する
+        - APIの仕様を確認する
+        - 単体テスト計画を考える
+
+  - type: textarea
+    id: acceptance_criteria
+    attributes:
+      label: 受け入れ条件
+      description: 完了とみなす条件を明確にする
+      placeholder: |
+        - ユーザー登録が成功する
+        - バリデーションエラーが正しく表示される

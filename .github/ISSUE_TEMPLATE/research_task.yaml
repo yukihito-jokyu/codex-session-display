@@ -1,0 +1,32 @@
+name: 調査タスク
+description: 技術的調査や情報収集を行うタスク
+labels: ["research"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: 詳細説明
+      description: 調査の詳細
+      placeholder: 詳細な調査内容や期待動作を記述
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: 調査手順
+      description: 調査を行う際のステップや方法を事前に考える
+      placeholder: |
+        - 公式ドキュメントを確認
+        - 比較表を作成
+        - 実装サンプルを試す
+
+  - type: textarea
+    id: deliverables
+    attributes:
+      label: 成果物
+      description: 調査後に提出するものを明確にする
+      placeholder: |
+        - レポート
+        - 選定理由
+        - コードサンプル

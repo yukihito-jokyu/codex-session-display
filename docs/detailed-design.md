@@ -32,6 +32,7 @@
 | Originator     | 文字列またはnull | 起動元（codex-tui など）                   |
 | ModelProvider  | 文字列またはnull | モデルプロバイダー（openai など）          |
 | Branch         | 文字列またはnull | Gitブランチ名                              |
+| Source         | 文字列またはnull | ソース情報（cli など）                     |
 | Timestamp      | 文字列またはnull | セッション開始時刻                         |
 | FileSize       | 整数             | ファイルサイズ（バイト）                   |
 | FileModifiedAt | 文字列またはnull | ファイル最終更新日時                       |
@@ -585,16 +586,16 @@ HTTPステータスが正常でない場合、ApiErrorをスローする。
 
 #### 3.4.1 セッション関連の型
 
-| 型名                  | フィールド概要                                                                                                                             |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| SessionSummary        | セッション一覧の1件（id, file_path, cwd, cli_version, originator, model_provider, branch, timestamp, file_size, file_modified_at, parsed） |
-| SessionListResponse   | sessionsフィールドにSessionSummaryの配列を持つ                                                                                             |
-| TokenBreakdown        | total_tokens, input_tokens, output_tokens, reasoning_output_tokens                                                                         |
-| TokenDetail           | TokenBreakdown + cached_input_tokens                                                                                                       |
-| TurnStatistics        | index, collaboration_mode_kind, duration_ms, time_to_first_token_ms, token_count_count, consumed_tokens（TokenBreakdown）                  |
-| Statistics            | duration_ms, total_tokens, tool_call_count, token_count_count, context_window_size, turn_count, turns（TurnStatisticsの配列）              |
-| TokenCountEntry       | index, turn_index, bound_to_node_id, last_token_usage（TokenDetail）, total_token_usage（TokenDetail）                                     |
-| SessionDetailResponse | id, parsed_at, nodes（FlowNodeの配列）, edges（FlowEdgeの配列）, statistics（Statistics）, token_counts（TokenCountEntryの配列）           |
+| 型名                  | フィールド概要                                                                                                                                     |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| SessionSummary        | セッション一覧の1件（id, file_path, cwd, cli_version, originator, model_provider, branch, source, timestamp, file_size, file_modified_at, parsed） |
+| SessionListResponse   | sessionsフィールドにSessionSummaryの配列を持つ                                                                                                     |
+| TokenBreakdown        | total_tokens, input_tokens, output_tokens, reasoning_output_tokens                                                                                 |
+| TokenDetail           | TokenBreakdown + cached_input_tokens                                                                                                               |
+| TurnStatistics        | index, collaboration_mode_kind, duration_ms, time_to_first_token_ms, token_count_count, consumed_tokens（TokenBreakdown）                          |
+| Statistics            | duration_ms, total_tokens, tool_call_count, token_count_count, context_window_size, turn_count, turns（TurnStatisticsの配列）                      |
+| TokenCountEntry       | index, turn_index, bound_to_node_id, last_token_usage（TokenDetail）, total_token_usage（TokenDetail）                                             |
+| SessionDetailResponse | id, parsed_at, nodes（FlowNodeの配列）, edges（FlowEdgeの配列）, statistics（Statistics）, token_counts（TokenCountEntryの配列）                   |
 
 #### 3.4.2 React Flow関連の型
 
@@ -842,6 +843,7 @@ SessionListPage
       "originator": "codex-tui",
       "model_provider": "openai",
       "branch": "feature/5",
+      "source": "cli",
       "timestamp": "2026-05-23T13:44:55.385Z",
       "file_size": 378000,
       "file_modified_at": "2026-05-23T14:30:00.000Z",

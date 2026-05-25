@@ -1,0 +1,44 @@
+name: バグ修正タスク
+description: 発見した不具合を修正するためのタスク
+labels: ["bug"]
+body:
+  - type: input
+    id: bug_title
+    attributes:
+      label: バグ名
+      description: 不具合のタイトルを簡潔に記述
+      placeholder: ユーザー登録時に500エラーが発生
+    validations:
+      required: true
+
+  - type: textarea
+    id: bug_description
+    attributes:
+      label: バグ概要
+      description: 不具合の概要を簡潔に記述
+      placeholder: ユーザー登録時に500エラーが発生
+
+  - type: textarea
+    id: steps_to_reproduce
+    attributes:
+      label: 再現手順
+      description: バグを再現するための具体的手順を記述
+      placeholder: |
+        - サイトにアクセス
+        - ユーザー登録フォームを開く
+        - 必要項目を入力
+        - 登録ボタンを押す
+
+  - type: textarea
+    id: expected_behavior
+    attributes:
+      label: 期待される動作
+      description: 正しい動作を記述
+      placeholder: 登録完了画面が表示される
+
+  - type: textarea
+    id: actual_behavior
+    attributes:
+      label: 実際の動作
+      description: 不具合が起こった時の動作を記述
+      placeholder: 500エラーが表示される
