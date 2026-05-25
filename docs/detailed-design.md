@@ -236,6 +236,9 @@ event_msg はサブタイプによって含まれるフィールドが異なる�
   ├─ Step 5: reasoning ペアリング
   │   agent_reasoning と response_item(reasoning) を出現順で1:1ペアにする。
   │   ペアリングできないものは単独で保持する。
+  │   ※ v0.121.0以降では両方存在する場合常に1:1が成立する。
+  │   ※ 一部バージョンでは agent_reasoning が出力されず、
+  │     response_item(reasoning) のみ（暗号化済み・summary空）となる場合がある。
   │
   ├─ Step 6: バッチ検出
   │   連続する function_call 群と function_call_output 群をバッチとして検出する。
@@ -408,8 +411,13 @@ Build(session)
   │     │   分岐: response_item(message, role=user) ノード
   │     │
   │     ├─ 2f. reasoning ノード生成 → ハネススタックに push
-  │     │   agent_reasoning のテキストを summary に設定
-  │     │   reasoning の summary を fullText の一部に設定
+  │     │   ペアリング済みの場合:
+  │     │     agent_reasoning のテキストを summary に設定
+  │     │     reasoning の summary を fullText の一部に設定
+  │     │   スタンドアロンAR（ARのみ）の場合:
+  │     │     ARテキストを summary および fullText に設定
+  │     │   スタンドアロンRI（RIのみ・暗号化済み）の場合:
+  │     │     「（暗号化済み・表示不可）」を summary および fullText に設定
   │     │
   │     ├─ 2g. 各 Batch を処理:
   │     │   ├─ function_call ノード群を生成
@@ -740,6 +748,8 @@ HTTPステータスが正常でない場合、ApiErrorをスローする。
 - summary: agent_reasoning.text の先頭2行
 - fullText: agent_reasoning.text の全文 + reasoning.summary の全文
 - クリック → BottomPanel に推論テキスト全文 + サマリーを表示
+- スタンドアロンAR（RIなし）: summary/fullText にARテキストのみ設定
+- スタンドアロンRI（ARなし・暗号化済み）: summary/fullText に「（暗号化済み・表示不可）」を設定
 
 **ContextDocNode**（タイプ: contextDoc）— 分岐ノード
 
@@ -1034,7 +1044,13 @@ SessionListPage
   │     ├─ response_item(reasoning) レコードのリストを取得
   │     ├─ 出現順序で 1:1 ペアリング:
   │     │   reasoningPairs[i] = {agentReasoning, reasoningSummary}
-  │     └─ ペアリングできない場合は単独で保持
+  │     └─ ペアリングできない場合は単独で保持:
+  │         ├─ ARのみ（agent_reasoning が余る）:
+  │         │   standaloneReasoning として保持
+  │         │   summary/fullText に ARテキストを設定
+  │         └─ RIのみ（response_item(reasoning) が余る、またはAR不在）:
+  │             standaloneReasoning として保持
+  │             summaryが空の場合はプレースホルダーを設定
   │
   ├─ Step 6: バッチ検出
   │   for turn in turns:
