@@ -434,6 +434,13 @@ Build(session)
   │     │
   │     ├─ 2h. turn.ItemCompleted から item_completed ノード生成（存在する場合）
   │     │
+  │     ├─ 2h'. 非バッチの agent_message / response_item(message, assistant) を
+  │     │       agentMessage ノードとしてハーネスに push
+  │     │       バッチ検出（Step 6）でバッチに含まれなかったレコードが対象。
+  │     │       agent_message と response_item(message, assistant) が
+  │     │       連続して出現する場合は同一内容のことが多いため、1つのノードに統合し、
+  │     │       マッピングテーブルには両方のレコードを同じノードIDに紐付ける
+  │     │
   │     └─ 2i. task_complete ノード生成 → ハーネススタックに push
   │
   ├─ 3. 各 token_count について、紐付け先ノードに TokenBadgeData を設定
@@ -1070,6 +1077,12 @@ SessionListPage
       ※ BoundToRecord はパース時点では TypedRecord への参照として保持し、
       FlowGraph 生成フェーズ（§2.6 Step 3）でレコード→ノードIDの
       マッピングテーブルを用いて BoundToNodeID（文字列）に解決する
+
+      ※ turn.Records に非token_countレコードが存在しない場合
+      （ターン内レコードが空の状態でtoken_countが出現）、
+      BoundToRecord を null とし、BoundToNodeID を空文字列とする。
+      フロントエンドでは当該token_countにバッジを表示せず、
+      token_count表には表示する
 ```
 
 ### 5.2 対応対象外のセッションファイル
