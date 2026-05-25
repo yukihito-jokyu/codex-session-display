@@ -1,0 +1,49 @@
+name: 🚀 機能の提案 / Feature Request
+description: 新しい機能のアイデアや、既存機能の改善案を提案します。
+labels: ["feature"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: 📝 概要
+      description: どのような機能を追加したいか、簡潔に説明してください。
+      placeholder: ログイン画面に「パスワードを表示する」ボタンを追加したい
+    validations:
+      required: true
+
+  - type: textarea
+    id: background
+    attributes:
+      label: 💡 背景・課題 (Why)
+      description: なぜこの機能が必要だと感じましたか？現状、どのような不便や問題がありますか？
+      placeholder: パスワードの入力ミスが多く、ログインに失敗するユーザーが多いため
+
+  - type: textarea
+    id: success_criteria
+    attributes:
+      label: 🎯 達成したいゴール (Success Criteria)
+      description: この機能が実装された結果、どのような状態になれば「完了」と言えるかを記載してください。
+      placeholder: |
+        - [ ] 〇〇ができるようになる
+        - [ ] △△という課題が解決される
+
+  - type: textarea
+    id: specification
+    attributes:
+      label: 🛠 具体的な仕様案 (Optional)
+      description: 画面イメージ、挙動の詳細、APIのレスポンス例など、具体的なアイデアがあれば記載してください。（画像やワイヤーフレームの貼り付けも歓迎です）
+      placeholder: 具体的な仕様案を記述
+
+  - type: textarea
+    id: concerns
+    attributes:
+      label: ⚠️ 懸念点・検討事項
+      description: 実装にあたって心配なことや、事前に相談したいことがあれば記載してください。
+      placeholder: セキュリティ上のリスク、既存機能への影響など
+
+  - type: textarea
+    id: additional
+    attributes:
+      label: その他
+      description: 補足情報、参考にした他社サービスのURLなどがあれば自由に記載してください。
+      placeholder: 参考URL、補足情報など
