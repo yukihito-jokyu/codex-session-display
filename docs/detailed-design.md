@@ -431,23 +431,32 @@ custom_tool_call群 → custom_tool_call_output群（中間レコードなし、
 | TextLength | 整数                       | テキスト文字数                                                                                 |
 | TurnIndex  | 整数                       | 属するターンのインデックス                                                                     |
 
+#### 2.5.3.1 TokenBadgeData のデータ構造
+
+| フィールド      | 型   | 説明                                                                                        |
+| --------------- | ---- | ------------------------------------------------------------------------------------------- |
+| TotalTokens     | 整数 | 紐付く最新の token_count の総トークン数                                                     |
+| TokenCountIndex | 整数 | 紐付く最初の token_count の token_counts 配列インデックス                                   |
+| BoundCount      | 整数 | 紐付く token_count の件数。1の場合は通常表示、2以上の場合は件数をバッジに併記（例: 「×2」） |
+
 #### 2.5.4 カスタムノードタイプ一覧
 
-| ノードタイプ       | 対象レコード                                                                   | カテゴリ       |
-| ------------------ | ------------------------------------------------------------------------------ | -------------- |
-| `sessionMeta`      | session_meta                                                                   | メタ系         |
-| `taskEvent`        | task_started, task_complete, turn_aborted                                      | イベント系     |
-| `turnContext`      | turn_context                                                                   | Turn系         |
-| `userMessage`      | event_msg(user_message)                                                        | Turn系         |
-| `agentMessage`     | event_msg(agent_message), response_item(message, role=assistant)               | Turn系         |
-| `reasoning`        | agent_reasoning + reasoning（統合）                                            | 思考系         |
-| `action`           | function_call, function_call_output, custom_tool_call, custom_tool_call_output | Action系       |
-| `webSearchAction`  | response_item(web_search_call), event_msg(web_search_end)                      | Action系       |
-| `developerMessage` | response_item(message, role=developer)                                         | メッセージ系   |
-| `userApiMessage`   | response_item(message, role=user)                                              | メッセージ系   |
-| `contextDoc`       | base_instructions, developer_instructions, user_instructions                   | コンテキスト系 |
-| `itemCompleted`    | event_msg(item_completed)                                                      | イベント系     |
-| `generic`          | 未知タイプ                                                                     | 未知タイプ     |
+| ノードタイプ       | 対象レコード                                                                                                            | カテゴリ       |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------- | -------------- |
+| `sessionMeta`      | session_meta                                                                                                            | メタ系         |
+| `taskEvent`        | task_started, task_complete, turn_aborted                                                                               | イベント系     |
+| `turnContext`      | turn_context                                                                                                            | Turn系         |
+| `userMessage`      | event_msg(user_message)                                                                                                 | Turn系         |
+| `agentMessage`     | event_msg(agent_message), response_item(message, role=assistant)                                                        | Turn系         |
+| `reasoning`        | agent_reasoning + reasoning（統合）                                                                                     | 思考系         |
+| `action`           | function_call, function_call_output, custom_tool_call, custom_tool_call_output                                          | Action系       |
+| `webSearchAction`  | response_item(web_search_call), event_msg(web_search_end)                                                               | Action系       |
+| `developerMessage` | response_item(message, role=developer)                                                                                  | メッセージ系   |
+| `userApiMessage`   | response_item(message, role=user)                                                                                       | メッセージ系   |
+| `contextDoc`       | base_instructions, developer_instructions, user_instructions                                                            | コンテキスト系 |
+| `itemCompleted`    | event_msg(item_completed)                                                                                               | イベント系     |
+| `externalEvent`    | exec_command_end, mcp_tool_call_end, view_image_tool_call, collab_agent_spawn_end, collab_close_end, collab_waiting_end | Action系       |
+| `generic`          | 未知タイプ                                                                                                              | 未知タイプ     |
 
 #### 2.5.5 FlowEdge のデータ構造
 
@@ -523,11 +532,12 @@ Build(session)
   │     │
   │     └─ 2i. task_complete ノード生成 → ハーネススタックに push
   │
-  ├─ 3. 外部イベントブランチノード生成:
+  ├─ 3. 外部イベントブランチノード生成（タイプ: externalEvent）:
   │     ├─ call_id を持つ外部イベントレコード（exec_command_end, mcp_tool_call_end,
-  │     │   view_image_tool_call 等）からブランチノードを生成
+  │     │   view_image_tool_call, collab_agent_spawn_end, collab_close_end,
+  │     │   collab_waiting_end 等）からブランチノードを生成
   │     ├─ call_id で対応する action ノード（function_call_output 等）を特定し、
-  │     │   ブランチエッジで接続する
+  │     │   step エッジで接続する
   │     └─ ブランチノードは対応する action ノードの右側に配置
   │
   ├─ 4. 各 token_count について、紐付け先ノードに TokenBadgeData を設定
@@ -535,8 +545,11 @@ Build(session)
   │     │      ノード生成時に TypedRecord → FlowNode.ID の対応を記録
   │     ├─ b. token_count.BoundToRecord をマッピングテーブルで解決し
   │     │      BoundToNodeID（文字列）を設定
-  │     └─ c. 紐付け先ノードの TokenBadgeData に
-  │            totalTokens と tokenCountIndex を設定
+  │     └─ c. 紐付け先ノードごとに TokenBadgeData を集約:
+  │            同一ノードに複数の token_count が紐付く場合:
+  │            ├─ TotalTokens: 最後の token_count の totalTokens
+  │            ├─ TokenCountIndex: 最初の token_count のインデックス
+  │            └─ BoundCount: 紐付く token_count の件数
   │
   └─ 5. 全ノード・エッジを FlowGraph として返す
 ```
@@ -676,6 +689,7 @@ JSONLファイルの最終更新日時 > キャッシュファイルの最終更
   │                 │     ├── <ReasoningNode>
   │                 │     ├── <ActionNode>
   │                 │     ├── <WebSearchActionNode>
+  │                 │     ├── <ExternalEventNode>
   │                 │     ├── <GenericNode>
   │                 │     └── <TokenBadge>
   │                 ├── <RightPanel>
@@ -742,12 +756,12 @@ HTTPステータスが正常でない場合、ApiErrorをスローする。
 
 #### 3.4.2 React Flow関連の型
 
-| 型名           | フィールド概要                                                                                                      |
-| -------------- | ------------------------------------------------------------------------------------------------------------------- |
-| NodeData       | category, label, icon, summary, fullText, meta, batchIndex, batchSize, tokenBadge, collapsed, textLength, turnIndex |
-| TokenBadgeData | totalTokens, tokenCountIndex（token_counts配列へのインデックス）                                                    |
-| FlowNode       | React FlowのNode型。dataにNodeDataを持つ                                                                            |
-| FlowEdge       | React FlowのEdge型                                                                                                  |
+| 型名           | フィールド概要                                                                                                           |
+| -------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| NodeData       | category, label, icon, summary, fullText, meta, batchIndex, batchSize, tokenBadge, collapsed, textLength, turnIndex      |
+| TokenBadgeData | totalTokens（紐付く最新の総トークン数）, tokenCountIndex（最初のtoken_counts配列インデックス）, boundCount（紐付く件数） |
+| FlowNode       | React FlowのNode型。dataにNodeDataを持つ                                                                                 |
+| FlowEdge       | React FlowのEdge型                                                                                                       |
 
 ### 3.5 React Flowカスタムノード設計
 
@@ -764,7 +778,7 @@ HTTPステータスが正常でない場合、ApiErrorをスローする。
 └─────────────────────────────┘
 ```
 
-- **node-header**: アイコン + ラベル + トークンバッジ（存在する場合）
+- **node-header**: アイコン + ラベル + トークンバッジ（存在する場合）。boundCount ≥ 2 の場合は件数を併記（例: 「12.3K ×2」）
 - **node-body**: summary テキスト。クリックで BottomPanel に詳細を表示
 - **ホバー**: ボーダー色変化（青）+ ドロップシャドウ
 - **選択**: 2pxのブルーボーダー
@@ -836,6 +850,7 @@ HTTPステータスが正常でない場合、ApiErrorをスローする。
 - function_call: label = 関数名, summary = 引数の先頭1行（JSONの場合はパースして最初の値）
 - function_call_output: label = "Output: {関数名}", summary = 出力の先頭1行
 - バッチ情報表示: BatchSize ≥ 2 の場合のみ「{BatchIndex+1}/{BatchSize}」をノードに表示。BatchSize = 1 の場合は非表示
+- デフォルト値: バッチに含まれないノード（非Action系ノード）は BatchSize=0, BatchIndex=0 とする。BatchSize=0 は非表示として扱う
 
 **ReasoningNode**（タイプ: reasoning）
 
@@ -886,6 +901,46 @@ HTTPステータスが正常でない場合、ApiErrorをスローする。
 - end側: label = "Web Search Result", summary = `action: {action.type}`
 - meta（call側）: action.type, action.query, action.queries
 - meta（end側）: query, action.type, action.queries
+
+**ExternalEventNode**（タイプ: externalEvent）— ブランチノード
+
+action ノード（function_call_output 等）の右側に step エッジで分岐配置。call_id で対応する action ノードと紐付く。
+
+```
+┌───────────────────────────┐
+│ [⌨] exec_command    [✓]  │  ← exec_command_end
+├───────────────────────────┤
+│ find docs -type f         │
+│ exit: 0 · 0.3s           │
+└───────────────────────────┘
+
+┌───────────────────────────┐
+│ [🔌] figma_whoami    [✓] │  ← mcp_tool_call_end
+├───────────────────────────┤
+│ server: codex_apps        │
+│ result: Ok                │
+└───────────────────────────┘
+
+┌───────────────────────────┐
+│ [🖼] View Image           │  ← view_image_tool_call
+├───────────────────────────┤
+│ /Users/.../my.jpeg        │
+└───────────────────────────┘
+```
+
+サブタイプごとの仕様:
+
+| サブタイプ             | label            | icon | summary                                                    | meta                                                                        | ステータス表示                         |
+| ---------------------- | ---------------- | ---- | ---------------------------------------------------------- | --------------------------------------------------------------------------- | -------------------------------------- |
+| exec_command_end       | "exec_command"   | ⌨    | `{command の先頭行}` + `\nexit: {exit_code} · {duration}s` | command, exit_code, duration, cwd, process_id, aggregated_output            | exit_code=0 → ✓（緑）, 0以外 → ✕（赤） |
+| mcp_tool_call_end      | "{tool}"         | 🔌   | `server: {server}` + `\nresult: {Ok/Err}`                  | invocation.server, invocation.tool, invocation.arguments, result            | result.Ok → ✓, result.Err → ✕          |
+| view_image_tool_call   | "View Image"     | 🖼   | `{path のファイル名部分}`                                  | path                                                                        | なし                                   |
+| collab_agent_spawn_end | "Spawn Agent"    | 👥   | `{new_agent_nickname} ({new_agent_role})`                  | new_agent_nickname, new_agent_role, prompt, model, reasoning_effort, status | status=completed → ✓                   |
+| collab_close_end       | "Collab Close"   | 👥   | `{receiver_agent_nickname} ({receiver_agent_role})`        | receiver_agent_nickname, receiver_agent_role, status                        | status=completed → ✓                   |
+| collab_waiting_end     | "Collab Waiting" | 👥   | `agents: {statuses のエージェント数}`                      | statuses                                                                    | なし                                   |
+
+- ステータス表示: ノードヘッダーの右側に ✓/✕ アイコンを表示（exit_code や result に基づく）
+- fullText: exec*command_end の aggregated_output 全文、mcp_tool_call_end の result 全文、collab*\* の status（完了内容）全文
 
 ### 3.6 画面詳細設計
 
@@ -982,7 +1037,7 @@ SessionListPage
 - デフォルト: 非表示（max-height: 0）
 - ノードクリック時: スライドインで表示（max-height: 250px）
 - 表示内容: クリックしたノードの meta および fullText
-- token_count バッジクリック時: トークン内訳（input/output/cached/reasoning）を表示
+- token_count バッジクリック時: 紐付く全 token_count のトークン内訳（input/output/cached/reasoning）を表示。boundCount ≥ 2 の場合は各 token_count を時系列で表示
 
 **エクスポートボタン:**
 
@@ -1194,6 +1249,8 @@ SessionListPage
           ├─ BoundToRecord = 直前レコード（TypedRecordへの参照）
           │   ※ 連続token_countの場合、複数のtoken_countが
           │   同一レコードに紐付けられることを許容する
+          │   ※ 同一ノードに複数紐付く場合、FlowGraph生成（§2.6 Step 4c）
+          │     で TokenBadgeData に集約する
           └─ TurnIndex = turn.Index
 
       ※ BoundToRecord はパース時点では TypedRecord への参照として保持し、
