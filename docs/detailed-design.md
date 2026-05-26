@@ -328,7 +328,7 @@ event_msg はサブタイプによって含まれるフィールドが異なる�
 | 要素           | 説明                                                                                               |
 | -------------- | -------------------------------------------------------------------------------------------------- |
 | CallRecords    | 連続する function_call または custom_tool_call の配列（混在しない）                                |
-| OutputRecords  | 対応する function_call_output または custom_tool_call_output の配列                                |
+| OutputRecords  | 対応する function_call_output または custom_tool_call_output の配列（null を含む場合がある）       |
 | MiddleMessage  | バッチ中間のエージェントメッセージ（存在する場合）                                                 |
 | ContextRecords | バッチ中間の実行コンテキストイベント（exec_command_end、token_count等）。パターンA/Bの中間に挟まる |
 | IsPatternB     | パターンB（中間メッセージが response_item のみ）かどうか                                           |
@@ -365,8 +365,14 @@ custom_tool_call群 → custom_tool_call_output群（中間レコードなし、
    ※ a〜c いずれの場合も、agent_message/assistant message 以外のレコード
      （exec_command_end、token_count 等）は ContextRecords として保持
 4. 連続する function_call_output を検出する（outputBatch）
-5. call_id で call と output の対応を検証:
-   callBatch[i] の call_id == outputBatch[i] の call_id
+5. call_id で call と output の対応を検証・復旧:
+   a. callBatch[i] の call_id == outputBatch[i] の call_id が全件一致
+      → そのまま Batch 生成へ
+   b. 不一致あり → 警告ログを出力し、call_id マップで復旧:
+      - outputMap[call_id] = outputRecord を構築
+      - call の順序に従い output を再配置:
+        OutputRecords[i] = outputMap[callBatch[i].call_id]（存在しない場合は null）
+      - 対応する call がない output → 破棄
 6. Batch を生成する
 7. 走査位置を outputBatch の末尾に進める
 
@@ -375,7 +381,7 @@ custom_tool_call群 → custom_tool_call_output群（中間レコードなし、
 8. レコード配列を先頭から走査する
 9. 連続する custom_tool_call を検出する（callBatch）
 10. 連続する custom_tool_call_output を検出する（outputBatch）
-11. call_id で call と output の対応を検証
+11. call_id で call と output の対応を検証・復旧（手順5と同一ロジック）
 12. Batch を生成する（MiddleMessage なし、ContextRecords なし）
 13. 走査位置を outputBatch の末尾に進める
 
@@ -484,15 +490,18 @@ Build(session)
   │     │
   │     ├─ 2g. 各 Batch を処理:
   │     │   ├─ function_call ノード群を生成（バッチサイズに応じて縦配置）
-  │     │   │   ※ call側・output側それぞれバッチサイズ分の action ノードを生成
+  │     │   │   ※ call側はバッチサイズ分の action ノードを生成
   │     │   ├─ ハーネス最上位から call[0] へエッジ
   │     │   ├─ call[i] → call[i+1] へエッジ（バッチ内）
   │     │   ├─ Batch 中間メッセージノード生成 → ハーネススタックに push
   │     │   ├─ call[last] → 中間メッセージ へエッジ
-  │     │   ├─ function_call_output ノード群を生成
-  │     │   ├─ 中間メッセージ → output[0] へエッジ
-  │     │   ├─ output[i] → output[i+1] へエッジ（バッチ内）
-  │     │   └─ output[last] → ハーネスに戻るエッジ
+  │     │   ├─ function_call_output ノード群を生成:
+  │     │   │   ├─ OutputRecords[i] が null 以外 → output ノードを生成
+  │     │   │   └─ OutputRecords[i] が null → output ノードをスキップ
+  │     │   ├─ 中間メッセージ → 最初の非null output[i] へエッジ
+  │     │   │   ※ 全 output が null の場合 → 中間メッセージをハーネスに接続
+  │     │   ├─ output[i] → 次の非null output[j] へエッジ（null をスキップ）
+  │     │   └─ 最後の非null output → ハーネスに戻るエッジ
   │     │
   │     ├─ 2h. turn.ItemCompleted から item_completed ノード生成（存在する場合）
   │     │
