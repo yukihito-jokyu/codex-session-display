@@ -586,6 +586,11 @@ Build(session)
 | BatchNodeGap    | 8   | バッチ内ノードの縦gap           |
 | BatchMiddleGap  | 24  | バッチ中間メッセージのgap       |
 
+NodeHeightの使い分け基準:
+
+- turnContext, reasoning → NodeHeightLarge=120
+- それ以外 → NodeHeight=80
+
 #### 2.7.3 座標計算アルゴリズム
 
 1. ハーネス上のノードを上から順に配置。Y座標は「直前ノードのY + ノード高さ + gap」で累積
