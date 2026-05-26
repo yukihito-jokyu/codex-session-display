@@ -272,8 +272,9 @@ event_msg はサブタイプによって含まれるフィールドが異なる�
   │   ├─ event_msg(web_search_end) → Web検索完了
   │   ├─ event_msg(item_completed) → アイテム完了イベント
   │   ├─ event_msg(token_count) → トークンカウント
-  │   └─ その他（error, collab_*, exec_command_end, mcp_tool_call_end, view_image_tool_call 等）
-  │      → generic ノードとして扱う
+  │   ├─ call_id を持つイベント（exec_command_end, mcp_tool_call_end,
+  │   │   view_image_tool_call 等）→ 外部イベントブランチ（§2.6 Step 3 で処理）
+  │   └─ その他（error, collab_* 等）→ generic ノードとして扱う
   │
   ├─ Step 5: reasoning ペアリング
   │   agent_reasoning と response_item(reasoning) を出現順で1:1ペアにする。
@@ -318,8 +319,9 @@ event_msg はサブタイプによって含まれるフィールドが異なる�
 | AgentMessages     | TypedRecordの配列            | エージェントメッセージ               |
 | ItemCompleted     | TypedRecordの配列            | アイテム完了イベント                 |
 | TokenCounts       | TokenCountWithBindingの配列  | 紐付け済みtoken_count                |
-| WebSearchRecords  | TypedRecordの配列            | Web検索呼び出し・完了レコード        |
-| GenericRecords    | TypedRecordの配列            | その他の未分類レコード               |
+| WebSearchRecords   | TypedRecordの配列            | Web検索呼び出し・完了レコード        |
+| ExternalEventRecords | TypedRecordの配列          | call_idを持つ外部イベントレコード    |
+| GenericRecords     | TypedRecordの配列            | その他の未分類レコード               |
 
 #### 2.3.4 型付きレコード（TypedRecord）
 
@@ -336,7 +338,7 @@ event_msg はサブタイプによって含まれるフィールドが異なる�
 | CallRecords    | 連続する function_call または custom_tool_call の配列（混在しない）                                |
 | OutputRecords  | 対応する function_call_output または custom_tool_call_output の配列（null を含む場合がある）       |
 | MiddleMessage  | バッチ中間のエージェントメッセージ（存在する場合）                                                 |
-| ContextRecords | バッチ中間の実行コンテキストイベント（exec_command_end、token_count等）。パターンA/Bの中間に挟まる |
+| ContextRecords | バッチ中間の実行コンテキストイベント（exec_command_end、token_count等）。パターンA/Bの中間に挟まる。call_idを持つレコードは§2.6 Step 3で外部イベントブランチノードとして処理される |
 | IsPatternB     | パターンB（中間メッセージが response_item のみ）かどうか                                           |
 
 #### 2.4.2 バッチのパターン
@@ -347,7 +349,7 @@ event_msg はサブタイプによって含まれるフィールドが異なる�
 
 **パターンB**: function_call群 → [ContextRecords] → response_item(message, role=assistant) → [ContextRecords] → function_call_output群（agent_messageなし）
 
-※ ContextRecords として exec_command_end、token_count、mcp_tool_call_end、view_image_tool_call 等が挟まる場合がある。これらは実行コンテキストイベントであり、MiddleMessage とは別枠で ContextRecords に格納する。
+※ ContextRecords として exec_command_end、token_count、mcp_tool_call_end、view_image_tool_call 等が挟まる場合がある。これらは実行コンテキストイベントであり、MiddleMessage とは別枠で ContextRecords に格納する。ノード生成時（§2.6）では、call_id を持つ ContextRecords は外部イベントブランチノード（Step 3）として処理され、ハーネスには配置されない。token_count は token_count 紐付け（Step 4）で処理される。
 
 **custom_tool_call バッチ:**
 
@@ -469,7 +471,7 @@ Build(session)
   ├─ 2. 各 Turn を処理:
   │     ├─ 2a. task_started ノード生成 → ハーネススタックに push
   │     │
-  │     ├─ 2b. response_item(message, role=developer/user) を分岐ノードとして生成
+  │     ├─ 2b. DeveloperMessages + UserMessages を分岐ノードとして生成
   │     │   ハーネス最上位ノードから分岐エッジを張る
   │     │   分岐ノードはハーネス右側に配置
   │     │
@@ -480,12 +482,9 @@ Build(session)
   │     │     └─ user_instructions ノード（折りたたみ）
   │     │   turnContext から各コンテキストノードへ分岐エッジ
   │     │
-  │     ├─ 2d. response_item(message, role=user) 分岐ノード生成
+  │     ├─ 2d. user_message ノード生成 → ハーネススタックに push
   │     │
-  │     ├─ 2e. user_message ノード生成 → ハーネススタックに push
-  │     │   分岐: response_item(message, role=user) ノード
-  │     │
-  │     ├─ 2f. reasoning ノード生成 → ハネススタックに push
+  │     ├─ 2e. reasoning ノード生成 → ハーネススタックに push
   │     │   ペアリング済みの場合:
   │     │     agent_reasoning のテキストを summary に設定
   │     │     reasoning の summary を fullText の一部に設定
@@ -494,40 +493,44 @@ Build(session)
   │     │   スタンドアロンRI（RIのみ・暗号化済み）の場合:
   │     │     「（暗号化済み・表示不可）」を summary および fullText に設定
   │     │
-  │     ├─ 2g. 各 Batch を処理:
-  │     │   ├─ function_call ノード群を生成（バッチサイズに応じて縦配置）
-  │     │   │   ※ call側はバッチサイズ分の action ノードを生成
-  │     │   ├─ ハーネス最上位から call[0] へエッジ
-  │     │   ├─ call[i] → call[i+1] へエッジ（バッチ内）
+  │     ├─ 2f. 各 Batch を処理:
+  │     │   ├─ call[i] ノードを順次生成 → ハーネススタックに push
+  │     │   │   ※ push により直前のノードから自動的にエッジが張られる
   │     │   ├─ Batch 中間メッセージノード生成 → ハーネススタックに push
-  │     │   ├─ call[last] → 中間メッセージ へエッジ
-  │     │   ├─ function_call_output ノード群を生成:
-  │     │   │   ├─ OutputRecords[i] が null 以外 → output ノードを生成
+  │     │   │   ※ MiddleMessage なしの場合はスキップ
+  │     │   ├─ OutputRecords[i] に基づき output ノードを生成:
+  │     │   │   ├─ OutputRecords[i] が null 以外 → output ノード生成 → push
   │     │   │   └─ OutputRecords[i] が null → output ノードをスキップ
-  │     │   ├─ 中間メッセージ → 最初の非null output[i] へエッジ
-  │     │   │   ※ 全 output が null の場合 → 中間メッセージをハーネスに接続
-  │     │   ├─ output[i] → 次の非null output[j] へエッジ（null をスキップ）
-  │     │   └─ 最後の非null output → ハーネスに戻るエッジ
+  │     │   └─ ※ 全 output が null の場合、中間メッセージがハーネススタックトップ
   │     │
-  │     ├─ 2g'. 各 web_search_call / web_search_end を処理:
+  │     ├─ 2f'. 各 web_search_call / web_search_end を処理:
   │     │   ├─ webSearchAction ノード（call側）を生成 → ハーネススタックに push
   │     │   ├─ webSearchAction ノード（end側）を生成 → ハーネススタックに push
   │     │   └─ call側 → end側 へエッジ
   │     │
-  │     ├─ 2h. turn.ItemCompleted から item_completed ノード生成（存在する場合）
+  │     ├─ 2g. turn.ItemCompleted から item_completed ノード生成（存在する場合）
   │     │
-  │     ├─ 2h'. 非バッチの agent_message / response_item(message, assistant) を
-  │     │       agentMessage ノードとしてハーネスに push
+  │     ├─ 2g'. 非バッチの agent_message / response_item(message, assistant) を
+  │     │       agentMessage ノードとしてハーネススタックに push
   │     │       バッチ検出（Step 6）でバッチに含まれなかったレコードが対象。
   │     │       agent_message と response_item(message, assistant) が
   │     │       連続して出現する場合は同一内容のことが多いため、1つのノードに統合し、
   │     │       マッピングテーブルには両方のレコードを同じノードIDに紐付ける
   │     │
-  │     ├─ 2h''. genericRecords から generic ノード生成 → ハーネススタックに push
+  │     ├─ 2h. genericRecords から generic ノード生成 → ハーネススタックに push
+  │     │   ※ call_id を持つ外部イベント（exec_command_end, mcp_tool_call_end,
+  │     │     view_image_tool_call 等）は除外（Step 3 で処理）
   │     │
   │     └─ 2i. task_complete ノード生成 → ハーネススタックに push
   │
-  ├─ 3. 各 token_count について、紐付け先ノードに TokenBadgeData を設定
+  ├─ 3. 外部イベントブランチノード生成:
+  │     ├─ call_id を持つ外部イベントレコード（exec_command_end, mcp_tool_call_end,
+  │     │   view_image_tool_call 等）からブランチノードを生成
+  │     ├─ call_id で対応する action ノード（function_call_output 等）を特定し、
+  │     │   ブランチエッジで接続する
+  │     └─ ブランチノードは対応する action ノードの右側に配置
+  │
+  ├─ 4. 各 token_count について、紐付け先ノードに TokenBadgeData を設定
   │     ├─ a. レコード→ノードIDのマッピングテーブルを構築:
   │     │      ノード生成時に TypedRecord → FlowNode.ID の対応を記録
   │     ├─ b. token_count.BoundToRecord をマッピングテーブルで解決し
@@ -535,10 +538,10 @@ Build(session)
   │     └─ c. 紐付け先ノードの TokenBadgeData に
   │            totalTokens と tokenCountIndex を設定
   │
-  └─ 4. 全ノード・エッジを FlowGraph として返す
+  └─ 5. 全ノード・エッジを FlowGraph として返す
 ```
 
-**ハーネススタック**とは、メインフロー（縦方向の直列接続）を構成するノードの管理用スタックである。スタックの最上位ノードが次のノードの接続元となる。
+**ハーネススタック**とは、メインフロー（縦方向の直列接続）を構成するノードの管理用スタックである。スタックの最上位ノードが次のノードの接続元となる。ノードをハーネススタックに push すると、直前のスタック最上位ノードから当該ノードへエッジが張られ、スタックの最上位が更新される。
 
 ### 2.7 レイアウト計算
 
@@ -1153,7 +1156,9 @@ SessionListPage
   │       ├─ event_msg(web_search_end) → webSearchEnds に一時保持
   │       ├─ event_msg(item_completed) → turn.ItemCompleted に追加
   │       ├─ event_msg(token_count) → tokenCounts に追加
-  │       └─ その他（error, collab_*, exec_command_end 等）→ genericRecords に一時保持
+    │       └─ その他（error, collab_*, exec_command_end 等）
+  │          ├─ call_id を持つレコード → externalEventRecords に一時保持
+  │          └─ call_id を持たないレコード → genericRecords に一時保持
   │
   ├─ Step 5: reasoning ペアリング
   │   for turn in turns:
