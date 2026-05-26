@@ -483,9 +483,8 @@ Build(session)
   │     │     「（暗号化済み・表示不可）」を summary および fullText に設定
   │     │
   │     ├─ 2g. 各 Batch を処理:
-  │     │   ├─ function_call ノード群を生成
-  │     │   │   バッチサイズ1 → 1つの action ノード
-  │     │   │   バッチサイズN → N個の action ノード（縦配置）
+  │     │   ├─ function_call ノード群を生成（バッチサイズに応じて縦配置）
+  │     │   │   ※ call側・output側それぞれバッチサイズ分の action ノードを生成
   │     │   ├─ ハーネス最上位から call[0] へエッジ
   │     │   ├─ call[i] → call[i+1] へエッジ（バッチ内）
   │     │   ├─ Batch 中間メッセージノード生成 → ハーネススタックに push
@@ -803,6 +802,7 @@ HTTPステータスが正常でない場合、ApiErrorをスローする。
 
 - function_call: label = 関数名, summary = 引数の先頭1行（JSONの場合はパースして最初の値）
 - function_call_output: label = "Output: {関数名}", summary = 出力の先頭1行
+- バッチ情報表示: BatchSize ≥ 2 の場合のみ「{BatchIndex+1}/{BatchSize}」をノードに表示。BatchSize = 1 の場合は非表示
 
 **ReasoningNode**（タイプ: reasoning）
 
