@@ -268,8 +268,12 @@ event_msg はサブタイプによって含まれるフィールドが異なる�
   │   ├─ response_item(reasoning) → 推論サマリー（後でペアリング）
   │   ├─ response_item(function_call) → ツール呼び出し（後でバッチ検出）
   │   ├─ response_item(function_call_output) → ツール結果（後でバッチ検出）
+  │   ├─ response_item(web_search_call) → Web検索呼び出し
+  │   ├─ event_msg(web_search_end) → Web検索完了
   │   ├─ event_msg(item_completed) → アイテム完了イベント
-  │   └─ event_msg(token_count) → トークンカウント
+  │   ├─ event_msg(token_count) → トークンカウント
+  │   └─ その他（error, collab_*, exec_command_end, mcp_tool_call_end, view_image_tool_call 等）
+  │      → generic ノードとして扱う
   │
   ├─ Step 5: reasoning ペアリング
   │   agent_reasoning と response_item(reasoning) を出現順で1:1ペアにする。
@@ -314,6 +318,8 @@ event_msg はサブタイプによって含まれるフィールドが異なる�
 | AgentMessages     | TypedRecordの配列            | エージェントメッセージ               |
 | ItemCompleted     | TypedRecordの配列            | アイテム完了イベント                 |
 | TokenCounts       | TokenCountWithBindingの配列  | 紐付け済みtoken_count                |
+| WebSearchRecords  | TypedRecordの配列            | Web検索呼び出し・完了レコード        |
+| GenericRecords    | TypedRecordの配列            | その他の未分類レコード               |
 
 #### 2.3.4 型付きレコード（TypedRecord）
 
@@ -408,27 +414,27 @@ custom_tool_call群 → custom_tool_call_output群（中間レコードなし、
 
 #### 2.5.3 NodeData のデータ構造
 
-| フィールド | 型                         | 説明                                                                                   |
-| ---------- | -------------------------- | -------------------------------------------------------------------------------------- |
-| Category   | 文字列                     | ノードのカテゴリ（Turn系、イベント系、思考系、Action系、メッセージ系、コンテキスト系） |
-| Label      | 文字列                     | ノードヘッダーのタイトル                                                               |
-| Icon       | 文字列                     | ノードアイコン文字                                                                     |
-| Summary    | 文字列                     | ノードbodyに表示する短いテキスト                                                       |
-| FullText   | 文字列または未設定         | クリック展開時の全文                                                                   |
-| Meta       | キー・バリューのマップ     | 詳細パネル表示用のメタデータ                                                           |
-| BatchIndex | 整数                       | バッチ内のインデックス                                                                 |
-| BatchSize  | 整数                       | バッチサイズ                                                                           |
-| TokenBadge | TokenBadgeDataまたは未設定 | トークンバッジ                                                                         |
-| Collapsed  | 真偽値                     | 折りたたみ状態                                                                         |
-| TextLength | 整数                       | テキスト文字数                                                                         |
-| TurnIndex  | 整数                       | 属するターンのインデックス                                                             |
+| フィールド | 型                         | 説明                                                                                           |
+| ---------- | -------------------------- | ---------------------------------------------------------------------------------------------- |
+| Category   | 文字列                     | ノードのカテゴリ（メタ系、Turn系、イベント系、思考系、Action系、メッセージ系、コンテキスト系） |
+| Label      | 文字列                     | ノードヘッダーのタイトル                                                                       |
+| Icon       | 文字列                     | ノードアイコン文字                                                                             |
+| Summary    | 文字列                     | ノードbodyに表示する短いテキスト                                                               |
+| FullText   | 文字列または未設定         | クリック展開時の全文                                                                           |
+| Meta       | キー・バリューのマップ     | 詳細パネル表示用のメタデータ                                                                   |
+| BatchIndex | 整数                       | バッチ内のインデックス                                                                         |
+| BatchSize  | 整数                       | バッチサイズ                                                                                   |
+| TokenBadge | TokenBadgeDataまたは未設定 | トークンバッジ                                                                                 |
+| Collapsed  | 真偽値                     | 折りたたみ状態                                                                                 |
+| TextLength | 整数                       | テキスト文字数                                                                                 |
+| TurnIndex  | 整数                       | 属するターンのインデックス                                                                     |
 
 #### 2.5.4 カスタムノードタイプ一覧
 
 | ノードタイプ       | 対象レコード                                                                   | カテゴリ       |
 | ------------------ | ------------------------------------------------------------------------------ | -------------- |
-| `sessionMeta`      | session_meta                                                                   | Turn系         |
-| `taskEvent`        | task_started, task_complete                                                    | イベント系     |
+| `sessionMeta`      | session_meta                                                                   | メタ系         |
+| `taskEvent`        | task_started, task_complete, turn_aborted                                      | イベント系     |
 | `turnContext`      | turn_context                                                                   | Turn系         |
 | `userMessage`      | event_msg(user_message)                                                        | Turn系         |
 | `agentMessage`     | event_msg(agent_message), response_item(message, role=assistant)               | Turn系         |
@@ -503,6 +509,11 @@ Build(session)
   │     │   ├─ output[i] → 次の非null output[j] へエッジ（null をスキップ）
   │     │   └─ 最後の非null output → ハーネスに戻るエッジ
   │     │
+  │     ├─ 2g'. 各 web_search_call / web_search_end を処理:
+  │     │   ├─ webSearchAction ノード（call側）を生成 → ハーネススタックに push
+  │     │   ├─ webSearchAction ノード（end側）を生成 → ハーネススタックに push
+  │     │   └─ call側 → end側 へエッジ
+  │     │
   │     ├─ 2h. turn.ItemCompleted から item_completed ノード生成（存在する場合）
   │     │
   │     ├─ 2h'. 非バッチの agent_message / response_item(message, assistant) を
@@ -511,6 +522,8 @@ Build(session)
   │     │       agent_message と response_item(message, assistant) が
   │     │       連続して出現する場合は同一内容のことが多いため、1つのノードに統合し、
   │     │       マッピングテーブルには両方のレコードを同じノードIDに紐付ける
+  │     │
+  │     ├─ 2h''. genericRecords から generic ノード生成 → ハーネススタックに push
   │     │
   │     └─ 2i. task_complete ノード生成 → ハーネススタックに push
   │
@@ -652,6 +665,7 @@ JSONLファイルの最終更新日時 > キャッシュファイルの最終更
   │                 │     ├── <MessageNode>
   │                 │     ├── <ReasoningNode>
   │                 │     ├── <ActionNode>
+  │                 │     ├── <WebSearchActionNode>
   │                 │     ├── <GenericNode>
   │                 │     └── <TokenBadge>
   │                 ├── <RightPanel>
@@ -841,6 +855,27 @@ HTTPステータスが正常でない場合、ApiErrorをスローする。
 ```
 
 デフォルトは折りたたみ状態。クリックでテキスト全文を展開表示。textLength から文字数を表示。
+
+**WebSearchActionNode**（タイプ: webSearchAction）
+
+```
+┌───────────────────────────┐
+│ [🔍] Web Search           │  ← call側
+├───────────────────────────┤
+│ query: "codex session..."  │
+└───────────────────────────┘
+
+┌───────────────────────────┐
+│ [🔍] Web Search Result    │  ← end側
+├───────────────────────────┤
+│ action: search             │
+└───────────────────────────┘
+```
+
+- call側: label = "Web Search", summary = `query: {action.query の先頭1行}`
+- end側: label = "Web Search Result", summary = `action: {action.type}`
+- meta（call側）: action.type, action.query, action.queries
+- meta（end側）: query, action.type, action.queries
 
 ### 3.6 画面詳細設計
 
@@ -1114,8 +1149,11 @@ SessionListPage
   │       │   └─ role=assistant → バッチ中間として扱う
   │       ├─ response_item(function_call) → functionCalls に一時保持
   │       ├─ response_item(function_call_output) → functionOutputs に一時保持
+  │       ├─ response_item(web_search_call) → webSearchCalls に一時保持
+  │       ├─ event_msg(web_search_end) → webSearchEnds に一時保持
   │       ├─ event_msg(item_completed) → turn.ItemCompleted に追加
-  │       └─ event_msg(token_count) → tokenCounts に追加
+  │       ├─ event_msg(token_count) → tokenCounts に追加
+  │       └─ その他（error, collab_*, exec_command_end 等）→ genericRecords に一時保持
   │
   ├─ Step 5: reasoning ペアリング
   │   for turn in turns:
