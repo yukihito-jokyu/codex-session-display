@@ -502,15 +502,22 @@ Build(session)
   │     │   スタンドアロンRI（RIのみ・暗号化済み）の場合:
   │     │     「（暗号化済み・表示不可）」を summary および fullText に設定
   │     │
-  │     ├─ 2f. 各 Batch を処理:
-  │     │   ├─ call[i] ノードを順次生成 → ハーネススタックに push
-  │     │   │   ※ push により直前のノードから自動的にエッジが張られる
-  │     │   ├─ Batch 中間メッセージノード生成 → ハーネススタックに push
-  │     │   │   ※ MiddleMessage なしの場合はスキップ
-  │     │   ├─ OutputRecords[i] に基づき output ノードを生成:
-  │     │   │   ├─ OutputRecords[i] が null 以外 → output ノード生成 → push
-  │     │   │   └─ OutputRecords[i] が null → output ノードをスキップ
-  │     │   └─ ※ 全 output が null の場合、中間メッセージがハーネススタックトップ
+  │     ├─ 2f. 各 Batch を処理（fork-join パターン）:
+  │     │   ├─ call[i] ノードを分岐ノードとして生成
+  │     │   │   ハーネス最上位ノードから step エッジで接続
+  │     │   │   X = BranchOffsetX + i * (NodeWidth + BranchNodeGapX)
+  │     │   │   Y = ハーネス最上位ノード.Y（全call同一Y）
+  │     │   ├─ output[i] ノードを call[i] の直下に生成
+  │     │   │   call[i] から default エッジで接続
+  │     │   │   X = call[i].X
+  │     │   │   Y = call[i].Y + NodeHeight + BatchNodeGap
+  │     │   ├─ MiddleMessage が存在する場合:
+  │     │   │   MiddleMessage ノードをハーネススタックに push（join先）
+  │     │   │   各 output[i] から default エッジで MiddleMessage に接続
+  │     │   ├─ MiddleMessage が存在しない場合:
+  │     │   │   join先は次のハーネスノード（2g' の agentMessage 等）
+  │     │   │   各 output[i] から default エッジで join先に接続
+  │     │   └─ ※ OutputRecords[i] が null の場合、当該 output ノードはスキップ
   │     │
   │     ├─ 2f'. 各 web_search_call / web_search_end を処理:
   │     │   ├─ webSearchAction ノード（call側）を生成 → ハーネススタックに push
@@ -558,10 +565,10 @@ Build(session)
 
 #### 2.6.1 エッジタイプ使い分け基準
 
-| エッジタイプ | 接続パターン           | 説明                                                   |
-| ------------ | ---------------------- | ------------------------------------------------------ |
-| default      | ハーネス上の直列接続   | メインフロー、バッチ内接続、WebSearch接続              |
-| step         | ハーネスからの水平分岐 | コンテキスト分岐、メッセージ分岐、外部イベントブランチ |
+| エッジタイプ | 接続パターン                       | 説明                                                                     |
+| ------------ | ---------------------------------- | ------------------------------------------------------------------------ |
+| default      | ハーネス上の直列接続・バッチ内接続 | メインフロー、call→output接続、output→join接続、WebSearch接続            |
+| step         | ハーネスからの水平分岐             | バッチ分岐（ハーネス→call）、コンテキスト分岐、メッセージ分岐、外部イベントブランチ |
 
 ### 2.7 レイアウト計算
 
@@ -585,6 +592,7 @@ Build(session)
 | NodeGap         | 40  | ノード間の縦gap                 |
 | BatchNodeGap    | 8   | バッチ内ノードの縦gap           |
 | BatchMiddleGap  | 24  | バッチ中間メッセージのgap       |
+| BranchNodeGapX  | 20  | バッチ分岐ノード間の水平gap    |
 
 NodeHeightの使い分け基準:
 
@@ -597,6 +605,12 @@ NodeHeightの使い分け基準:
 2. 分岐ノードのY座標: 対応するハーネスノードのY座標に揃える
 3. 分岐ノードのX座標: BranchOffsetX
 4. コンテキストノードのX座標: ContextOffsetX。複数のコンテキストノードは縦に並べる
+5. バッチ分岐ノードの座標計算（fork-join パターン）:
+   a. call[i].X = BranchOffsetX + i * (NodeWidth + BranchNodeGapX)
+   b. call[i].Y = 分岐元ハーネスノード.Y（全call同一Y）
+   c. output[i].X = call[i].X
+   d. output[i].Y = call[i].Y + NodeHeight + BatchNodeGap
+   e. join先（MiddleMessage または次のハーネスノード）.Y = call[i].Y + NodeHeight + BatchNodeGap + NodeHeight + NodeGap
 
 ### 2.8 セッションスキャン処理
 
