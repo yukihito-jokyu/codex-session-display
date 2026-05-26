@@ -302,26 +302,26 @@ event_msg はサブタイプによって含まれるフィールドが異なる�
 
 #### 2.3.3 ターンのデータ構造（Turn）
 
-| フィールド        | 型                           | 説明                                 |
-| ----------------- | ---------------------------- | ------------------------------------ |
-| Index             | 整数                         | ターンのインデックス                 |
-| TurnID            | 文字列                       | ターンID                             |
-| TaskStarted       | EventMsgPayloadまたはnull    | task_startedイベント                 |
-| TaskComplete      | EventMsgPayloadまたはnull    | task_complete / turn_abortedイベント |
-| Aborted           | 真偽値                       | turn_abortedで終了した場合true       |
-| TurnContext       | TurnContextPayloadまたはnull | ターンコンテキスト                   |
-| Records           | TypedRecordの配列            | ターン内の全レコード（時系列順）     |
-| Batches           | Batchの配列                  | 検出されたバッチ                     |
-| DeveloperMessages | TypedRecordの配列            | 開発者メッセージ                     |
-| UserMessages      | TypedRecordの配列            | ユーザーメッセージ                   |
-| UserEventMsg      | TypedRecordまたはnull        | event_msg(user_message)              |
-| AgentReasonings   | TypedRecordの配列            | 推論テキストとサマリーのペア         |
-| AgentMessages     | TypedRecordの配列            | エージェントメッセージ               |
-| ItemCompleted     | TypedRecordの配列            | アイテム完了イベント                 |
-| TokenCounts       | TokenCountWithBindingの配列  | 紐付け済みtoken_count                |
-| WebSearchRecords   | TypedRecordの配列            | Web検索呼び出し・完了レコード        |
-| ExternalEventRecords | TypedRecordの配列          | call_idを持つ外部イベントレコード    |
-| GenericRecords     | TypedRecordの配列            | その他の未分類レコード               |
+| フィールド           | 型                           | 説明                                 |
+| -------------------- | ---------------------------- | ------------------------------------ |
+| Index                | 整数                         | ターンのインデックス                 |
+| TurnID               | 文字列                       | ターンID                             |
+| TaskStarted          | EventMsgPayloadまたはnull    | task_startedイベント                 |
+| TaskComplete         | EventMsgPayloadまたはnull    | task_complete / turn_abortedイベント |
+| Aborted              | 真偽値                       | turn_abortedで終了した場合true       |
+| TurnContext          | TurnContextPayloadまたはnull | ターンコンテキスト                   |
+| Records              | TypedRecordの配列            | ターン内の全レコード（時系列順）     |
+| Batches              | Batchの配列                  | 検出されたバッチ                     |
+| DeveloperMessages    | TypedRecordの配列            | 開発者メッセージ                     |
+| UserMessages         | TypedRecordの配列            | ユーザーメッセージ                   |
+| UserEventMsg         | TypedRecordまたはnull        | event_msg(user_message)              |
+| AgentReasonings      | TypedRecordの配列            | 推論テキストとサマリーのペア         |
+| AgentMessages        | TypedRecordの配列            | エージェントメッセージ               |
+| ItemCompleted        | TypedRecordの配列            | アイテム完了イベント                 |
+| TokenCounts          | TokenCountWithBindingの配列  | 紐付け済みtoken_count                |
+| WebSearchRecords     | TypedRecordの配列            | Web検索呼び出し・完了レコード        |
+| ExternalEventRecords | TypedRecordの配列            | call_idを持つ外部イベントレコード    |
+| GenericRecords       | TypedRecordの配列            | その他の未分類レコード               |
 
 #### 2.3.4 型付きレコード（TypedRecord）
 
@@ -333,13 +333,13 @@ event_msg はサブタイプによって含まれるフィールドが異なる�
 
 1ターン内で、エージェントが複数のツールを連続して呼び出し、その結果をまとめて受け取るパターンを「バッチ」と呼ぶ。バッチは以下の要素で構成される。
 
-| 要素           | 説明                                                                                               |
-| -------------- | -------------------------------------------------------------------------------------------------- |
-| CallRecords    | 連続する function_call または custom_tool_call の配列（混在しない）                                |
-| OutputRecords  | 対応する function_call_output または custom_tool_call_output の配列（null を含む場合がある）       |
-| MiddleMessage  | バッチ中間のエージェントメッセージ（存在する場合）                                                 |
+| 要素           | 説明                                                                                                                                                                               |
+| -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| CallRecords    | 連続する function_call または custom_tool_call の配列（混在しない）                                                                                                                |
+| OutputRecords  | 対応する function_call_output または custom_tool_call_output の配列（null を含む場合がある）                                                                                       |
+| MiddleMessage  | バッチ中間のエージェントメッセージ（存在する場合）                                                                                                                                 |
 | ContextRecords | バッチ中間の実行コンテキストイベント（exec_command_end、token_count等）。パターンA/Bの中間に挟まる。call_idを持つレコードは§2.6 Step 3で外部イベントブランチノードとして処理される |
-| IsPatternB     | パターンB（中間メッセージが response_item のみ）かどうか                                           |
+| IsPatternB     | パターンB（中間メッセージが response_item のみ）かどうか                                                                                                                           |
 
 #### 2.4.2 バッチのパターン
 
@@ -451,13 +451,13 @@ custom_tool_call群 → custom_tool_call_output群（中間レコードなし、
 
 #### 2.5.5 FlowEdge のデータ構造
 
-| フィールド | 型     | 説明                          |
-| ---------- | ------ | ----------------------------- |
-| ID         | 文字列 | エッジの一意ID                |
-| Source     | 文字列 | 接続元ノードID                |
-| Target     | 文字列 | 接続先ノードID                |
-| Type       | 文字列 | "default" / "step" / "branch" |
-| Animated   | 真偽値 | アニメーション有無            |
+| フィールド | 型     | 説明               |
+| ---------- | ------ | ------------------ |
+| ID         | 文字列 | エッジの一意ID     |
+| Source     | 文字列 | 接続元ノードID     |
+| Target     | 文字列 | 接続先ノードID     |
+| Type       | 文字列 | "default" / "step" |
+| Animated   | 真偽値 | アニメーション有無 |
 
 ### 2.6 ノード生成フロー
 
@@ -542,6 +542,13 @@ Build(session)
 ```
 
 **ハーネススタック**とは、メインフロー（縦方向の直列接続）を構成するノードの管理用スタックである。スタックの最上位ノードが次のノードの接続元となる。ノードをハーネススタックに push すると、直前のスタック最上位ノードから当該ノードへエッジが張られ、スタックの最上位が更新される。
+
+#### 2.6.1 エッジタイプ使い分け基準
+
+| エッジタイプ | 接続パターン           | 説明                                                   |
+| ------------ | ---------------------- | ------------------------------------------------------ |
+| default      | ハーネス上の直列接続   | メインフロー、バッチ内接続、WebSearch接続              |
+| step         | ハーネスからの水平分岐 | コンテキスト分岐、メッセージ分岐、外部イベントブランチ |
 
 ### 2.7 レイアウト計算
 
