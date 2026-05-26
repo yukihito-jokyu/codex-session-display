@@ -99,26 +99,37 @@ JSONLファイルの1行は、トップレベルの `type` フィールドで以
 
 #### 2.2.2 event_msg のサブタイプ
 
-| payload.type          | 内容                                                                  |
-| --------------------- | --------------------------------------------------------------------- |
-| `user_message`        | ユーザーからのメッセージ                                              |
-| `agent_message`       | エージェントからのメッセージ                                          |
-| `agent_reasoning`     | エージェントの推論テキスト                                            |
-| `task_started`        | ターンの開始を示すイベント                                            |
-| `task_complete`       | ターンの完了を示すイベント。所要時間やトークン使用量を含む            |
-| `turn_aborted`        | ターンの中断を示すイベント。task_completeと同等にターン終了として扱う |
-| `token_count`         | トークン使用量のカウント                                              |
-| `item_completed`      | アイテム完了イベント                                                  |
-| `thread_name_updated` | セッションタイトルの更新。thread_idでセッションと紐付く               |
+| payload.type             | 内容                                                                       |
+| ------------------------ | -------------------------------------------------------------------------- |
+| `user_message`           | ユーザーからのメッセージ                                                   |
+| `agent_message`          | エージェントからのメッセージ                                               |
+| `agent_reasoning`        | エージェントの推論テキスト                                                 |
+| `task_started`           | ターンの開始を示すイベント                                                 |
+| `task_complete`          | ターンの完了を示すイベント。所要時間やトークン使用量を含む                 |
+| `turn_aborted`           | ターンの中断を示すイベント。task_completeと同等にターン終了として扱う      |
+| `token_count`            | トークン使用量のカウント                                                   |
+| `item_completed`         | アイテム完了イベント                                                       |
+| `thread_name_updated`    | セッションタイトルの更新。thread_idでセッションと紐付く                    |
+| `exec_command_end`       | コマンド実行完了。call_id、command、exit_code、duration等を含む            |
+| `error`                  | エラーイベント。message、codex_error_infoを含む                            |
+| `web_search_end`         | Web検索完了。call_id、query、actionを含む                                  |
+| `collab_agent_spawn_end` | コラボエージェント起動完了。新スレッドID、prompt、model等を含む            |
+| `collab_close_end`       | コラボ終了。受信エージェント情報、完了内容を含む                           |
+| `collab_waiting_end`     | コラボ待機完了。各エージェントのステータスを含む                           |
+| `mcp_tool_call_end`      | MCPツール呼び出し完了。invocation（server, tool, arguments）、resultを含む |
+| `view_image_tool_call`   | 画像表示ツール呼び出し。call_id、pathを含む                                |
 
 #### 2.2.3 response_item のサブタイプ
 
-| payload.type           | 内容                                                          |
-| ---------------------- | ------------------------------------------------------------- |
-| `message`              | メッセージ。`role` で developer / user / assistant に分かれる |
-| `reasoning`            | 推論のサマリー                                                |
-| `function_call`        | ツール呼び出し。関数名と引数を含む                            |
-| `function_call_output` | ツール呼び出しの結果                                          |
+| payload.type              | 内容                                                          |
+| ------------------------- | ------------------------------------------------------------- |
+| `message`                 | メッセージ。`role` で developer / user / assistant に分かれる |
+| `reasoning`               | 推論のサマリー                                                |
+| `function_call`           | ツール呼び出し。関数名と引数を含む                            |
+| `function_call_output`    | ツール呼び出しの結果                                          |
+| `custom_tool_call`        | カスタムツール呼び出し。name、inputを含む                     |
+| `custom_tool_call_output` | カスタムツール呼び出しの結果。outputを含む                    |
+| `web_search_call`         | Web検索呼び出し。action（type, query, queries）を含む         |
 
 #### 2.2.4 session_meta のデータ構造
 
@@ -152,24 +163,49 @@ JSONLファイルの1行は、トップレベルの `type` フィールドで以
 
 event_msg はサブタイプによって含まれるフィールドが異なる。共通フィールドは `Type`（イベント種別）のみ。主なフィールドを以下に示す。
 
-| フィールド            | 対象サブタイプ                                            | 説明                                                                                                        |
-| --------------------- | --------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
-| Message / Text        | agent_message, agent_reasoning                            | メッセージ本文                                                                                              |
-| TurnID                | task_started, task_complete, turn_aborted, item_completed | ターンID                                                                                                    |
-| StartedAt             | task_started                                              | ターン開始時刻（秒タイムスタンプ）                                                                          |
-| ModelContextWindow    | task_started                                              | モデルのコンテキストウィンドウサイズ                                                                        |
-| CollaborationModeKind | task_started                                              | コラボレーションモードの種類                                                                                |
-| CompletedAt           | task_complete, turn_aborted                               | ターン完了時刻（秒タイムスタンプ）                                                                          |
-| DurationMs            | task_complete, turn_aborted                               | 所要時間（ミリ秒）                                                                                          |
-| TimeToFirstTokenMs    | task_complete                                             | 初回トークンまでの時間                                                                                      |
-| LastAgentMessage      | task_complete                                             | ターン完了時の最後のエージェントメッセージ。agent_messageと重複する場合がある                               |
-| Reason                | turn_aborted                                              | 中断理由                                                                                                    |
-| Item                  | item_completed                                            | 完了したアイテムのID、テキスト、タイプ                                                                      |
-| CompletedAtMs         | item_completed                                            | アイテム完了時刻（ミリ秒タイムスタンプ）。参照用                                                            |
-| ThreadID              | item_completed                                            | スレッドID（セッションIDと同一の場合がある）。参照用                                                        |
-| Info                  | token_count                                               | `total_token_usage`（TokenDetail）, `last_token_usage`（TokenDetail）, `model_context_window`（整数）を含む |
-| ThreadID              | thread_name_updated                                       | スレッドID（セッションIDと同一）。紐付けキーとして使用                                                      |
-| ThreadName            | thread_name_updated                                       | セッションのタイトル。LLMが自動生成                                                                         |
+| フィールド            | 対象サブタイプ                                               | 説明                                                                                                        |
+| --------------------- | ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| Message / Text        | agent_message, agent_reasoning                               | メッセージ本文                                                                                              |
+| TurnID                | task_started, task_complete, turn_aborted, item_completed    | ターンID                                                                                                    |
+| StartedAt             | task_started                                                 | ターン開始時刻（秒タイムスタンプ）                                                                          |
+| ModelContextWindow    | task_started                                                 | モデルのコンテキストウィンドウサイズ                                                                        |
+| CollaborationModeKind | task_started                                                 | コラボレーションモードの種類                                                                                |
+| CompletedAt           | task_complete, turn_aborted                                  | ターン完了時刻（秒タイムスタンプ）                                                                          |
+| DurationMs            | task_complete, turn_aborted                                  | 所要時間（ミリ秒）                                                                                          |
+| TimeToFirstTokenMs    | task_complete                                                | 初回トークンまでの時間                                                                                      |
+| LastAgentMessage      | task_complete                                                | ターン完了時の最後のエージェントメッセージ。agent_messageと重複する場合がある                               |
+| Reason                | turn_aborted                                                 | 中断理由                                                                                                    |
+| Item                  | item_completed                                               | 完了したアイテムのID、テキスト、タイプ                                                                      |
+| CompletedAtMs         | item_completed                                               | アイテム完了時刻（ミリ秒タイムスタンプ）。参照用                                                            |
+| ThreadID              | item_completed                                               | スレッドID（セッションIDと同一の場合がある）。参照用                                                        |
+| Info                  | token_count                                                  | `total_token_usage`（TokenDetail）, `last_token_usage`（TokenDetail）, `model_context_window`（整数）を含む |
+| ThreadID              | thread_name_updated                                          | スレッドID（セッションIDと同一）。紐付けキーとして使用                                                      |
+| ThreadName            | thread_name_updated                                          | セッションのタイトル。LLMが自動生成                                                                         |
+| CallID                | exec_command_end, mcp_tool_call_end, view_image_tool_call    | 呼び出しID                                                                                                  |
+| Command               | exec_command_end                                             | 実行コマンド（配列）                                                                                        |
+| Cwd                   | exec_command_end                                             | 作業ディレクトリ                                                                                            |
+| ExitCode              | exec_command_end                                             | 終了コード                                                                                                  |
+| Duration              | exec_command_end                                             | 所要時間（secs, nanos）                                                                                     |
+| AggregatedOutput      | exec_command_end                                             | コマンド実行結果（標準出力・エラー出力の統合）                                                              |
+| ProcessID             | exec_command_end                                             | プロセスID                                                                                                  |
+| Message               | error                                                        | エラーメッセージ（JSON文字列の場合がある）                                                                  |
+| CodexErrorInfo        | error                                                        | エラー種別（"other" 等）                                                                                    |
+| Query                 | web_search_end                                               | 検索クエリ                                                                                                  |
+| Action                | web_search_end                                               | 検索アクション（type, query, queries）                                                                      |
+| SenderThreadID        | collab_agent_spawn_end, collab_close_end, collab_waiting_end | 送信元スレッドID                                                                                            |
+| NewThreadID           | collab_agent_spawn_end                                       | 新規エージェントのスレッドID                                                                                |
+| NewAgentNickname      | collab_agent_spawn_end                                       | 新規エージェントのニックネーム                                                                              |
+| NewAgentRole          | collab_agent_spawn_end                                       | 新規エージェントのロール                                                                                    |
+| Prompt                | collab_agent_spawn_end                                       | エージェントへの指示                                                                                        |
+| Model                 | collab_agent_spawn_end                                       | 使用モデル名                                                                                                |
+| ReasoningEffort       | collab_agent_spawn_end                                       | 推論努力度                                                                                                  |
+| Status                | collab_agent_spawn_end, collab_close_end                     | ステータス（pending_init、completed等）                                                                     |
+| ReceiverThreadID      | collab_close_end                                             | 受信エージェントのスレッドID                                                                                |
+| ReceiverAgentNickname | collab_close_end                                             | 受信エージェントのニックネーム                                                                              |
+| Statuses              | collab_waiting_end                                           | 各エージェントのステータスマップ                                                                            |
+| Invocation            | mcp_tool_call_end                                            | MCP呼び出し情報（server, tool, arguments）                                                                  |
+| Result                | mcp_tool_call_end                                            | MCP呼び出し結果（Ok/Err）                                                                                   |
+| Path                  | view_image_tool_call                                         | 画像ファイルパス                                                                                            |
 
 以下のフィールドは実データに存在するが、本プロジェクトでは使用しない。
 
@@ -183,17 +219,19 @@ event_msg はサブタイプによって含まれるフィールドが異なる�
 
 #### 2.2.7 response_item のデータ構造
 
-| フィールド       | 対象サブタイプ                      | 説明                                                                                                                                              |
-| ---------------- | ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Role             | message                             | メッセージのロール（developer / user / assistant）                                                                                                |
-| Content          | message                             | メッセージの内容配列。各要素は `type` と `text` を持つ。`type` はロールに応じて決まる: developer / user → `input_text`、assistant → `output_text` |
-| Summary          | reasoning                           | 推論サマリーの配列。各要素は `type`（summary_text）と `text` を持つ                                                                               |
-| Content          | reasoning                           | 推論の本文（現在は常にnull）                                                                                                                      |
-| EncryptedContent | reasoning                           | 暗号化された推論内容（現在は常にnull）                                                                                                            |
-| Name             | function_call                       | 呼び出す関数名                                                                                                                                    |
-| Arguments        | function_call                       | 関数の引数（JSON文字列）                                                                                                                          |
-| CallID           | function_call, function_call_output | 呼び出しと結果を紐付けるID                                                                                                                        |
-| Output           | function_call_output                | 関数の実行結果テキスト                                                                                                                            |
+| フィールド       | 対象サブタイプ                                                                 | 説明                                                                                                                                              |
+| ---------------- | ------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Role             | message                                                                        | メッセージのロール（developer / user / assistant）                                                                                                |
+| Content          | message                                                                        | メッセージの内容配列。各要素は `type` と `text` を持つ。`type` はロールに応じて決まる: developer / user → `input_text`、assistant → `output_text` |
+| Summary          | reasoning                                                                      | 推論サマリーの配列。各要素は `type`（summary_text）と `text` を持つ                                                                               |
+| Content          | reasoning                                                                      | 推論の本文（現在は常にnull）                                                                                                                      |
+| EncryptedContent | reasoning                                                                      | 暗号化された推論内容（現在は常にnull）                                                                                                            |
+| Name             | function_call, custom_tool_call                                                | 呼び出す関数名                                                                                                                                    |
+| Arguments        | function_call                                                                  | 関数の引数（JSON文字列）                                                                                                                          |
+| Input            | custom_tool_call                                                               | カスタムツールの入力（パッチ内容等）                                                                                                              |
+| CallID           | function_call, function_call_output, custom_tool_call, custom_tool_call_output | 呼び出しと結果を紐付けるID                                                                                                                        |
+| Output           | function_call_output, custom_tool_call_output                                  | 関数の実行結果テキスト                                                                                                                            |
+| Action           | web_search_call                                                                | 検索アクション（type: "search", query, queries）                                                                                                  |
 
 ### 2.3 パース処理フロー
 
@@ -287,18 +325,27 @@ event_msg はサブタイプによって含まれるフィールドが異なる�
 
 1ターン内で、エージェントが複数のツールを連続して呼び出し、その結果をまとめて受け取るパターンを「バッチ」と呼ぶ。バッチは以下の要素で構成される。
 
-| 要素          | 説明                                                     |
-| ------------- | -------------------------------------------------------- |
-| CallRecords   | 連続する function_call の配列                            |
-| OutputRecords | 対応する function_call_output の配列                     |
-| MiddleMessage | バッチ中間のエージェントメッセージ（存在する場合）       |
-| IsPatternB    | パターンB（中間メッセージが response_item のみ）かどうか |
+| 要素           | 説明                                                                                               |
+| -------------- | -------------------------------------------------------------------------------------------------- |
+| CallRecords    | 連続する function_call または custom_tool_call の配列（混在しない）                                |
+| OutputRecords  | 対応する function_call_output または custom_tool_call_output の配列                                |
+| MiddleMessage  | バッチ中間のエージェントメッセージ（存在する場合）                                                 |
+| ContextRecords | バッチ中間の実行コンテキストイベント（exec_command_end、token_count等）。パターンA/Bの中間に挟まる |
+| IsPatternB     | パターンB（中間メッセージが response_item のみ）かどうか                                           |
 
 #### 2.4.2 バッチのパターン
 
-**パターンA**: function_call群 → agent_message → response_item(message, role=assistant) → function_call_output群
+**function_call バッチ:**
 
-**パターンB**: function_call群 → response_item(message, role=assistant) → function_call_output群（agent_messageなし）
+**パターンA**: function_call群 → [ContextRecords] → agent_message → response_item(message, role=assistant) → [ContextRecords] → function_call_output群
+
+**パターンB**: function_call群 → [ContextRecords] → response_item(message, role=assistant) → [ContextRecords] → function_call_output群（agent_messageなし）
+
+※ ContextRecords として exec_command_end、token_count、mcp_tool_call_end、view_image_tool_call 等が挟まる場合がある。これらは実行コンテキストイベントであり、MiddleMessage とは別枠で ContextRecords に格納する。
+
+**custom_tool_call バッチ:**
+
+custom_tool_call群 → custom_tool_call_output群（中間レコードなし、バッチサイズは常に1）
 
 #### 2.4.3 検出処理
 
@@ -306,18 +353,33 @@ event_msg はサブタイプによって含まれるフィールドが異なる�
 入力: ターン内のレコード配列（時系列順）
 出力: Batch の配列
 
+=== function_call バッチ検出 ===
+
 1. レコード配列を先頭から走査する
 2. 連続する function_call を検出する（callBatch）
-3. callBatch の直後のレコードを確認:
-   a. agent_message → パターンA。中間メッセージとして保持。
-      直後の response_item(message, role=assistant) があればスキップして次へ進む
-   b. response_item(message, role=assistant) で agent_message なし → パターンB
-   c. 上記以外 → 中間メッセージなし
+3. callBatch の直後から次の function_call_output までの間にあるレコードを確認:
+   a. agent_message が含まれる → パターンA。MiddleMessage として保持。
+      同一位置の response_item(message, role=assistant) があればスキップ
+   b. response_item(message, role=assistant) のみで agent_message なし → パターンB
+   c. 上記以外 → MiddleMessage なし
+   ※ a〜c いずれの場合も、agent_message/assistant message 以外のレコード
+     （exec_command_end、token_count 等）は ContextRecords として保持
 4. 連続する function_call_output を検出する（outputBatch）
 5. call_id で call と output の対応を検証:
    callBatch[i] の call_id == outputBatch[i] の call_id
 6. Batch を生成する
-7. 走査位置を outputBatch の末尾に進めて繰り返す
+7. 走査位置を outputBatch の末尾に進める
+
+=== custom_tool_call バッチ検出 ===
+
+8. レコード配列を先頭から走査する
+9. 連続する custom_tool_call を検出する（callBatch）
+10. 連続する custom_tool_call_output を検出する（outputBatch）
+11. call_id で call と output の対応を検証
+12. Batch を生成する（MiddleMessage なし、ContextRecords なし）
+13. 走査位置を outputBatch の末尾に進める
+
+両者の検出結果をマージして Batch の配列として返す
 ```
 
 ### 2.5 React Flow形式への変換
@@ -357,20 +419,21 @@ event_msg はサブタイプによって含まれるフィールドが異なる�
 
 #### 2.5.4 カスタムノードタイプ一覧
 
-| ノードタイプ       | 対象レコード                                                     | カテゴリ       |
-| ------------------ | ---------------------------------------------------------------- | -------------- |
-| `sessionMeta`      | session_meta                                                     | Turn系         |
-| `taskEvent`        | task_started, task_complete                                      | イベント系     |
-| `turnContext`      | turn_context                                                     | Turn系         |
-| `userMessage`      | event_msg(user_message)                                          | Turn系         |
-| `agentMessage`     | event_msg(agent_message), response_item(message, role=assistant) | Turn系         |
-| `reasoning`        | agent_reasoning + reasoning（統合）                              | 思考系         |
-| `action`           | function_call, function_call_output                              | Action系       |
-| `developerMessage` | response_item(message, role=developer)                           | メッセージ系   |
-| `userApiMessage`   | response_item(message, role=user)                                | メッセージ系   |
-| `contextDoc`       | base_instructions, developer_instructions, user_instructions     | コンテキスト系 |
-| `itemCompleted`    | event_msg(item_completed)                                        | イベント系     |
-| `generic`          | 未知タイプ                                                       | 未知タイプ     |
+| ノードタイプ       | 対象レコード                                                                   | カテゴリ       |
+| ------------------ | ------------------------------------------------------------------------------ | -------------- |
+| `sessionMeta`      | session_meta                                                                   | Turn系         |
+| `taskEvent`        | task_started, task_complete                                                    | イベント系     |
+| `turnContext`      | turn_context                                                                   | Turn系         |
+| `userMessage`      | event_msg(user_message)                                                        | Turn系         |
+| `agentMessage`     | event_msg(agent_message), response_item(message, role=assistant)               | Turn系         |
+| `reasoning`        | agent_reasoning + reasoning（統合）                                            | 思考系         |
+| `action`           | function_call, function_call_output, custom_tool_call, custom_tool_call_output | Action系       |
+| `webSearchAction`  | response_item(web_search_call), event_msg(web_search_end)                      | Action系       |
+| `developerMessage` | response_item(message, role=developer)                                         | メッセージ系   |
+| `userApiMessage`   | response_item(message, role=user)                                              | メッセージ系   |
+| `contextDoc`       | base_instructions, developer_instructions, user_instructions                   | コンテキスト系 |
+| `itemCompleted`    | event_msg(item_completed)                                                      | イベント系     |
+| `generic`          | 未知タイプ                                                                     | 未知タイプ     |
 
 #### 2.5.5 FlowEdge のデータ構造
 
