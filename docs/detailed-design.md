@@ -713,7 +713,10 @@ UUIDは常に末尾36文字（固定長）のため、文字列操作で抽出�
 5. エラー処理:
    - セッション未検出 → 404 SESSION_NOT_FOUND
    - ファイルサイズ超過 → 413 FILE_TOO_LARGE
+   - 非対応形式 → 422 UNSUPPORTED_FORMAT
    - パース失敗 → 422 PARSE_ERROR
+   - ファイル読み込み失敗 → 500 FILE_READ_ERROR
+   - 内部エラー → 500 INTERNAL_ERROR
 
 #### 2.10.3 統計画像ハンドラ（GET /api/sessions/:id/stats-image）
 
@@ -725,6 +728,13 @@ UUIDは常に末尾36文字（固定長）のため、文字列操作で抽出�
    - 所要時間、総トークン数、ツール呼び出し数、トークンカウント数、コンテキストウィンドウサイズ、ターン数
      c. 画像サイズ: 1920×1080（固定）
 4. PNG画像バイナリをレスポンスとして返す（Content-Type: image/png）
+5. エラー処理:
+   - セッション未検出 → 404 SESSION_NOT_FOUND
+   - ファイルサイズ超過 → 413 FILE_TOO_LARGE
+   - 非対応形式 → 422 UNSUPPORTED_FORMAT
+   - パース失敗 → 422 PARSE_ERROR
+   - ファイル読み込み失敗 → 500 FILE_READ_ERROR
+   - 画像生成失敗 → 500 INTERNAL_ERROR
 
 ---
 
@@ -1175,13 +1185,14 @@ SessionListPage
 
 **エラーレスポンス:**
 
-| ステータス | code              | 条件                                   |
-| ---------- | ----------------- | -------------------------------------- |
-| 404        | SESSION_NOT_FOUND | 指定IDのセッションファイルが存在しない |
-| 413        | FILE_TOO_LARGE    | ファイルサイズが50MBを超過             |
-| 422        | PARSE_ERROR       | JSONLの解析に失敗                      |
-| 500        | FILE_READ_ERROR   | ファイル読み込み失敗                   |
-| 500        | INTERNAL_ERROR    | 内部エラー                             |
+| ステータス | code               | 条件                                                     |
+| ---------- | ------------------ | -------------------------------------------------------- |
+| 404        | SESSION_NOT_FOUND  | 指定IDのセッションファイルが存在しない                   |
+| 413        | FILE_TOO_LARGE     | ファイルサイズが50MBを超過                               |
+| 422        | UNSUPPORTED_FORMAT | 非対応のセッションファイル形式（Codex CLI v0.121.0未満） |
+| 422        | PARSE_ERROR        | JSONLの解析に失敗                                        |
+| 500        | FILE_READ_ERROR    | ファイル読み込み失敗                                     |
+| 500        | INTERNAL_ERROR     | 内部エラー                                               |
 
 ### 4.3 GET /api/sessions/:id/stats-image
 
@@ -1204,12 +1215,14 @@ SessionListPage
 
 **エラーレスポンス:**
 
-| ステータス | code              | 条件                           |
-| ---------- | ----------------- | ------------------------------ |
-| 404        | SESSION_NOT_FOUND | セッションが存在しない         |
-| 413        | FILE_TOO_LARGE    | ファイルサイズが50MBを超過     |
-| 422        | PARSE_ERROR       | セッションファイルの解析に失敗 |
-| 500        | INTERNAL_ERROR    | 画像生成失敗                   |
+| ステータス | code               | 条件                                                     |
+| ---------- | ------------------ | -------------------------------------------------------- |
+| 404        | SESSION_NOT_FOUND  | セッションが存在しない                                   |
+| 413        | FILE_TOO_LARGE     | ファイルサイズが50MBを超過                               |
+| 422        | UNSUPPORTED_FORMAT | 非対応のセッションファイル形式（Codex CLI v0.121.0未満） |
+| 422        | PARSE_ERROR        | セッションファイルの解析に失敗                           |
+| 500        | FILE_READ_ERROR    | セッションファイルの読み込みに失敗                       |
+| 500        | INTERNAL_ERROR     | 画像生成失敗                                             |
 
 ### 4.4 エラーレスポンス共通形式
 
@@ -1249,6 +1262,11 @@ SessionListPage
   │   │   └─ payload.Type で ResponseItemType を判定
   │   └─ その他 → 未知タイプ（rawのまま保持）
   │   JSONパース失敗 → 警告ログ + スキップ
+  │
+  ├─ Step 2.5: 非対応形式チェック
+  │   session_meta の cli_version を確認:
+  │   ├─ v0.121.0 未満 → エラー（UNSUPPORTED_FORMAT）
+  │   └─ v0.121.0 以上 → 続行
   │
   ├─ Step 3: ターン分割 + thread_name収集
   │   ├─ currentTurn = null
