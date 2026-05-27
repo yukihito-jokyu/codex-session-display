@@ -747,7 +747,10 @@ UUIDは常に末尾36文字（固定長）のため、文字列操作で抽出�
   ├── ルーター
   │     ├── ルート "/"
   │     │     └── <SessionListPage>
-  │     │           ├── <SearchBox>
+  │     │           ├── <Toolbar>
+  │     │           │     ├── セッション件数表示
+  │     │           │     ├── ソースパス表示
+  │     │           │     └── <SearchBox>
   │     │           └── <DateTree>
   │     │                 └── <YearGroup>[] → <MonthGroup>[] → <DayGroup>[]
   │     │                       └── <SessionRow>[]
@@ -755,15 +758,25 @@ UUIDは常に末尾36文字（固定長）のため、文字列操作で抽出�
   │     └── ルート "/sessions/:id"
   │           └── <SessionDetailPage>
   │                 ├── <Header>
+  │                 │     ├── 戻るボタン（← 一覧に戻る）
+  │                 │     ├── セッションID表示
+  │                 │     ├── ブランチ表示
+  │                 │     ├── CWD表示
+  │                 │     ├── タイムスタンプ表示
   │                 │     └── <ExportButton>
   │                 ├── <FlowCanvas>            ← React Flow
   │                 │     ├── <SessionMetaNode>
   │                 │     ├── <TurnEventNode>
   │                 │     ├── <TurnContextNode>
-  │                 │     ├── <MessageNode>
+  │                 │     │     └── <ContextDocNode>[]     ← コンテキスト分岐
+  │                 │     ├── <UserMessageNode>
+  │                 │     ├── <AgentMessageNode>
+  │                 │     ├── <DeveloperMessageNode>
+  │                 │     ├── <UserApiMessageNode>
   │                 │     ├── <ReasoningNode>
   │                 │     ├── <ActionNode>
   │                 │     ├── <WebSearchActionNode>
+  │                 │     ├── <ItemCompletedNode>
   │                 │     ├── <ExternalEventNode>
   │                 │     ├── <GenericNode>
   │                 │     └── <TokenBadge>
