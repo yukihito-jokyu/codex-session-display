@@ -944,6 +944,9 @@ HTTPステータスが正常でない場合、またはタイムアウト・ネ�
 - summary（開始時）: `"mode: {collaboration_mode_kind}\nstarted_at: {time}"` — {time}はローカル時刻 `YYYY-MM-DD HH:MM:SS` 形式
 - summary（完了時）: `"所要時間: {duration}\n初回トークン: {ttft}"`
 - summary（中断時）: `"所要時間: {duration}\n理由: {reason}"`
+- meta（開始時）: collaboration_mode_kind, started_at, model_context_window
+- meta（完了時）: duration_ms, time_to_first_token_ms
+- meta（中断時）: duration_ms, reason
 
 **TurnContextNode**（タイプ: turnContext）
 
@@ -958,6 +961,8 @@ HTTPステータスが正常でない場合、またはタイムアウト・ネ�
 ```
 
 ハーネス上のノード + 右側にコンテキスト分岐ノードを展開。分岐先は base_instructions, developer_instructions, user_instructions。
+
+- meta: model, effort, approval_policy, collaboration_mode, user_instructions
 
 **ActionNode**（タイプ: action）
 
@@ -979,6 +984,8 @@ HTTPステータスが正常でない場合、またはタイムアウト・ネ�
 - function_call_output: label = "Output: {関数名}", summary = 出力の先頭1行
 - バッチ情報表示: BatchSize ≥ 2 の場合のみ「{BatchIndex+1}/{BatchSize}」をノードに表示。BatchSize = 1 の場合は非表示
 - デフォルト値: バッチに含まれないノード（非Action系ノード）は BatchSize=0, BatchIndex=0 とする。BatchSize=0 は非表示として扱う
+- meta（全サブタイプ）: name, call_id
+- fullText: function_call は引数のJSON全文、function_call_output は出力テキスト全文、custom_tool_call はinputの全文、custom_tool_call_output はoutputの全文
 
 **ReasoningNode**（タイプ: reasoning）
 
@@ -1008,6 +1015,8 @@ HTTPステータスが正常でない場合、またはタイムアウト・ネ�
 ```
 
 デフォルトは折りたたみ状態。クリックでテキスト全文を展開表示。textLength から文字数を表示。
+
+- fullText: インストラクション全文
 
 **WebSearchActionNode**（タイプ: webSearchAction）
 
@@ -1069,6 +1078,38 @@ action ノード（function_call_output 等）の右側に step エッジで分�
 
 - ステータス表示: ノードヘッダーの右側に ✓/✕ アイコンを表示（exit_code や result に基づく）
 - fullText: exec*command_end の aggregated_output 全文、mcp_tool_call_end の result 全文、collab*\* の status（完了内容）全文
+
+**UserMessageNode**（タイプ: userMessage）
+
+- summary: event_msg(user_message) のテキスト先頭2行
+- fullText: ユーザーメッセージ全文
+
+**AgentMessageNode**（タイプ: agentMessage）
+
+- summary: event_msg(agent_message) / response_item(message, role=assistant) のテキスト先頭2行
+- fullText: エージェントメッセージ全文
+
+**DeveloperMessageNode**（タイプ: developerMessage）
+
+- summary: response_item(message, role=developer) のテキスト先頭2行
+- fullText: 開発者メッセージ全文
+
+**UserApiMessageNode**（タイプ: userApiMessage）
+
+- summary: response_item(message, role=user) のテキスト先頭2行
+- fullText: ユーザーAPIメッセージ全文
+
+**ItemCompletedNode**（タイプ: itemCompleted）
+
+- summary: item.text の先頭2行（テキストがない場合は item.type を表示）
+- meta: item_id, item_type, completed_at_ms, thread_id
+- fullText: item.text の全文
+
+**GenericNode**（タイプ: generic）
+
+- summary: ペイロードのJSON先頭1行
+- meta: レコードから抽出可能な主要フィールド（サブタイプに応じて動的に生成）
+- fullText: ペイロード全体のJSON文字列
 
 ### 3.6 画面詳細設計
 
@@ -1165,14 +1206,14 @@ SessionListPage
 
 2×3グリッドで以下の6項目を表示する。各カードはStatistics（§2.1.5）の対応フィールドを値とする。
 
-| stat-card             | フィールド          |
-| --------------------- | ------------------- |
-| 所要時間              | DurationMs          |
-| 総トークン数          | TotalTokens         |
-| ツール呼び出し数      | ToolCallCount       |
-| トークンカウント数    | TokenCountCount     |
-| コンテキストウィンドウ | ContextWindowSize   |
-| ターン数              | TurnCount           |
+| stat-card              | フィールド        |
+| ---------------------- | ----------------- |
+| 所要時間               | DurationMs        |
+| 総トークン数           | TotalTokens       |
+| ツール呼び出し数       | ToolCallCount     |
+| トークンカウント数     | TokenCountCount   |
+| コンテキストウィンドウ | ContextWindowSize |
+| ターン数               | TurnCount         |
 
 **TurnTokenSummary:**
 
@@ -1198,8 +1239,15 @@ SessionListPage
 
 - デフォルト: 非表示（max-height: 0）
 - ノードクリック時: スライドインで表示（max-height: 250px）
-- 表示内容: クリックしたノードの meta および fullText
-- token_count バッジクリック時: 紐付く全 token_count のトークン内訳（input/output/cached/reasoning）を表示。boundCount ≥ 2 の場合は各 token_count を時系列で表示
+- 表示内容: 全ノード種別で共通フォーマット。`meta` があればキー・バリュー表を表示し、`fullText` があれば全文を表示する。両方なければ表示しない
+- token_count バッジクリック時: 左右分割表示に切り替え
+  - 左: ノード詳細（meta のキー・バリュー表 + fullText の全文）
+  - 右: 紐付く全 token_count のトークン内訳
+    - boundCount = 1: 単一カード形式で TokenDetail の5項目（TotalTokens, InputTokens, OutputTokens, ReasoningOutputTokens, CachedInputTokens）を縦並びのキー・バリューで表示
+    - boundCount ≥ 2: 各 token_count を時系列で縦に並べ、各エントリにインデックス番号と同じ5項目を表示
+  - 分割比率: ユーザーがドラッグで自由に変更可能
+  - ノード本体をクリックし直すとノード詳細のみの単一パネルに戻る
+- スクロール: max-height: 250px を維持し、`overflow-y: auto` でスクロール可能。ノード詳細エリアとトークン内訳エリアはそれぞれ独立してスクロール
 
 **エクスポートボタン:**
 
