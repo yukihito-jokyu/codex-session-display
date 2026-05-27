@@ -448,7 +448,7 @@ custom_tool_call群 → custom_tool_call_output群（中間レコードなし、
 | `turnContext`      | turn_context                                                                                                            | Turn系         |
 | `userMessage`      | event_msg(user_message)                                                                                                 | Turn系         |
 | `agentMessage`     | event_msg(agent_message), response_item(message, role=assistant)                                                        | Turn系         |
-| `reasoning`        | agent_reasoning + reasoning（統合）                                                                                     | 思考系         |
+| `reasoning`        | agent_reasoning + reasoning（統合）                                                                                     | Turn系         |
 | `action`           | function_call, function_call_output, custom_tool_call, custom_tool_call_output                                          | Action系       |
 | `webSearchAction`  | response_item(web_search_call), event_msg(web_search_end)                                                               | Action系       |
 | `developerMessage` | response_item(message, role=developer)                                                                                  | メッセージ系   |
@@ -476,20 +476,25 @@ custom_tool_call群 → custom_tool_call_output群（中間レコードなし、
 Build(session)
   │
   ├─ 1. sessionMeta ノード生成 → ハーネススタックに push
+  │     base_instructions コンテキスト分岐ノードを生成:
+  │       sessionMeta から step エッジで接続（内向き）
+  │       X = ContextOffsetX
+  │       データソース: session_meta.base_instructions.text
   │
-  ├─ 2. 各 Turn を処理:
+  ├─ 2. 各 Turn を処理（2a〜2d はステップ順、2e以降はレコードの出現順に処理）:
   │     ├─ 2a. task_started ノード生成 → ハーネススタックに push
   │     │
   │     ├─ 2b. DeveloperMessages + UserMessages を分岐ノードとして生成
-  │     │   ハーネス最上位ノードから分岐エッジを張る
+  │     │   各ノードからハーネス最上位ノードへ step エッジで接続（内向き）
   │     │   分岐ノードはハーネス右側に配置
   │     │
   │     ├─ 2c. turnContext ノード生成 → ハーネススタックに push
-  │     │   コンテキスト分岐ノードを生成:
-  │     │     ├─ base_instructions ノード（折りたたみ）
+  │     │   コンテキスト分岐ノードを生成（内向き step エッジ、nullの場合は生成しない）:
   │     │     ├─ developer_instructions ノード（折りたたみ）
+  │     │     │   データソース: turn_context.collaboration_mode.developer_instructions
   │     │     └─ user_instructions ノード（折りたたみ）
-  │     │   turnContext から各コンテキストノードへ分岐エッジ
+  │     │         データソース: turn_context.user_instructions
+  │     │   各コンテキストノードから turnContext へ step エッジで接続
   │     │
   │     ├─ 2d. user_message ノード生成 → ハーネススタックに push
   │     │
@@ -511,12 +516,10 @@ Build(session)
   │     │   │   call[i] から default エッジで接続
   │     │   │   X = call[i].X
   │     │   │   Y = call[i].Y + NodeHeight + BatchNodeGap
-  │     │   ├─ MiddleMessage が存在する場合:
-  │     │   │   MiddleMessage ノードをハーネススタックに push（join先）
+  │     │   ├─ MiddleMessage ノードをハーネススタックに push（join先）:
+  │     │   │   Pattern A: agent_message + response_item(message, assistant) を統合
+  │     │   │   Pattern B: response_item(message, assistant) のみ
   │     │   │   各 output[i] から default エッジで MiddleMessage に接続
-  │     │   ├─ MiddleMessage が存在しない場合:
-  │     │   │   join先は次のハーネスノード（2g' の agentMessage 等）
-  │     │   │   各 output[i] から default エッジで join先に接続
   │     │   └─ ※ OutputRecords[i] が null の場合、当該 output ノードはスキップ
   │     │
   │     ├─ 2f'. 各 web_search_call / web_search_end を処理:
@@ -524,7 +527,7 @@ Build(session)
   │     │   ├─ webSearchAction ノード（end側）を生成 → ハーネススタックに push
   │     │   └─ call側 → end側 へエッジ
   │     │
-  │     ├─ 2g. turn.ItemCompleted から item_completed ノード生成（存在する場合）
+  │     ├─ 2g. turn.ItemCompleted から item_completed ノード生成 → ハーネススタックに push（存在する場合）
   │     │
   │     ├─ 2g'. 非バッチの agent_message / response_item(message, assistant) を
   │     │       agentMessage ノードとしてハーネススタックに push
@@ -565,10 +568,10 @@ Build(session)
 
 #### 2.6.1 エッジタイプ使い分け基準
 
-| エッジタイプ | 接続パターン                       | 説明                                                                                |
-| ------------ | ---------------------------------- | ----------------------------------------------------------------------------------- |
-| default      | ハーネス上の直列接続・バッチ内接続 | メインフロー、call→output接続、output→join接続、WebSearch接続                       |
-| step         | ハーネスからの水平分岐             | バッチ分岐（ハーネス→call）、コンテキスト分岐、メッセージ分岐、外部イベントブランチ |
+| エッジタイプ | 接続パターン                       | 説明                                                                                                                                     |
+| ------------ | ---------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| default      | ハーネス上の直列接続・バッチ内接続 | メインフロー、call→output接続、output→join接続、WebSearch接続                                                                            |
+| step         | ハーネスとの水平接続               | バッチ分岐（ハーネス→call: 外向き）、コンテキスト分岐（内向き）、メッセージ分岐（内向き: DevMsg/UserApi→ハーネス）、外部イベントブランチ |
 
 ### 2.7 レイアウト計算
 
@@ -612,9 +615,11 @@ NodeHeightの使い分け基準:
    d. output[i].Y = call[i].Y + NodeHeight + BatchNodeGap
    e. join先（MiddleMessage または次のハーネスノード）.Y = call[i].Y + NodeHeight + BatchNodeGap + NodeHeight + NodeGap
 6. コンテキスト分岐ノードの座標計算:
-   a. contextDoc[i].X = ContextOffsetX（全ノード同一X）
-   b. contextDoc[0].Y = turnContext.Y（1番目はturnContextに揃える）
-   c. contextDoc[i].Y = turnContext.Y + i \* (NodeHeight + NodeGap)（2番目以降は累積）
+   a. base_instructions: sessionMeta.Y に揃える、X = ContextOffsetX
+   b. developer_instructions / user_instructions:
+   contextDoc[i].X = ContextOffsetX（全ノード同一X）
+   contextDoc[0].Y = turnContext.Y（1番目はturnContextに揃える）
+   contextDoc[i].Y = turnContext.Y + i \* (NodeHeight + NodeGap)（2番目以降は累積）
 
 ### 2.8 セッションスキャン処理
 
