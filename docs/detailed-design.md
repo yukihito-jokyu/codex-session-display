@@ -859,6 +859,16 @@ HTTPステータスが正常でない場合、またはタイムアウト・ネ�
 
 ### 3.4 フロントエンドの型定義
 
+#### 3.4.0 命名規則
+
+| 対象                | 規則       | 例                                         |
+| ------------------- | ---------- | ------------------------------------------ |
+| API ドメイン型      | snake_case | `file_path`, `duration_ms`, `total_tokens` |
+| React Flow 可視化型 | camelCase  | `batchIndex`, `textLength`, `totalTokens`  |
+
+- **変換レイヤーなし**: API レスポンスの JSON をそのままフロントエンドの型として使用する。snake_case と camelCase の混在を許容する
+- **Go 側の JSON タグで制御**: バックエンドの Go 構造体は JSON タグで snake_case（API ドメイン型）または camelCase（React Flow 可視化型）を出力する
+
 #### 3.4.1 セッション関連の型
 
 | 型名                  | フィールド概要                                                                                                                                     |
