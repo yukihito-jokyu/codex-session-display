@@ -924,7 +924,7 @@ HTTPステータスが正常でない場合、またはタイムアウト・ネ�
 └───────────────────────────┘
 ```
 
-- summary: `"CLI v{cli_version} · {model_provider} · {originator}"`
+- summary: `"CLI v{cli_version} · {model_provider} · {originator}"` — nullの項目は "—" で表示
 - meta: cli_version, model_provider, originator, cwd, git_branch, git_commit
 
 **TurnEventNode**（タイプ: taskEvent）
@@ -941,7 +941,7 @@ HTTPステータスが正常でない場合、またはタイムアウト・ネ�
 - task_started: label = "Turn {N} Started", icon = "▶"
 - task_complete: label = "Turn {N} Complete", icon = "■"
 - turn_aborted: label = "Turn {N} 中断", icon = "✕"
-- summary（開始時）: `"mode: {collaboration_mode_kind}\nstarted_at: {time}"`
+- summary（開始時）: `"mode: {collaboration_mode_kind}\nstarted_at: {time}"` — {time}はローカル時刻 `YYYY-MM-DD HH:MM:SS` 形式
 - summary（完了時）: `"所要時間: {duration}\n初回トークン: {ttft}"`
 - summary（中断時）: `"所要時間: {duration}\n理由: {reason}"`
 
@@ -975,7 +975,7 @@ HTTPステータスが正常でない場合、またはタイムアウト・ネ�
 └───────────────────────────┘
 ```
 
-- function_call: label = 関数名, summary = 引数の先頭1行（JSONの場合はパースして最初の値）
+- function_call: label = 関数名, summary = 引数のJSONをパースし、最初の値を再シリアライズして先頭1行を表示。値が文字列ならそのまま、配列・オブジェクトならJSON文字列の先頭を切り詰め
 - function_call_output: label = "Output: {関数名}", summary = 出力の先頭1行
 - バッチ情報表示: BatchSize ≥ 2 の場合のみ「{BatchIndex+1}/{BatchSize}」をノードに表示。BatchSize = 1 の場合は非表示
 - デフォルト値: バッチに含まれないノード（非Action系ノード）は BatchSize=0, BatchIndex=0 とする。BatchSize=0 は非表示として扱う
