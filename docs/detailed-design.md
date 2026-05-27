@@ -715,14 +715,16 @@ UUIDは常に末尾36文字（固定長）のため、文字列操作で抽出�
    - ファイルサイズ超過 → 413 FILE_TOO_LARGE
    - パース失敗 → 422 PARSE_ERROR
 
-#### 2.10.3 エクスポートハンドラ（POST /api/sessions/:id/export）
+#### 2.10.3 統計画像ハンドラ（GET /api/sessions/:id/stats-image）
 
-1. セッションIDを抽出
-2. リクエストボディから format/width/height を読込
-3. キャッシュまたはパースからFlowGraphを取得
-4. SVG/PNG形式で画像データを生成
-   ※ 初期実装ではフロントエンド側で html-to-image 等を使用して画像化する
-5. 画像バイナリをレスポンスとして返す
+1. URLパスからセッションIDを抽出
+2. キャッシュまたはパースから統計情報（Statistics）とセッションメタデータを取得
+3. Goネイティブの2DグラフィックスライブラリでPNG画像を生成:
+   a. 上部ヘッダー: セッションID（短縮形式）、ブランチ名、作業ディレクトリ、タイムスタンプ
+   b. 下部: 6つのstat-card（2列×3行グリッド）
+   - 所要時間、総トークン数、ツール呼び出し数、トークンカウント数、コンテキストウィンドウサイズ、ターン数
+     c. 画像サイズ: 1920×1080（固定）
+4. PNG画像バイナリをレスポンスとして返す（Content-Type: image/png）
 
 ---
 
@@ -794,11 +796,11 @@ APIレスポンスの nodes / edges をそのまま React Flow の初期値と�
 
 APIクライアントは同一オリジンで通信する。以下の3つの関数を提供する。
 
-| 関数               | HTTPメソッド | パス                     | 戻り値                |
-| ------------------ | ------------ | ------------------------ | --------------------- |
-| fetchSessionList   | GET          | /api/sessions            | SessionListResponse   |
-| fetchSessionDetail | GET          | /api/sessions/:id        | SessionDetailResponse |
-| exportSession      | POST         | /api/sessions/:id/export | 画像Blob              |
+| 関数               | HTTPメソッド | パス                          | 戻り値                |
+| ------------------ | ------------ | ----------------------------- | --------------------- |
+| fetchSessionList   | GET          | /api/sessions                 | SessionListResponse   |
+| fetchSessionDetail | GET          | /api/sessions/:id             | SessionDetailResponse |
+| fetchStatsImage    | GET          | /api/sessions/:id/stats-image | 画像Blob              |
 
 HTTPステータスが正常でない場合、ApiErrorをスローする。
 
@@ -1105,7 +1107,8 @@ SessionListPage
 **エクスポートボタン:**
 
 - クリック → 確認ダイアログなしでエクスポート開始
-- フロントエンド側で React Flow のキャンバスを画像化（PNG形式でダウンロード）
+- バックエンドの `GET /api/sessions/:id/stats-image` を呼び出し、PNG画像をダウンロード
+- ファイル名: `stats-{sessionID短縮}.png`
 
 ---
 
@@ -1180,34 +1183,33 @@ SessionListPage
 | 500        | FILE_READ_ERROR   | ファイル読み込み失敗                   |
 | 500        | INTERNAL_ERROR    | 内部エラー                             |
 
-### 4.3 POST /api/sessions/:id/export
+### 4.3 GET /api/sessions/:id/stats-image
 
-**概要:** セッションの可視化結果を画像としてエクスポートする
+**概要:** セッションの統計情報を画像として取得する
 
-**リクエストボディ:**
+**リクエスト:**
 
-```json
-{
-  "format": "png",
-  "width": 1920,
-  "height": 1080
-}
-```
+| 項目        | 値                            |
+| ----------- | ----------------------------- |
+| Path        | /api/sessions/:id/stats-image |
+| Path Params | id — セッションID（UUID）     |
 
-| フィールド | 型     | 必須 | デフォルト | 説明                       |
-| ---------- | ------ | ---- | ---------- | -------------------------- |
-| format     | 文字列 | No   | "png"      | "png" のみ対応（初期実装） |
-| width      | 整数   | No   | 1920       | 出力画像幅（px）           |
-| height     | 整数   | No   | 1080       | 出力画像高（px）           |
+**レスポンス 200:**
 
-**レスポンス 200:** Content-Type: image/png、Body: PNG画像バイナリ
+- Content-Type: image/png
+- Body: PNG画像バイナリ（1920×1080）
+  - 上部: セッションヘッダー（セッションID短縮形式、ブランチ名、作業ディレクトリ、タイムスタンプ）
+  - 下部: 6つのstat-card（2列×3行グリッド）
+    - 所要時間、総トークン数、ツール呼び出し数、トークンカウント数、コンテキストウィンドウサイズ、ターン数
 
 **エラーレスポンス:**
 
-| ステータス | code              | 条件                   |
-| ---------- | ----------------- | ---------------------- |
-| 404        | SESSION_NOT_FOUND | セッションが存在しない |
-| 500        | INTERNAL_ERROR    | 画像生成失敗           |
+| ステータス | code              | 条件                           |
+| ---------- | ----------------- | ------------------------------ |
+| 404        | SESSION_NOT_FOUND | セッションが存在しない         |
+| 413        | FILE_TOO_LARGE    | ファイルサイズが50MBを超過     |
+| 422        | PARSE_ERROR       | セッションファイルの解析に失敗 |
+| 500        | INTERNAL_ERROR    | 画像生成失敗                   |
 
 ### 4.4 エラーレスポンス共通形式
 
