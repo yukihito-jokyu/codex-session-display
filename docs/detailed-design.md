@@ -802,18 +802,24 @@ UUIDは常に末尾36文字（固定長）のため、文字列操作で抽出�
 
 #### 3.2.2 セッション詳細画面の状態
 
-| 状態               | 型                        | 説明                                |
-| ------------------ | ------------------------- | ----------------------------------- |
-| sessionData        | SessionDetailまたはnull   | APIから取得したセッション詳細       |
-| loading            | 真偽値                    | ローディング状態                    |
-| error              | 文字列またはnull          | エラーメッセージ                    |
-| selectedNode       | FlowNodeまたはnull        | 選択中のノード（BottomPanel表示用） |
-| selectedTokenBadge | TokenCountEntryまたはnull | 選択中のトークンバッジ              |
-| bottomPanelOpen    | 真偽値                    | 下部パネルの開閉状態                |
+| 状態               | 型                        | 説明                                | デフォルト |
+| ------------------ | ------------------------- | ----------------------------------- | ---------- |
+| sessionData        | SessionDetailまたはnull   | APIから取得したセッション詳細       | null       |
+| loading            | 真偽値                    | ローディング状態                    | false      |
+| error              | 文字列またはnull          | エラーメッセージ                    | null       |
+| selectedNode       | FlowNodeまたはnull        | 選択中のノード（BottomPanel表示用） | null       |
+| selectedTokenBadge | TokenCountEntryまたはnull | 選択中のトークンバッジ              | null       |
+| rightPanelOpen     | 真偽値                    | RightPanelの開閉状態                | true       |
+| exporting          | 真偽値                    | エクスポート中                      | false      |
+| notification       | Notificationまたはnull    | トースト通知                        | null       |
+
+Notification型: `{ message: string, type: 'success' \| 'error' \| 'info' }`
+
+BottomPanelの表示状態は導出判定とする: `bottomPanelOpen = selectedNode !== null || selectedTokenBadge !== null`
 
 #### 3.2.3 React Flowの状態管理方針
 
-APIレスポンスの nodes / edges をそのまま React Flow の初期値として渡す。ノードのドラッグ移動は無効とする。ノードの選択状態は `onNodeClick` コールバックで管理し、親コンポーネントに通知する。
+APIレスポンスの nodes / edges をそのまま React Flow の初期値として渡す。ノードのドラッグ移動は無効とする。ノードの選択状態は `onNodeClick` コールバックで管理し、親コンポーネントに通知する。ビューポート（ズームレベル・パン位置）の状態はReact Flowの内部管理に委ね、独自stateは定義しない。
 
 ### 3.3 APIクライアント
 
