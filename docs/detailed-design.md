@@ -565,9 +565,9 @@ Build(session)
 
 #### 2.6.1 エッジタイプ使い分け基準
 
-| エッジタイプ | 接続パターン                       | 説明                                                                     |
-| ------------ | ---------------------------------- | ------------------------------------------------------------------------ |
-| default      | ハーネス上の直列接続・バッチ内接続 | メインフロー、call→output接続、output→join接続、WebSearch接続            |
+| エッジタイプ | 接続パターン                       | 説明                                                                                |
+| ------------ | ---------------------------------- | ----------------------------------------------------------------------------------- |
+| default      | ハーネス上の直列接続・バッチ内接続 | メインフロー、call→output接続、output→join接続、WebSearch接続                       |
 | step         | ハーネスからの水平分岐             | バッチ分岐（ハーネス→call）、コンテキスト分岐、メッセージ分岐、外部イベントブランチ |
 
 ### 2.7 レイアウト計算
@@ -592,7 +592,7 @@ Build(session)
 | NodeGap         | 40  | ノード間の縦gap                 |
 | BatchNodeGap    | 8   | バッチ内ノードの縦gap           |
 | BatchMiddleGap  | 24  | バッチ中間メッセージのgap       |
-| BranchNodeGapX  | 20  | バッチ分岐ノード間の水平gap    |
+| BranchNodeGapX  | 20  | バッチ分岐ノード間の水平gap     |
 
 NodeHeightの使い分け基準:
 
@@ -606,11 +606,15 @@ NodeHeightの使い分け基準:
 3. 分岐ノードのX座標: BranchOffsetX
 4. コンテキストノードのX座標: ContextOffsetX。複数のコンテキストノードは縦に並べる
 5. バッチ分岐ノードの座標計算（fork-join パターン）:
-   a. call[i].X = BranchOffsetX + i * (NodeWidth + BranchNodeGapX)
+   a. call[i].X = BranchOffsetX + i \* (NodeWidth + BranchNodeGapX)
    b. call[i].Y = 分岐元ハーネスノード.Y（全call同一Y）
    c. output[i].X = call[i].X
    d. output[i].Y = call[i].Y + NodeHeight + BatchNodeGap
    e. join先（MiddleMessage または次のハーネスノード）.Y = call[i].Y + NodeHeight + BatchNodeGap + NodeHeight + NodeGap
+6. コンテキスト分岐ノードの座標計算:
+   a. contextDoc[i].X = ContextOffsetX（全ノード同一X）
+   b. contextDoc[0].Y = turnContext.Y（1番目はturnContextに揃える）
+   c. contextDoc[i].Y = turnContext.Y + i \* (NodeHeight + NodeGap)（2番目以降は累積）
 
 ### 2.8 セッションスキャン処理
 
