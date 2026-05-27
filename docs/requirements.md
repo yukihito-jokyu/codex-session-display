@@ -12,7 +12,7 @@ Codex CLIのセッションログ（JSONL）を解析・可視化し、開発者
 
 ### 1.3 プラットフォーム
 
-React + GoによるWebアプリケーションをローカルで起動して使用する。将来、Wailsを使用してデスクトップアプリに移行することを前提とした構成とする。
+Wails（Go + React）によるデスクトップアプリケーション。ローカルで起動して使用する。
 
 ### 1.4 前提条件
 
@@ -461,7 +461,7 @@ JSONLは各レコードのトップレベル `type` フィールドで4種類に
 
 #### UC-1: セッション一覧の閲覧
 
-1. アプリケーションを起動する（Go バックエンド + React フロントエンド）
+1. アプリケーションを起動する（Wailsデスクトップアプリ）
 2. `~/.codex/sessions` のセッション一覧が自動表示される
 3. セッションID、ブランチ、タイムスタンプ等を確認する
 
@@ -482,7 +482,8 @@ JSONLは各レコードのトップレベル `type` フィールドで4種類に
 #### UC-4: 解析結果のエクスポート
 
 1. セッション詳細画面でエクスポート操作を行う
-2. React Flowの可視化結果が画像として保存される
+2. ネイティブファイル保存ダイアログが開く
+3. ユーザーが保存先を選択し、統計情報の画像が保存される
 
 ### 2.9 画面構成
 
@@ -578,8 +579,9 @@ JSONLは各レコードのトップレベル `type` フィールドで4種類に
 
 | レイヤー       | 技術                | 役割                                               |
 | -------------- | ------------------- | -------------------------------------------------- |
+| アプリフレーム | Wails               | Go + Reactのデスクトップアプリフレームワーク       |
 | フロントエンド | React + React Flow  | JSONL解析結果の可視化                              |
-| バックエンド   | Go                  | JSONLの読込・解析・React Flow形式への変換・API提供 |
+| バックエンド   | Go                  | JSONLの読込・解析・React Flow形式への変換・IPC提供 |
 | データソース   | `~/.codex/sessions` | CodexセッションJSONLファイル                       |
 | キャッシュ     | `~/.codex-display`  | 解析結果JSON（React Flow形式）                     |
 
@@ -590,7 +592,7 @@ JSONLは各レコードのトップレベル `type` フィールドで4種類に
 - JSONLレコードからReact Flowのnode/edgeへの変換
 - 解析結果のJSON保存・読込（`~/.codex-display`）
 - 再解析判定（JSONLと解析結果JSONの日時比較）
-- ReactフロントエンドへのAPI提供
+- ReactフロントエンドへのIPC提供（Wailsバインディング経由）
 
 ### 4.3 データフロー
 
@@ -609,161 +611,52 @@ React Frontend（React Flow表示）
 
 ```
 
-### 4.4 API仕様
+### 4.4 IPCメソッド仕様
 
-GoバックエンドはReactフロントエンドにREST APIを提供する。
+GoバックエンドはWailsのバインディング生成を通じてReactフロントエンドにIPCメソッドを提供する。`wails generate module` によりTypeScript型付き関数が自動生成される。
 
-#### GET /api/sessions
+#### ListSessions()
 
 セッション一覧を取得する。ディレクトリ構造（年/月/日）でグループ化して返す。
 
-**レスポンス:**
-
-```json
-{
-  "sessions": [
-    {
-      "id": "019e5514-ed44-78b2-bf88-233d6e4273bf",
-      "file_path": "2026/05/23/rollout-2026-05-23T22-44-55-019e5514-ed44-78b2-bf88-233d6e4273bf.jsonl",
-      "cwd": "/Users/.../backend-dev-val",
-      "cli_version": "0.131.0",
-      "originator": "codex-tui",
-      "model_provider": "openai",
-      "branch": "feature/5",
-      "timestamp": "2026-05-23T13:44:55.385Z",
-      "file_size": 378000,
-      "file_modified_at": "2026-05-23T14:30:00.000Z",
-      "parsed": true
-    }
-  ]
-}
-```
+**戻り値:** `SessionSummary` の配列
 
 - `parsed`: 解析済みかどうか。`false` の場合、`cwd` / `cli_version` / `originator` / `model_provider` / `branch` は `null`
 - フロントエンドは `parsed === false` の項目に「解析前」と表示する
 
-#### GET /api/sessions/:id
+#### GetSessionDetail(id)
 
 指定セッションの解析結果（React Flow形式）を取得する。キャッシュが存在しない、またはJSONLが新しければ再解析する。
 
-**パスパラメータ:** `id` — セッションID（UUID）
+**引数:** `id` — セッションID（UUID）
 
-**レスポンス:**
+**戻り値:** `SessionDetailResponse`（nodes, edges, statistics, token_counts）
 
-```json
-{
-  "id": "019e5514-ed44-78b2-bf88-233d6e4273bf",
-  "parsed_at": "2026-05-23T15:00:00.000Z",
-  "nodes": [
-    {
-      "id": "node-1",
-      "type": "sessionMeta",
-      "position": { "x": 0, "y": 0 },
-      "data": { ... }
-    }
-  ],
-  "edges": [
-    {
-      "id": "edge-1",
-      "source": "node-1",
-      "target": "node-2",
-      "type": "default"
-    }
-  ],
-  "statistics": {
-    "duration_ms": 1254000,
-    "total_tokens": 2679135,
-    "tool_call_count": 67,
-    "token_count_count": 55,
-    "context_window_size": 258400,
-    "turn_count": 2,
-    "turns": [
-      {
-        "index": 1,
-        "collaboration_mode_kind": "plan",
-        "duration_ms": 115515,
-        "time_to_first_token_ms": 9593,
-        "token_count_count": 6,
-        "consumed_tokens": {
-          "total_tokens": 133610,
-          "input_tokens": 130190,
-          "output_tokens": 2619,
-          "reasoning_output_tokens": 801
-        }
-      },
-      {
-        "index": 2,
-        "collaboration_mode_kind": "default",
-        "duration_ms": 1117925,
-        "time_to_first_token_ms": 12092,
-        "token_count_count": 49,
-        "consumed_tokens": {
-          "total_tokens": 2545525,
-          "input_tokens": 2477430,
-          "output_tokens": 68961,
-          "reasoning_output_tokens": 2431
-        }
-      }
-    ]
-  },
-  "token_counts": [
-    {
-      "index": 1,
-      "turn_index": 1,
-      "bound_to_node_id": "node-5",
-      "last_token_usage": {
-        "total_tokens": 15778,
-        "input_tokens": 15585,
-        "output_tokens": 193,
-        "cached_input_tokens": 0,
-        "reasoning_output_tokens": 132
-      },
-      "total_token_usage": {
-        "total_tokens": 15778,
-        "input_tokens": 15585,
-        "output_tokens": 193,
-        "cached_input_tokens": 0,
-        "reasoning_output_tokens": 132
-      }
-    }
-  ]
-}
-```
+#### ExportStatsImage(id)
 
-#### POST /api/sessions/:id/export
+指定セッションの統計情報をPNG画像としてエクスポートする。ネイティブファイル保存ダイアログを開き、ユーザーが保存先を選択する。
 
-指定セッションの可視化結果を画像としてエクスポートする。
+**引数:** `id` — セッションID（UUID）
 
-**パスパラメータ:** `id` — セッションID（UUID）
+**戻り値:** なし（ファイル保存）
 
-**リクエストボディ:**
+#### エラー形式
+
+全メソッドで共通の `AppError` 構造体:
 
 ```json
 {
-  "format": "png",
-  "width": 1920,
-  "height": 1080
+  "code": "FILE_READ_ERROR",
+  "message": "セッションファイルの読み込みに失敗しました"
 }
 ```
 
-**レスポンス:** 画像ファイル（バイナリ）
-
-#### エラーレスポンス
-
-全APIで共通のエラーレスポンス形式:
-
-```json
-{
-  "error": "セッションファイルの読み込みに失敗しました",
-  "code": "FILE_READ_ERROR"
-}
-```
-
-| HTTPステータス | code                  | 内容                                                  |
-| -------------- | --------------------- | ----------------------------------------------------- |
-| 404            | `SESSION_NOT_FOUND`   | 指定IDのセッションが存在しない                        |
-| 413            | `FILE_TOO_LARGE`      | ファイルサイズが50MBを超過                            |
-| 422            | `UNSUPPORTED_FORMAT`  | 非対応のセッションファイル形式（Codex CLI v0.121.0未満）※詳細設計で追加 |
-| 422            | `PARSE_ERROR`         | JSONLの解析に失敗（破損・形式不正）                   |
-| 500            | `FILE_READ_ERROR`     | ファイルの読み込みに失敗                              |
-| 500            | `INTERNAL_ERROR`      | 内部エラー                                            |
+| code                  | 内容                                                  |
+| --------------------- | ----------------------------------------------------- |
+| `SESSION_NOT_FOUND`   | 指定IDのセッションが存在しない                        |
+| `FILE_TOO_LARGE`      | ファイルサイズが50MBを超過                            |
+| `UNSUPPORTED_FORMAT`  | 非対応のセッションファイル形式（Codex CLI v0.121.0未満） |
+| `PARSE_ERROR`         | JSONLの解析に失敗（破損・形式不正）                   |
+| `FILE_READ_ERROR`     | ファイルの読み込みに失敗                              |
+| `IMAGE_GEN_ERROR`     | 画像の生成に失敗                                      |
+| `INTERNAL_ERROR`      | 内部エラー                                            |
