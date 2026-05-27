@@ -1161,6 +1161,39 @@ SessionListPage
 | ターン別トークン使用量 | TurnTokenSummary   | ターンごとのカード（消費トークン内訳）           |
 | token_countごとの推移  | TokenCountTable    | 行列表。スクロール可能。ターン境界セパレータ付き |
 
+**StatisticsPanel（6 stat-card）:**
+
+2×3グリッドで以下の6項目を表示する。各カードはStatistics（§2.1.5）の対応フィールドを値とする。
+
+| stat-card             | フィールド          |
+| --------------------- | ------------------- |
+| 所要時間              | DurationMs          |
+| 総トークン数          | TotalTokens         |
+| ツール呼び出し数      | ToolCallCount       |
+| トークンカウント数    | TokenCountCount     |
+| コンテキストウィンドウ | ContextWindowSize   |
+| ターン数              | TurnCount           |
+
+**TurnTokenSummary:**
+
+各ターンを1枚のカードとして表示する。データソースは TurnStatistics（§2.1.4）。
+
+- ヘッダー: ターン番号（Index）
+- 内訳表示: ConsumedTokens（TokenBreakdown）の4項目
+  - TotalTokens / InputTokens / OutputTokens / ReasoningOutputTokens
+- 補助情報: DurationMs / TimeToFirstTokenMs
+
+**TokenCountTable:**
+
+行列表形式で token_count の推移を表示する。データソースは TokenCountEntry（§2.1.6）。
+
+- 行: 各 token_count エントリ（Index順）
+- 列: TotalTokenUsage（TokenDetail）の5項目
+  - TotalTokens / InputTokens / OutputTokens / ReasoningOutputTokens / CachedInputTokens
+- LastTokenUsage: 表示しない
+- ターン境界セパレータ: TurnIndex が変わるタイミングで挿入
+- スクロール: 可能
+
 **BottomPanel 仕様:**
 
 - デフォルト: 非表示（max-height: 0）
