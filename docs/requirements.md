@@ -651,12 +651,12 @@ GoバックエンドはWailsのバインディング生成を通じてReactフ�
 }
 ```
 
-| code                  | 内容                                                  |
-| --------------------- | ----------------------------------------------------- |
-| `SESSION_NOT_FOUND`   | 指定IDのセッションが存在しない                        |
-| `FILE_TOO_LARGE`      | ファイルサイズが50MBを超過                            |
-| `UNSUPPORTED_FORMAT`  | 非対応のセッションファイル形式（Codex CLI v0.121.0未満） |
-| `PARSE_ERROR`         | JSONLの解析に失敗（破損・形式不正）                   |
-| `FILE_READ_ERROR`     | ファイルの読み込みに失敗                              |
-| `IMAGE_GEN_ERROR`     | 画像の生成に失敗                                      |
-| `INTERNAL_ERROR`      | 内部エラー                                            |
+| code                 | 内容                                                     |
+| -------------------- | -------------------------------------------------------- |
+| `SESSION_NOT_FOUND`  | 指定IDのセッションが存在しない                           |
+| `FILE_TOO_LARGE`     | ファイルサイズが50MBを超過                               |
+| `UNSUPPORTED_FORMAT` | 非対応のセッションファイル形式（Codex CLI v0.121.0未満） |
+| `PARSE_ERROR`        | JSONLの解析に失敗（破損・形式不正）                      |
+| `FILE_READ_ERROR`    | ファイルの読み込みに失敗                                 |
+| `IMAGE_GEN_ERROR`    | 画像の生成に失敗                                         |
+| `INTERNAL_ERROR`     | 内部エラー                                               |
