@@ -27,6 +27,11 @@ React フロントエンドの構成として、以下のルールを導入す�
    - CSS Modulesのファイル名は、TypeScriptのコンポーネント名と完全に一致させる（PascalCase）。
    - 例: `ActionNode.tsx` に対応するスタイルファイルは `ActionNode.module.css` とする。
 
+4. **CSS Modulesのクラス名命名規則（camelCase）**
+   - CSS Modules内で定義するクラス名は `camelCase` とする。
+   - 例: `.actionButton` や `.titleText`。
+   - これにより、JS/TS側で `styles.actionButton` のようにドット記法で直感的にアクセスできる。ファイルスコープを持つため、BEM等の複雑な命名は避け、フラットでシンプルな命名を推奨する。
+
 ## 理由
 
 ### 採用理由
@@ -37,6 +42,8 @@ React フロントエンドの構成として、以下のルールを導入す�
    - カスタムノードは13種類以上に及び、これらを機能ディレクトリ直下に置くとファイルが乱雑になる。グローバル共通UIの `components/nodes/` に分離することで、キャンバス本体（`features/sessions/components/FlowCanvas/`）とノード描画の責務を綺麗に分離できる。
 3. **エディタにおける識別性の向上**
    - スタイルファイルを `style.module.css` などとせず `[ComponentName].module.css` とすることで、エディタで複数のスタイルファイルを開いた際にもタブ名だけで対象コンポーネントを判別できる。
+4. **JS/TSにおける参照のスマートさ**
+   - クラス名を `camelCase` にすることで、JavaScript/TypeScript側でのアクセス時に `styles.myClass` とドット記法を用いることができ、ブラケット表記（`styles['my-class']`）を避けることができる。
 
 ## 結果
 
