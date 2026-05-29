@@ -233,6 +233,32 @@ event_msg はサブタイプによって含まれるフィールドが異なる�
 | Output           | function_call_output, custom_tool_call_output                                  | 関数の実行結果テキスト                                                                                                                            |
 | Action           | web_search_call                                                                | 検索アクション（type: "search", query, queries）                                                                                                  |
 
+#### 2.2.8 未知フィールドの扱い方針
+
+- **パース時の挙動**: 
+  Go構造体へのデシリアライズ時には、構造体で定義されていない未知のフィールドは単に無視する（Go標準の `json.Unmarshal` および `go-json` のデフォルト挙動）。
+  これにより、Codex CLIの将来的なバージョンアップでログ形式に軽微なフィールド追加があっても、エラーや不要な警告ログを出さずに安定して動作させる。
+- **生データの保持**: 
+  一方で、デシリアライズされたデータとは別に、パース対象となった各行の「生JSON文字列（Raw JSON）」を [TypedRecord](#234-型付きレコードtypedrecord) の `Raw` フィールドなどにそのまま保持する。
+  これにより、フロントエンドでの詳細表示時や将来的な拡張時に、元のすべてのメタデータを欠落させずに参照できるようにする。
+
+#### 2.2.9 ペイロードの動的デシリアライズの実装方針（二段階パース）
+
+JSONLレコードはトップレベルの `type`、およびその配下の `payload.type` によって異なる構造（ポリモーフィック）を持つ。これを型安全かつ高速に処理するため、`json.RawMessage`（または `gojson.RawMessage`）を利用した**二段階パース（Two-stage Unmarshaling）**を採用する。
+
+1. **第1段階 (エンベロープのパース)**:
+   共通の封筒構造体（Envelope）にパースし、個別データ部分を `json.RawMessage` として未パースのまま保持する。
+   ```go
+   type RecordEnvelope struct {
+       Type      string          `json:"type"`
+       Timestamp int64           `json:"timestamp"`
+       Payload   json.RawMessage `json:"payload"`
+   }
+   ```
+2. **第2段階 (ペイロードのパース)**:
+   `Type` の値（`session_meta`, `turn_context`, `event_msg`, `response_item`）に応じて条件分岐し、対応するペイロード構造体へ `Payload` フィールドをさらにデコードする。
+   `event_msg` や `response_item` などのように、さらに `payload.type` による分岐が必要な場合は、段階的にパースを繰り返す（例: `EventMsgPayload` 構造体内の `Details json.RawMessage` を、さらに `TaskStartedDetails` 構造体へデコードする）。
+
 ### 2.3 パース処理フロー
 
 #### 2.3.1 全体フロー
