@@ -747,20 +747,9 @@ Wailsアプリケーションのエントリポイントとなる構造体。バ
    h. `SessionDetailResponse` を返す
 5. エラー時は `AppError` を返す（§6.1参照）
 
-#### 2.10.4 統計画像エクスポート（ExportStatsImage）
+#### 2.10.4 統計画像エクスポート（ExportStatsImage）（保留）
 
-1. セッションIDを受け取る
-2. キャッシュまたはパースから統計情報（Statistics）とセッションメタデータを取得
-3. Goネイティブの2DグラフィックスライブラリでPNG画像を生成:
-   a. 上部ヘッダー: セッションID（短縮形式）、ブランチ名、作業ディレクトリ、タイムスタンプ
-   b. 下部: 6つのstat-card（2列×3行グリッド）
-   - 所要時間、総トークン数、ツール呼び出し数、トークンカウント数、コンテキストウィンドウサイズ、ターン数
-     c. 画像サイズ: 1920×1080（固定）
-4. ネイティブファイル保存ダイアログ（`runtime.SaveFileDialog`）を開く
-   - デフォルトファイル名: `stats-{sessionID短縮}.png`
-5. ユーザーが保存先を選択 → PNG画像をファイルに書き込む
-6. ユーザーがキャンセル → 処理を中断（エラーなし）
-7. エラー時は `AppError` を返す
+※本メソッドは一旦保留（実装対象外）とする（ADR 0016参照）。
 
 ---
 
@@ -808,6 +797,7 @@ Wailsアプリケーションのエントリポイントとなる構造体。バ
   │                 │     └── <TokenBadge>
   │                 ├── <RightPanel>
   │                 │     ├── 統計パネル
+  │                 │     ├── <InteractiveCharts>     ← 統計グラフパネル（トークン消費量・ツール呼び出し回数の推移）
   │                 │     ├── ターン別トークンサマリー
   │                 │     └── トークンカウント表
   │                 └── <BottomPanel>           ← ノード詳細
@@ -836,7 +826,7 @@ Wailsアプリケーションのエントリポイントとなる構造体。バ
 | selectedNode       | FlowNodeまたはnull        | 選択中のノード（BottomPanel表示用） | null       |
 | selectedTokenBadge | TokenCountEntryまたはnull | 選択中のトークンバッジ              | null       |
 | rightPanelOpen     | 真偽値                    | RightPanelの開閉状態                | true       |
-| exporting          | 真偽値                    | エクスポート中                      | false      |
+| exporting          | 真偽値                    | (保留) エクスポート中               | false      |
 | notification       | Notificationまたはnull    | トースト通知                        | null       |
 
 Notification型: `{ message: string, type: 'success' \| 'error' \| 'info' }`
@@ -855,7 +845,7 @@ APIレスポンスの nodes / edges をそのまま React Flow の初期値と�
 | ---------------- | --------------------------------------------- | --------------------- |
 | ListSessions     | `() ([]SessionSummary, error)`                | SessionSummaryの配列  |
 | GetSessionDetail | `(id string) (*SessionDetailResponse, error)` | SessionDetailResponse |
-| ExportStatsImage | `(id string) error`                           | なし（ファイル保存）  |
+| ExportStatsImage | `(id string) error`                           | (保留) なし           |
 
 #### 3.3.1 バインディング生成
 
@@ -1207,8 +1197,17 @@ SessionListPage
 | ---------------------- | ------------------ | ------------------------------------------------ |
 | 統計情報               | StatisticsPanel    | 6つのstat-card（2×3グリッド）                    |
 | ターン所要時間         | StatisticsPanel 内 | バーチャートで各ターンの所要時間を表示           |
+| 統計グラフ             | InteractiveCharts  | ターンごとのトークン消費量とツール呼び出し回数の推移グラフを表示 |
 | ターン別トークン使用量 | TurnTokenSummary   | ターンごとのカード（消費トークン内訳）           |
 | token_countごとの推移  | TokenCountTable    | 行列表。スクロール可能。ターン境界セパレータ付き |
+
+**InteractiveCharts 仕様:**
+
+1. **ターンごとのトークン消費量グラフ**:
+   - Recharts などのライブラリを使用し、各ターンの消費トークン数（`input_tokens`, `output_tokens`, `reasoning_output_tokens` などの内訳）を積み上げ棒グラフ（Stacked Bar Chart）で表現する。
+   - ホバー時に詳細なトークン内訳をツールチップで表示する。
+2. **ターンごとのツール呼び出し回数グラフ**:
+   - 横軸をターン番号、縦軸をツール呼び出し回数（`function_call` の件数）とした棒グラフまたは折れ線グラフを表示する。
 
 **StatisticsPanel（6 stat-card）:**
 
@@ -1257,12 +1256,9 @@ SessionListPage
   - ノード本体をクリックし直すとノード詳細のみの単一パネルに戻る
 - スクロール: max-height: 250px を維持し、`overflow-y: auto` でスクロール可能。ノード詳細エリアとトークン内訳エリアはそれぞれ独立してスクロール
 
-**エクスポートボタン:**
+**エクスポートボタン（保留）:**
 
-- クリック → 確認ダイアログなしでエクスポート開始
-- バックエンドの `ExportStatsImage(id)` を呼び出し、ネイティブファイル保存ダイアログを開く
-- 成功時: トースト通知「画像をエクスポートしました」
-- 失敗時: トースト通知でエラーメッセージを表示
+※画像エクスポート保留に伴い、本ボタンはUIから非表示とし、アクションも無効とする（ADR 0016参照）。
 
 ---
 
@@ -1336,38 +1332,9 @@ type AppError struct {
 | FILE_READ_ERROR    | ファイル読み込み失敗                                     |
 | INTERNAL_ERROR     | 内部エラー                                               |
 
-### 4.4 ExportStatsImage(id)
+### 4.4 ExportStatsImage(id)（保留）
 
-**概要:** セッションの統計情報をPNG画像としてエクスポートする
-
-**Goシグネチャ:** `func (a *App) ExportStatsImage(id string) error`
-
-**引数:**
-
-| パラメータ | 型     | 説明                 |
-| ---------- | ------ | -------------------- |
-| id         | 文字列 | セッションID（UUID） |
-
-**戻り値:** なし（ファイル保存）
-
-**処理フロー:**
-
-1. キャッシュまたはパースから統計情報とセッションメタデータを取得
-2. Goネイティブの2DグラフィックスライブラリでPNG画像を生成:
-   - 上部ヘッダー: セッションID（短縮形式）、ブランチ名、作業ディレクトリ、タイムスタンプ
-   - 下部: 6つのstat-card（2列×3行グリッド）
-   - 画像サイズ: 1920×1080（固定）
-3. ネイティブファイル保存ダイアログ（`runtime.SaveFileDialog`）を開く
-   - デフォルトファイル名: `stats-{sessionID短縮}.png`
-4. ユーザーが保存先を選択 → ファイルに書き込む
-5. ユーザーがキャンセル → 処理を中断（エラーなし）
-
-**エラー:**
-
-| code               | 条件                                                     |
-| ------------------ | -------------------------------------------------------- |
-| SESSION_NOT_FOUND  | セッションが存在しない                                   |
-| FILE_TOO_LARGE     | ファイルサイズが50MBを超過                               |
+※本メソッドは一旦保留（実装対象外）とする（ADR 0016参照）。
 | UNSUPPORTED_FORMAT | 非対応のセッションファイル形式（Codex CLI v0.121.0未満） |
 | PARSE_ERROR        | セッションファイルの解析に失敗                           |
 | FILE_READ_ERROR    | セッションファイルの読み込みに失敗                       |
@@ -1542,15 +1509,9 @@ IPCエラーは `AppError` 構造体（§4.1参照）で返す。
 - 表示方法: 画面中央にエラーメッセージ + 再試行ボタン
 - AppError.code でエラーコードを判定し、対応するメッセージを表示する
 
-#### 6.2.3 エクスポートエラー
+#### 6.2.3 エクスポートエラー（保留）
 
-エクスポートボタン（ExportStatsImage）のエラーはトースト通知で対応する。画面全体のエラー表示は行わない。
-
-| 状況       | 通知type | メッセージ                               |
-| ---------- | -------- | ---------------------------------------- |
-| 成功       | success  | 画像をエクスポートしました               |
-| 失敗       | error    | AppErrorのエラーコードに応じたメッセージ |
-| キャンセル | info     | エクスポートをキャンセルしました         |
+※画像エクスポート保留に伴い、本エラー処理は一旦対象外とする。
 
 #### 6.2.4 ローディング中
 
