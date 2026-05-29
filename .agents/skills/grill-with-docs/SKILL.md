@@ -86,3 +86,9 @@ description: 既存のドメインモデルに対して計画を検証し、用�
 3つのいずれかが欠けている場合、ADRはスキップ。[ADR-FORMAT.md](./ADR-FORMAT.md)のフォーマットを使用。
 
 </supporting-info>
+
+議論内容として以下のコマンドでIssueの内容を取得してください:
+
+```
+gh issue view <issue-number>
+```
