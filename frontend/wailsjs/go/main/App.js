@@ -5,3 +5,11 @@
 export function Greet(arg1) {
   return window['go']['main']['App']['Greet'](arg1);
 }
+
+export function ListSessions(arg1, arg2, arg3) {
+  return window['go']['main']['App']['ListSessions'](arg1, arg2, arg3);
+}
+
+export function OpenLogDirectory() {
+  return window['go']['main']['App']['OpenLogDirectory']();
+}
