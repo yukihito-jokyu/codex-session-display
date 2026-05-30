@@ -15,6 +15,9 @@ node_modules/
 *.test
 *.out
 
+# Go test
+internal/usecase/testdata
+
 # Local tasks metadata
 docs/tasks
 
