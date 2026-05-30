@@ -17,3 +17,7 @@ node_modules/
 
 # Local tasks metadata
 docs/tasks
+
+# Playwright test artifacts
+frontend/test-results/
+frontend/playwright-report/
