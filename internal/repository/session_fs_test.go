@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"codex-session-display/internal/domain/dto"
 	"context"
 	"errors"
 	"fmt"
@@ -8,8 +9,6 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
-
-	"codex-session-display/internal/domain/dto"
 )
 
 type mockCacheRepository struct {
@@ -59,7 +58,7 @@ func TestSessionFSRepository_ListSessions(t *testing.T) {
 
 	t.Run("empty directory", func(t *testing.T) {
 		emptyDir := filepath.Join(tmpDir, "empty")
-		if err := os.Mkdir(emptyDir, 0755); err != nil {
+		if err := os.Mkdir(emptyDir, 0o755); err != nil {
 			t.Fatal(err)
 		}
 		repo := NewSessionFSRepository(emptyDir, &mockCacheRepository{})
@@ -74,31 +73,31 @@ func TestSessionFSRepository_ListSessions(t *testing.T) {
 
 	t.Run("successful scan and invalid files skipped", func(t *testing.T) {
 		scanDir := filepath.Join(tmpDir, "scan")
-		if err := os.Mkdir(scanDir, 0755); err != nil {
+		if err := os.Mkdir(scanDir, 0o755); err != nil {
 			t.Fatal(err)
 		}
 
 		// 1. 有効なファイル
 		filenameVal := "rollout-2026-05-23T22-44-55-019e5514-ed44-78b2-bf88-233d6e4273bf.jsonl"
-		if err := os.WriteFile(filepath.Join(scanDir, filenameVal), []byte("{}"), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(scanDir, filenameVal), []byte("{}"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 
 		// 2. 無効なプレフィックスまたはサフィックス
 		filenameInvalidSfx := "rollout-2026-05-23T22-44-55-019e5514-ed44-78b2-bf88-233d6e4273bf.txt"
-		if err := os.WriteFile(filepath.Join(scanDir, filenameInvalidSfx), []byte("{}"), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(scanDir, filenameInvalidSfx), []byte("{}"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 
 		// 3. 無効な名前フォーマット（parseSessionFilename が失敗するファイル名）
 		filenameInvalidFmt := "rollout-invalid-format.jsonl"
-		if err := os.WriteFile(filepath.Join(scanDir, filenameInvalidFmt), []byte("{}"), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(scanDir, filenameInvalidFmt), []byte("{}"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 
 		// 4. サブディレクトリ（ファイルではないためスキップされるべき）
 		subDir := filepath.Join(scanDir, "rollout-2026-05-23T22-44-55-029e5514-ed44-78b2-bf88-233d6e4273bf.jsonl")
-		if err := os.Mkdir(subDir, 0755); err != nil {
+		if err := os.Mkdir(subDir, 0o755); err != nil {
 			t.Fatal(err)
 		}
 
@@ -120,16 +119,16 @@ func TestSessionFSRepository_ListSessions(t *testing.T) {
 
 	t.Run("WalkDir permission error in latest month scan", func(t *testing.T) {
 		permDir := filepath.Join(tmpDir, "perm_error_latest")
-		if err := os.Mkdir(permDir, 0755); err != nil {
+		if err := os.Mkdir(permDir, 0o755); err != nil {
 			t.Fatal(err)
 		}
 		defer func() { _ = os.RemoveAll(permDir) }()
 
 		nopermDir := filepath.Join(permDir, "noperm")
-		if err := os.Mkdir(nopermDir, 0000); err != nil {
+		if err := os.Mkdir(nopermDir, 0o000); err != nil {
 			t.Fatal(err)
 		}
-		defer func() { _ = os.Chmod(nopermDir, 0755) }()
+		defer func() { _ = os.Chmod(nopermDir, 0o755) }()
 
 		repo := NewSessionFSRepository(permDir, &mockCacheRepository{})
 		_, err := repo.ListSessions(context.Background(), 0, 0, "")
@@ -140,16 +139,16 @@ func TestSessionFSRepository_ListSessions(t *testing.T) {
 
 	t.Run("WalkDir permission error in target month scan", func(t *testing.T) {
 		permDir := filepath.Join(tmpDir, "perm_error_target")
-		if err := os.Mkdir(permDir, 0755); err != nil {
+		if err := os.Mkdir(permDir, 0o755); err != nil {
 			t.Fatal(err)
 		}
 		defer func() { _ = os.RemoveAll(permDir) }()
 
 		nopermDir := filepath.Join(permDir, "noperm")
-		if err := os.Mkdir(nopermDir, 0000); err != nil {
+		if err := os.Mkdir(nopermDir, 0o000); err != nil {
 			t.Fatal(err)
 		}
-		defer func() { _ = os.Chmod(nopermDir, 0755) }()
+		defer func() { _ = os.Chmod(nopermDir, 0o755) }()
 
 		repo := NewSessionFSRepository(permDir, &mockCacheRepository{})
 		_, err := repo.ListSessions(context.Background(), 2026, 5, "")
@@ -160,7 +159,7 @@ func TestSessionFSRepository_ListSessions(t *testing.T) {
 
 	t.Run("d.Info() error (deleted file)", func(t *testing.T) {
 		infoDir := filepath.Join(tmpDir, "info_error")
-		if err := os.Mkdir(infoDir, 0755); err != nil {
+		if err := os.Mkdir(infoDir, 0o755); err != nil {
 			t.Fatal(err)
 		}
 		defer func() { _ = os.RemoveAll(infoDir) }()
@@ -171,7 +170,7 @@ func TestSessionFSRepository_ListSessions(t *testing.T) {
 			// 5つのファイルを生成
 			for j := 0; j < 5; j++ {
 				filePath := filepath.Join(infoDir, fmt.Sprintf("rollout-2026-05-23T22-44-55-019e5514-ed44-78b2-bf88-233d6e4273b%d.jsonl", j))
-				_ = os.WriteFile(filePath, []byte("{}"), 0644)
+				_ = os.WriteFile(filePath, []byte("{}"), 0o644)
 			}
 
 			stop := make(chan struct{})
@@ -192,14 +191,14 @@ func TestSessionFSRepository_ListSessions(t *testing.T) {
 
 	t.Run("filepath.Rel error", func(t *testing.T) {
 		relDir := filepath.Join(tmpDir, "rel_error")
-		if err := os.Mkdir(relDir, 0755); err != nil {
+		if err := os.Mkdir(relDir, 0o755); err != nil {
 			t.Fatal(err)
 		}
 		defer func() { _ = os.RemoveAll(relDir) }()
 
 		filename := "rollout-2026-05-23T22-44-55-019e5514-ed44-78b2-bf88-233d6e4273bf.jsonl"
 		filePath := filepath.Join(relDir, filename)
-		if err := os.WriteFile(filePath, []byte("{}"), 0644); err != nil {
+		if err := os.WriteFile(filePath, []byte("{}"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 
@@ -226,17 +225,17 @@ func TestSessionFSRepository_ListSessions(t *testing.T) {
 
 	t.Run("filter by year/month (pagination)", func(t *testing.T) {
 		filterDir := filepath.Join(tmpDir, "filter_ym")
-		if err := os.Mkdir(filterDir, 0755); err != nil {
+		if err := os.Mkdir(filterDir, 0o755); err != nil {
 			t.Fatal(err)
 		}
 
 		// 1. 2026年5月のファイル (2026-05-10T12-00-00 -> UTC 2026-05-10)
 		fMay := "rollout-2026-05-10T12-00-00-00000000-0000-0000-0000-000000000001.jsonl"
-		_ = os.WriteFile(filepath.Join(filterDir, fMay), []byte("{}"), 0644)
+		_ = os.WriteFile(filepath.Join(filterDir, fMay), []byte("{}"), 0o644)
 
 		// 2. 2026年6月のファイル (2026-06-25T12-00-00 -> UTC 2026-06-25)
 		fJune := "rollout-2026-06-25T12-00-00-00000000-0000-0000-0000-000000000002.jsonl"
-		_ = os.WriteFile(filepath.Join(filterDir, fJune), []byte("{}"), 0644)
+		_ = os.WriteFile(filepath.Join(filterDir, fJune), []byte("{}"), 0o644)
 
 		repo := NewSessionFSRepository(filterDir, &mockCacheRepository{})
 
@@ -266,24 +265,24 @@ func TestSessionFSRepository_ListSessions(t *testing.T) {
 
 	t.Run("filter by query (search limit)", func(t *testing.T) {
 		queryDir := filepath.Join(tmpDir, "filter_query")
-		if err := os.Mkdir(queryDir, 0755); err != nil {
+		if err := os.Mkdir(queryDir, 0o755); err != nil {
 			t.Fatal(err)
 		}
 
 		// ファイル作成
 		f1 := "rollout-2026-05-25T12-00-00-00000000-0000-0000-0000-000000000001.jsonl"
-		_ = os.WriteFile(filepath.Join(queryDir, f1), []byte("{}"), 0644)
+		_ = os.WriteFile(filepath.Join(queryDir, f1), []byte("{}"), 0o644)
 		f2 := "rollout-2026-05-25T12-00-00-00000000-0000-0000-0000-000000000002.jsonl"
-		_ = os.WriteFile(filepath.Join(queryDir, f2), []byte("{}"), 0644)
+		_ = os.WriteFile(filepath.Join(queryDir, f2), []byte("{}"), 0o644)
 		f3 := "rollout-2026-05-25T12-00-00-00000000-0000-0000-0000-000000000003.jsonl"
-		_ = os.WriteFile(filepath.Join(queryDir, f3), []byte("{}"), 0644)
+		_ = os.WriteFile(filepath.Join(queryDir, f3), []byte("{}"), 0o644)
 
 		// モックキャッシュの準備
 		cwdMatch := "/users/match"
 		cwdNoMatch := "/users/other-path"
 		branchMatch := "feature-test"
 		providerMatch := "openai"
-		
+
 		cacheRepo := &mockCacheRepository{
 			cache: map[string]*dto.SessionSummary{
 				"00000000-0000-0000-0000-000000000001": {
@@ -335,12 +334,12 @@ func TestSessionFSRepository_ListSessions(t *testing.T) {
 
 	t.Run("invalid rfc3339 timestamp filter skipped", func(t *testing.T) {
 		invalidTSDir := filepath.Join(tmpDir, "invalid_ts")
-		if err := os.Mkdir(invalidTSDir, 0755); err != nil {
+		if err := os.Mkdir(invalidTSDir, 0o755); err != nil {
 			t.Fatal(err)
 		}
 
 		filename := "rollout-2026-05-23T22-44-55-019e5514-ed44-78b2-bf88-233d6e4273bf.jsonl"
-		if err := os.WriteFile(filepath.Join(invalidTSDir, filename), []byte("{}"), 0644); err != nil {
+		if err := os.WriteFile(filepath.Join(invalidTSDir, filename), []byte("{}"), 0o644); err != nil {
 			t.Fatal(err)
 		}
 
