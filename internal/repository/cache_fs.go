@@ -1,15 +1,18 @@
 package repository
 
 import (
+	"codex-session-display/internal/domain/dto"
+	"codex-session-display/internal/utils/logger"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-
-	"codex-session-display/internal/domain/dto"
-	"codex-session-display/internal/utils/logger"
 )
+
+// ErrSessionMetaNotFound はキャッシュ内に sessionMeta ノードが見つからない場合のエラーです。
+var ErrSessionMetaNotFound = errors.New("sessionMeta node not found in cache")
 
 // CacheFSRepository は usecase.CacheRepository を実装します。
 type CacheFSRepository struct {
@@ -39,15 +42,15 @@ func (r *CacheFSRepository) GetSessionSummary(ctx context.Context, sessionID str
 
 	// sessionMeta ノードを探す
 	var metaNode *dto.FlowNode
-	for _, n := range detail.Nodes {
-		if n.Type == "sessionMeta" {
-			metaNode = &n
+	for i := range detail.Nodes {
+		if detail.Nodes[i].Type == "sessionMeta" {
+			metaNode = &detail.Nodes[i]
 			break
 		}
 	}
 
 	if metaNode == nil {
-		return nil, fmt.Errorf("sessionMeta node not found in cache")
+		return nil, ErrSessionMetaNotFound
 	}
 
 	m := metaNode.Data.Meta
