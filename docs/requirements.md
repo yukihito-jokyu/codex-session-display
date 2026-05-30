@@ -208,12 +208,14 @@ JSONLは各レコードのトップレベル `type` フィールドで4種類に
 
 - `task_started` / `task_complete` はターン（turn）の境界を示す。1ターン = 1つの `task_started` 〜 `task_complete` のペアで、それぞれ同一の `turn_id` を持つ
 - `task_started` はセッション開始直後（`session_meta` の直後）と、各 `task_complete` の直後に出現する
+- `task_started` 〜 `task_complete` の枠外（セッション開始直後、ターン間、セッション終了後）に出現するレコードや、対応する `task_started` が欠落した「孤立した `task_complete` / `turn_aborted`」などのレコードは、**「疑似ターン（Pseudo-Turn）」**としてグループ化し、ハーネス（メインフロー）上に時系列順で縦方向に配置してエッジで接続する。
 - `turn_context` の前後に出現する `response_item(message)` の順序・件数はターンによって変動する（例: developer → user の場合と user → developer の場合がある）
 - 複数の `function_call` がバッチで連続出力され、対応する `function_call_output` もバッチで返る
 - `function_call` バッチと `function_call_output` バッチの間に `agent_message` + `response_item(message, role=assistant)` が挟まる
 - `response_item(type=message)` が `turn_context` の前後にも出現する
 - `item_completed` は常に出現するとは限らない（出現頻度が極めて低い場合がある）。また出現位置も固定ではなく、reasoning と agent_message の間に出現することもある
 - `token_count` は `turn_id` を持たず、出現位置から属するターンを判定する。`token_count` は直前のイベント（通常は `function_call` または `agent_message`）に紐付けて表示する（§2.3.8参照）
+
 
 **基本パターン（実際の出現順序）:**
 
@@ -315,7 +317,24 @@ JSONLは各レコードのトップレベル `type` フィールドで4種類に
 - `item_completed`（`event_msg.type=item_completed`）
 - `task_complete`（`event_msg.type=task_complete`）— ターン終了
 
+#### 2.3.2.1 ターン外ノードおよび孤立イベントの表示
+
+ハーネス（メインフロー）上に配置されるターン外ノード（疑似ターン内のノード）は、以下のルールに従って表示・スタイリングする。
+
+- **通常のターン外レコード（グローバル設定、システムイベント等）**:
+  - 対象ノード: `sessionMeta` 以外のターン外で出現する設定やシステムイベント等
+  - 表示内容: ラベルの先頭に `[System]` プレフィックスを付与する（例: `[System] thread_name_updated`）。
+  - スタイル: 通常のノードと区別するため、ボーダーを**破線（dashed border）**にし、背景色をトーンダウンしたグレー系にする。
+  - データ: ターン外であることを示すため、`turnIndex` は `null` または `-1` とする。
+
+- **孤立したターン終了イベント（task_started なしの task_complete / turn_aborted）**:
+  - 対象ノード: 対応する `task_started` が欠落した状態で出現した `task_complete` または `turn_aborted` レコード
+  - 表示内容: ラベルを `"Orphan Complete / 孤立した完了"` または `"Orphan Aborted / 孤立した中断"` とし、ノードのアイコンには `⚠️`（または `✕`）を表示する。
+  - スタイル: ボーダーを赤色またはオレンジ色の警告色にする。
+  - 詳細表示: ノードクリックで下部パネル（BottomPanel）を開いた際、「対応する task_started が存在しない孤立した完了イベントです」という警告メッセージを表示する。
+
 #### 2.3.3 ハーネス外（分岐）のノード
+
 
 - `response_item(message, role=developer)` — `task_started` と `turn_context` の前後に出現
 - `response_item(message, role=user)` — `turn_context` の前後に出現
