@@ -1,12 +1,20 @@
 {
 	"$schema": "https://biomejs.dev/schemas/2.4.16/schema.json",
 	"vcs": {
-		"enabled": false,
+		"enabled": true,
 		"clientKind": "git",
-		"useIgnoreFile": false
+		"useIgnoreFile": true,
+		"root": "../"
 	},
 	"files": {
-		"includes": ["**", "!!**/dist", "!!**/node_modules", "!!**/wailsjs"]
+		"includes": [
+			"**",
+			"!!**/dist",
+			"!!**/node_modules",
+			"!!**/wailsjs",
+			"!!**/test-results",
+			"!!**/playwright-report"
+		]
 	},
 	"formatter": {
 		"enabled": true,
@@ -17,20 +25,19 @@
 		"rules": {
 			"recommended": true,
 			"a11y": {
-				"noSvgWithoutTitle": "off",
-				"useButtonType": "off",
-				"useSemanticElements": "off",
-				"useFocusableInteractive": "off",
-				"useKeyWithClickEvents": "off"
+				"useSemanticElements": "off"
 			},
 			"complexity": {
-				"noImportantStyles": "off"
+				"noImportantStyles": "error"
 			},
 			"style": {
-				"noNonNullAssertion": "off"
+				"noNonNullAssertion": "error"
 			},
 			"correctness": {
-				"useExhaustiveDependencies": "off"
+				"useExhaustiveDependencies": "error",
+				"noUnusedVariables": "error",
+				"noUnusedImports": "error",
+				"noUnusedFunctionParameters": "error"
 			}
 		}
 	},
