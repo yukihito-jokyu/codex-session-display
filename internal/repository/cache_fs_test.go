@@ -1,13 +1,12 @@
 package repository
 
 import (
+	"codex-session-display/internal/domain/dto"
 	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
-
-	"codex-session-display/internal/domain/dto"
 )
 
 func TestNewCacheFSRepository(t *testing.T) {
@@ -28,7 +27,7 @@ func TestCacheFSRepository_GetSessionSummary(t *testing.T) {
 
 	// ファイル書き込み用のヘルパー関数
 	writeFile := func(filename string, content []byte) {
-		err := os.WriteFile(filepath.Join(tmpDir, filename), content, 0644)
+		err := os.WriteFile(filepath.Join(tmpDir, filename), content, 0o644)
 		if err != nil {
 			t.Fatalf("failed to write test file: %v", err)
 		}
