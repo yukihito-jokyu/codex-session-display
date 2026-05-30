@@ -2,6 +2,7 @@ package logger
 
 import (
 	"bytes"
+	"errors"
 	"log/slog"
 	"path/filepath"
 	"strings"
@@ -170,5 +171,33 @@ func TestLoggerStructOutput(t *testing.T) {
 	}
 	if !strings.Contains(output, "42") {
 		t.Errorf("expected output to contain struct field value '42', got: %s", output)
+	}
+}
+
+func TestGetLogDir_Error(t *testing.T) {
+	oldHomeFn := userHomeDirFn
+	defer func() { userHomeDirFn = oldHomeFn }()
+
+	userHomeDirFn = func() (string, error) {
+		return "", errors.New("home error")
+	}
+
+	_, err := GetLogDir()
+	if err == nil {
+		t.Error("expected error, got nil")
+	}
+}
+
+func TestGetLogFilePath_Error(t *testing.T) {
+	oldHomeFn := userHomeDirFn
+	defer func() { userHomeDirFn = oldHomeFn }()
+
+	userHomeDirFn = func() (string, error) {
+		return "", errors.New("home error")
+	}
+
+	_, err := GetLogFilePath()
+	if err == nil {
+		t.Error("expected error, got nil")
 	}
 }
