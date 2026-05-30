@@ -20,7 +20,7 @@ type App struct {
 }
 
 // NewApp は新しい App アプリケーション構造体を作成します。
-func NewApp() *App {
+func NewApp() (*App, error) {
 	logger.Info("Initializing application...")
 
 	home, err := os.UserHomeDir()
@@ -34,6 +34,7 @@ func NewApp() *App {
 	// キャッシュディレクトリが存在することを確認します。
 	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
 		logger.Error("Failed to create cache directory", "error", err.Error(), "path", cacheDir)
+		return nil, fmt.Errorf("failed to create cache directory: %w", err)
 	}
 
 	cacheRepo := repository.NewCacheFSRepository(cacheDir)
@@ -42,7 +43,7 @@ func NewApp() *App {
 
 	return &App{
 		listSessionsUC: listSessionsUC,
-	}
+	}, nil
 }
 
 // startup はアプリ起動時に呼び出されます。ランタイムメソッドを呼び出せるように

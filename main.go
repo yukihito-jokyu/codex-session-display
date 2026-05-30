@@ -24,10 +24,14 @@ func main() {
 	logger.Info("Starting application...")
 
 	// アプリ構造体のインスタンスを作成
-	app := NewApp()
+	app, err := NewApp()
+	if err != nil {
+		logger.Error("Failed to initialize app", "error", err.Error())
+		return
+	}
 
 	// オプションを指定してアプリケーションを作成
-	err := wails.Run(&options.App{
+	err = wails.Run(&options.App{
 		Title:  "codex-session-display",
 		Width:  1024,
 		Height: 768,
