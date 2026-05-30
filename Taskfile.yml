@@ -2,33 +2,52 @@ version: '3'
 
 tasks:
   setup:
-    desc: Setup development dependencies for backend and frontend
+    desc: バックエンドとフロントエンドの開発依存関係をセットアップします
     cmds:
       - go install github.com/wailsapp/wails/v2/cmd/wails@latest
       - go mod download
       - cd frontend && npm install
 
   dev:
-    desc: Start development server with hot-reload
+    desc: ホットリロード対応の開発サーバーを起動します
     cmds:
       - wails dev
 
   build:
-    desc: Build production binary
+    desc: 本番用バイナリをビルドします
     cmds:
       - wails build
 
   test:
-    desc: Run tests for backend
+    desc: バックエンドのテストを実行します
     cmds:
       - go test ./...
+      - go test -tags production ./...
+
+  test:e2e:
+    desc: フロントエンドのE2Eテストを実行します
+    cmds:
+      - cd frontend && npx playwright test
+
+  test:e2e:ui:
+    desc: フロントエンドのE2EテストをUIモードで実行します
+    cmds:
+      - cd frontend && npx playwright test --ui
+
+  cover:
+    desc: バックエンドのテストカバレッジを測定し、HTMLで表示します
+    cmds:
+      - go test -coverprofile=coverage.out ./...
+      - go tool cover -html=coverage.out
 
   lint:
-    desc: Run linters for backend
+    desc: バックエンドとフロントエンドのリンターを実行します
     cmds:
       - golangci-lint run
+      - cd frontend && npm run lint
 
   clean:
-    desc: Clean build artifacts
+    desc: ビルド成果物や一時ファイルをクリーンアップします
     cmds:
       - rm -rf build/
+      - rm -f coverage.out
