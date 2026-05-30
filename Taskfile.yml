@@ -46,6 +46,12 @@ tasks:
       - golangci-lint run
       - cd frontend && npm run lint
 
+  fmt:
+    desc: バックエンドとフロントエンドのコードをフォーマットします
+    cmds:
+      - golangci-lint run --fix
+      - cd frontend && npm run lint:write
+
   clean:
     desc: ビルド成果物や一時ファイルをクリーンアップします
     cmds:
