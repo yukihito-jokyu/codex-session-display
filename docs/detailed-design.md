@@ -363,46 +363,83 @@ JSONLレコードはトップレベルの `type`、およびその配下の `pay
 | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | CallRecords    | 連続する function_call または custom_tool_call の配列（混在しない）                                                                                                                |
 | OutputRecords  | 対応する function_call_output または custom_tool_call_output の配列（null を含む場合がある）                                                                                       |
-| MiddleMessage  | バッチ中間のエージェントメッセージ（存在する場合）                                                                                                                                 |
-| ContextRecords | バッチ中間の実行コンテキストイベント（exec_command_end、token_count等）。パターンA/Bの中間に挟まる。call_idを持つレコードは§2.6 Step 3で外部イベントブランチノードとして処理される |
-| IsPatternB     | パターンB（中間メッセージが response_item のみ）かどうか                                                                                                                           |
-
-#### 2.4.2 バッチのパターン
-
-**function_call バッチ:**
-
-**パターンA**: function_call群 → [ContextRecords] → agent_message → response_item(message, role=assistant) → [ContextRecords] → function_call_output群
-
-**パターンB**: function_call群 → [ContextRecords] → response_item(message, role=assistant) → [ContextRecords] → function_call_output群（agent_messageなし）
-
-※ ContextRecords として exec_command_end、token_count、mcp_tool_call_end、view_image_tool_call 等が挟まる場合がある。これらは実行コンテキストイベントであり、MiddleMessage とは別枠で ContextRecords に格納する。ノード生成時（§2.6）では、call_id を持つ ContextRecords は外部イベントブランチノード（Step 3）として処理され、ハーネスには配置されない。token_count は token_count 紐付け（Step 4）で処理される。
-
-**custom_tool_call バッチ:**
-
-custom_tool_call群 → custom_tool_call_output群（中間レコードなし、バッチサイズは常に1）
-
-#### 2.4.3 検出処理
-
-```
-入力: ターン内のレコード配列（時系列順）
-出力: Batch の配列
-
-=== function_call バッチ検出 ===
-
-1. レコード配列を先頭から走査する
-2. 連続する function_call を検出する（callBatch）
-3. callBatch の直後から次の function_call_output までの間にあるレコードを確認:
-   a. agent_message が含まれる → パターンA。MiddleMessage として保持。
-      同一位置の response_item(message, role=assistant) があればスキップ
-   b. response_item(message, role=assistant) のみで agent_message なし → パターンB
-   c. 上記以外 → MiddleMessage なし
-   ※ a〜c いずれの場合も、agent_message/assistant message 以外のレコード
-     （exec_command_end、token_count 等）は ContextRecords として保持
-4. 連続する function_call_output を検出する（outputBatch）
-5. call_id で call と output の対応を検証・復旧:
-   a. callBatch[i] の call_id == outputBatch[i] の call_id が全件一致
-      → そのまま Batch 生成へ
-   b. 不一致あり → 警告ログを出力し、call_id マップで復旧:
+| MiddleMessage  | バッチ中�  ├─ 2. 各 Turn を処理：
+  │     ├─ 2-1. 通常のターンの場合 (turn.TaskStarted != null)（2a〜2d はステップ順、2e以降はレコードの出現順に処理）:
+  │     │     ├─ 2a. task_started ノード生成 → ハーネススタックに push
+  │     │     │
+  │     │     ├─ 2b. DeveloperMessages + UserMessages を分岐ノードとして生成
+  │     │     │   各ノードからハーネス最上位ノードへ step エッジで接続（内向き）
+  │     │     │   分岐ノードはハーネス右側に配置
+  │     │     │
+  │     │     ├─ 2c. turnContext ノード生成 → ハーネススタックに push
+  │     │     │   コンテキスト分岐ノードを生成（内向き step エッジ、nullの場合は生成しない）:
+  │     │     │     ├─ developer_instructions ノード（折りたたみ）
+  │     │     │     │   データソース: turn_context.collaboration_mode.developer_instructions
+  │     │     │     └─ user_instructions ノード（折りたたみ）
+  │     │     │         データソース: turn_context.user_instructions
+  │     │     │   各コンテキストノードから turnContext へ step エッジで接続
+  │     │     │
+  │     │     ├─ 2d. user_message ノード生成 → ハーネススタックに push
+  │     │     │
+  │     │     ├─ 2e. reasoning ノード生成 → ハーネススタックに push
+  │     │     │   ペアリング済みの場合:
+  │     │     │     agent_reasoning のテキストを summary に設定
+  │     │     │     reasoning の summary を fullText の一部に設定
+  │     │     │   スタンドアロンAR（ARのみ）の場合:
+  │     │     │     ARテキストを summary および fullText に設定
+  │     │     │   スタンドアロンRI（RIのみ・暗号化済み）の場合:
+  │     │     │     「（暗号化済み・表示不可）」を summary および fullText に設定
+  │     │     │
+  │     │     ├─ 2f. 各 Batch を処理（fork-join パターン）:
+  │     │     │   ├─ call[i] ノードを分岐ノードとして生成
+  │     │     │   │   ハーネス最上位ノードから step エッジで接続
+  │     │     │   │   X = BranchOffsetX + i * (NodeWidth + BranchNodeGapX)
+  │     │     │   │   Y = ハーネス最上位ノード.Y（全call同一Y）
+  │     │     │   ├─ output[i] ノードを call[i] の直下に生成
+  │     │     │   │   call[i] から default エッジで接続
+  │     │     │   │   X = call[i].X
+  │     │     │   │   Y = call[i].Y + NodeHeight + BatchNodeGap
+  │     │     │   ├─ MiddleMessage ノードをハーネススタックに push（join先）:
+  │     │     │   │   Pattern A: agent_message + response_item(message, assistant) を統合
+  │     │     │   │   Pattern B: response_item(message, assistant) のみ
+  │     │     │   │   各 output[i] から default エッジで MiddleMessage に接続
+  │     │     │   └─ ※ OutputRecords[i] が null の場合、当該 output ノードはスキップ
+  │     │     │
+  │     │     ├─ 2f'. 各 web_search_call / web_search_end を処理:
+  │     │     │   ├─ webSearchAction ノード（call側）を生成 → ハーネススタックに push
+  │     │     │   ├─ webSearchAction ノード（end側）を生成 → ハーネススタックに push
+  │     │     │   └─ call側 → end側 へエッジ
+  │     │     │
+  │     │     ├─ 2g. turn.ItemCompleted から item_completed ノード生成 → ハーネススタックに push（存在する場合）
+  │     │     │
+  │     │     ├─ 2g'. 非バッチの agent_message / response_item(message, assistant) を
+  │     │     │       agentMessage ノードとしてハーネススタックに push
+  │     │     │       バッチ検出（Step 6）でバッチに含まれなかったレコードが対象。
+  │     │     │       - agent_message と response_item(message, assistant) が
+  │     │     │         連続して出現する場合は同一内容のことが多いため、1つのノードに統合し、
+  │     │     │         マッピングテーブルには両方のレコードを同じノードIDに紐付ける
+  │     │     │       - 単独で出現した場合は、単独の agentMessage ノードとしてハーネスに配置する
+  │     │     │         （実データ上は出現が確認されていないが、頑健性のためのフォールバック）
+  │     │     │
+  │     │     ├─ 2h. genericRecords から generic ノード生成 → ハーネススタックに push
+  │     │     │   ※ call_id を持つ外部イベント（exec_command_end, mcp_tool_call_end,
+  │     │     │     view_image_tool_call 等）は除外（Step 3 で処理）
+  │     │     │
+  │     │     └─ 2i. task_complete ノード生成 → ハーネススタックに push
+  │     │
+  │     └─ 2-2. 疑似ターンの場合 (turn.TaskStarted == null)（レコードを出現順に処理）:
+  │           疑似ターン内の各レコードについて、ハーネス上に縦方向に配置する:
+  │           ├─ session_meta の場合:
+  │           │   すでに生成済みの sessionMeta ノードをマッピングテーブルに紐付ける（新規生成はスキップ）
+  │           ├─ 孤立した task_complete / turn_aborted の場合:
+  │           │   警告付き taskEvent ノードを生成（ボーダー: 赤/オレンジ色、アイコン: "⚠️"、
+  │           │   ラベル: "Orphan Complete" または "Orphan Aborted"、詳細情報に警告を表示）し、
+  │           │   ハーネススタックに push
+  │           └─ その他レコードの場合:
+  │               レコードの型に応じたノード（ボーダー: 破線、背景: トーンダウンしたグレー、
+  │               ラベル先頭に `[System]` プレフィックス、turnIndex = -1）を生成し、
+  │               ハーネススタックに push
+��致あり → 警告ログを出力し、call_id マップで復旧:
       - outputMap[call_id] = outputRecord を構築
       - call の順序に従い output を再配置:
         OutputRecords[i] = outputMap[callBatch[i].call_id]（存在しない場合は null）
@@ -1375,18 +1412,30 @@ type AppError struct {
   │
   ├─ Step 3: ターン分割 + thread_name収集
   │   ├─ currentTurn = null
-  │   ├─ session_meta → ターン外レコード
-  │   ├─ thread_name_updated → ParsedSession.ThreadName に設定（最新値で上書き）
-  │   ├─ task_started → 新しい Turn を開始
-  │   │   ├─ Turn{Index: turnIndex++, TurnID: payload.turn_id}
-  │   │   └─ currentTurn = 新しいTurn
-  │   ├─ task_complete → currentTurn.TaskComplete に設定
-  │   │   └─ currentTurn = null（ターン終了）
-  │   ├─ turn_aborted → currentTurn.TaskComplete に設定
-  │   │   ├─ Aborted = true（中断フラグ）
-  │   │   └─ currentTurn = null（ターン終了）
-  │   └─ その他 → currentTurn.Records に追加
-  │       └─ currentTurn == null → ターン外レコードとして扱う
+  │   ├─ turns = [] (Turnのリスト)
+  │   ├─ outOfTurnBuffer = [] (ターン外レコード用一時バッファ)
+  │   ├─ (ファイル先頭から行ごとループ):
+  │   │   ├─ session_meta → outOfTurnBuffer に追加
+  │   │   ├─ thread_name_updated → ParsedSession.ThreadName に設定（最新値で上書き）
+  │   │   ├─ task_started → 
+  │   │   │   ├─ outOfTurnBuffer が空でない場合:
+  │   │   │   │   疑似ターンを生成（TaskStarted=null, Index=-1, Records=outOfTurnBuffer）して turns に追加、outOfTurnBuffer をクリア
+  │   │   │   ├─ 新しい Turn を開始:
+  │   │   │   │   Turn{Index: turnIndex++, TurnID: payload.turn_id, TaskStarted: payload}
+  │   │   │   └─ currentTurn = 新しいTurn
+  │   │   ├─ task_complete / turn_aborted → 
+  │   │   │   ├─ currentTurn != null の場合:
+  │   │   │   │   ├─ currentTurn.TaskComplete に設定。currentTurn.Aborted を設定（turn_abortedの場合）
+  │   │   │   │   └─ turns に追加し、currentTurn = null（ターン終了）
+  │   │   │   └─ currentTurn == null の場合（孤立した終了イベント）:
+  │   │   │       └─ outOfTurnBuffer に追加
+  │   │   └─ その他 → 
+  │   │       ├─ currentTurn != null → currentTurn.Records に追加
+  │   │       └─ currentTurn == null → outOfTurnBuffer に追加
+  │   └─ (ループ終了後):
+  │       └─ outOfTurnBuffer が空でない場合:
+  │           疑似ターンを生成（TaskStarted=null, Index=-1, Records=outOfTurnBuffer）して turns に追加
+
   │
   ├─ Step 4: ターン内レコード分類
   │   for turn in turns:
