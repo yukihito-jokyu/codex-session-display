@@ -1,127 +1,205 @@
 :root {
-  /* プレミアムな半透明効果のためのアルファ値付きの背景色 */
-  --bg-app: rgba(15, 17, 23, 0.75);
-  --bg-header: rgba(22, 27, 34, 0.85);
-  --border-color: #30363d;
-  --text-primary: #e1e4e8;
-  --text-secondary: #8b949e;
-  --text-muted: #484f58;
-  --bg-btn: #21262d;
-  --bg-btn-hover: #30363d;
-  --color-accent: #58a6ff;
-  --grid-dot: #1c2128;
-  --panel-shadow: rgba(0, 0, 0, 0.5);
+	/* プレミアムな半透明効果のためのアルファ値付きの背景色 */
+	--bg-app: rgba(15, 17, 23, 0.75);
+	--bg-header: rgba(22, 27, 34, 0.85);
+	--border-color: #30363d;
+	--text-primary: #e1e4e8;
+	--text-secondary: #8b949e;
+	--text-muted: #484f58;
+	--bg-btn: #21262d;
+	--bg-btn-hover: #30363d;
+	--color-accent: #58a6ff;
+	--grid-dot: #1c2128;
+	--panel-shadow: rgba(0, 0, 0, 0.5);
 
-  /* Titlebar buttons */
-  --titlebar-bg: rgba(22, 27, 34, 0.8);
-  --btn-close-hover: #e81123;
-  --btn-close-active: #f1707a;
-  --btn-control-hover: rgba(255, 255, 255, 0.1);
+	/* Card / Row */
+	--bg-card: rgba(22, 27, 34, 0.4);
+	--bg-card-hover: rgba(33, 38, 45, 0.6);
+	--card-hover-shadow: rgba(0, 0, 0, 0.15);
 
-  /* Node theme colors: background / icon-bg / border / text-icon */
-  /* 1. Meta & Context */
-  --node-meta-bg: #161b22;
-  --node-meta-icon-bg: #1c2d1c;
-  --node-meta-border: #3fb9504d;
-  --node-meta-text: #3fb950;
-  
-  /* 2. Inputs */
-  --node-input-bg: #161b22;
-  --node-input-icon-bg: #0d223a;
-  --node-input-border: #58a6ff4d;
-  --node-input-text: #58a6ff;
+	/* Tree / Accordion */
+	--tree-header-hover: rgba(255, 255, 255, 0.05);
+	--tree-line-color: rgba(255, 255, 255, 0.1);
+	--badge-count-bg: rgba(255, 255, 255, 0.08);
+	--size-badge-bg: rgba(255, 255, 255, 0.05);
+	--size-badge-border: rgba(255, 255, 255, 0.05);
 
-  /* 3. Outputs */
-  --node-output-bg: #161b22;
-  --node-output-icon-bg: #131c38;
-  --node-output-border: #79c0ff4d;
-  --node-output-text: #79c0ff;
+	/* Unparsed badge */
+	--badge-unparsed-bg: rgba(227, 179, 65, 0.1);
+	--badge-unparsed-border: rgba(227, 179, 65, 0.2);
+	--badge-unparsed-text: #e3b341;
 
-  /* 4. Thinking */
-  --node-think-bg: #161b22;
-  --node-think-icon-bg: #241935;
-  --node-think-border: #bc8cff4d;
-  --node-think-text: #bc8cff;
+	/* Placeholder badge (detail page) */
+	--badge-success-text: #3fb950;
+	--badge-success-bg: rgba(63, 185, 80, 0.15);
+	--badge-success-border: rgba(63, 185, 80, 0.3);
 
-  /* 5. Actions */
-  --node-action-bg: #161b22;
-  --node-action-icon-bg: #2e1f0a;
-  --node-action-border: #e3b3414d;
-  --node-action-text: #e3b341;
+	/* Spinner */
+	--spinner-track: rgba(88, 166, 255, 0.1);
 
-  /* 6. System Events */
-  --node-event-bg: #161b22;
-  --node-event-icon-bg: #1c2128;
-  --node-event-border: #30363d;
-  --node-event-text: #8b949e;
+	/* Accent badge (toolbar) */
+	--accent-badge-bg: rgba(88, 166, 255, 0.1);
+	--accent-badge-border: rgba(88, 166, 255, 0.2);
+	--accent-value-bg: rgba(88, 166, 255, 0.2);
 
-  /* 7. Warnings */
-  --node-warning-bg: #161b22;
-  --node-warning-icon-bg: #3c181c;
-  --node-warning-border: #f8514966;
-  --node-warning-text: #f85149;
+	/* Search input */
+	--search-bg: rgba(22, 27, 34, 0.6);
+	--search-bg-focus: rgba(22, 27, 34, 0.8);
+	--search-focus-ring: rgba(88, 166, 255, 0.15);
+
+	/* Detail card */
+	--detail-card-bg: rgba(22, 27, 34, 0.4);
+	--mono-bg: rgba(0, 0, 0, 0.3);
+
+	/* Titlebar buttons */
+	--titlebar-bg: rgba(22, 27, 34, 0.8);
+	--btn-close-hover: #e81123;
+	--btn-close-active: #f1707a;
+	--btn-control-hover: rgba(255, 255, 255, 0.1);
+
+	/* Node theme colors: background / icon-bg / border / text-icon */
+	/* 1. Meta & Context */
+	--node-meta-bg: #161b22;
+	--node-meta-icon-bg: #1c2d1c;
+	--node-meta-border: #3fb9504d;
+	--node-meta-text: #3fb950;
+
+	/* 2. Inputs */
+	--node-input-bg: #161b22;
+	--node-input-icon-bg: #0d223a;
+	--node-input-border: #58a6ff4d;
+	--node-input-text: #58a6ff;
+
+	/* 3. Outputs */
+	--node-output-bg: #161b22;
+	--node-output-icon-bg: #131c38;
+	--node-output-border: #79c0ff4d;
+	--node-output-text: #79c0ff;
+
+	/* 4. Thinking */
+	--node-think-bg: #161b22;
+	--node-think-icon-bg: #241935;
+	--node-think-border: #bc8cff4d;
+	--node-think-text: #bc8cff;
+
+	/* 5. Actions */
+	--node-action-bg: #161b22;
+	--node-action-icon-bg: #2e1f0a;
+	--node-action-border: #e3b3414d;
+	--node-action-text: #e3b341;
+
+	/* 6. System Events */
+	--node-event-bg: #161b22;
+	--node-event-icon-bg: #1c2128;
+	--node-event-border: #30363d;
+	--node-event-text: #8b949e;
+
+	/* 7. Warnings */
+	--node-warning-bg: #161b22;
+	--node-warning-icon-bg: #3c181c;
+	--node-warning-border: #f8514966;
+	--node-warning-text: #f85149;
 }
 
 body.light-theme {
-  /* プレミアムな半透明効果のためのアルファ値付きの背景色 (ライトテーマ) */
-  --bg-app: rgba(246, 248, 250, 0.75);
-  --bg-header: rgba(255, 255, 255, 0.85);
-  --border-color: #d0d7de;
-  --text-primary: #24292f;
-  --text-secondary: #57606a;
-  --text-muted: #8c959f;
-  --bg-btn: #f6f8fa;
-  --bg-btn-hover: #f3f4f6;
-  --color-accent: #0969da;
-  --grid-dot: #d0d7de;
-  --panel-shadow: rgba(0, 0, 0, 0.08);
+	/* プレミアムな半透明効果のためのアルファ値付きの背景色 (ライトテーマ) */
+	--bg-app: rgba(246, 248, 250, 0.75);
+	--bg-header: rgba(255, 255, 255, 0.85);
+	--border-color: #d0d7de;
+	--text-primary: #24292f;
+	--text-secondary: #57606a;
+	--text-muted: #8c959f;
+	--bg-btn: #f6f8fa;
+	--bg-btn-hover: #f3f4f6;
+	--color-accent: #0969da;
+	--grid-dot: #d0d7de;
+	--panel-shadow: rgba(0, 0, 0, 0.08);
 
-  /* Titlebar buttons */
-  --titlebar-bg: rgba(255, 255, 255, 0.8);
-  --btn-close-hover: #e81123;
-  --btn-close-active: #f1707a;
-  --btn-control-hover: rgba(0, 0, 0, 0.05);
+	/* Card / Row */
+	--bg-card: rgba(255, 255, 255, 0.6);
+	--bg-card-hover: rgba(243, 244, 246, 0.8);
+	--card-hover-shadow: rgba(0, 0, 0, 0.08);
 
-  /* Node theme colors: background / icon-bg / border / text-icon */
-  /* 1. Meta & Context */
-  --node-meta-bg: #ffffff;
-  --node-meta-icon-bg: #e8f5e9;
-  --node-meta-border: #a5d6a7;
-  --node-meta-text: #2e7d32;
-  
-  /* 2. Inputs */
-  --node-input-bg: #ffffff;
-  --node-input-icon-bg: #e3f2fd;
-  --node-input-border: #90caf9;
-  --node-input-text: #1565c0;
+	/* Tree / Accordion */
+	--tree-header-hover: rgba(0, 0, 0, 0.04);
+	--tree-line-color: rgba(0, 0, 0, 0.1);
+	--badge-count-bg: rgba(0, 0, 0, 0.06);
+	--size-badge-bg: rgba(0, 0, 0, 0.04);
+	--size-badge-border: rgba(0, 0, 0, 0.06);
 
-  /* 3. Outputs */
-  --node-output-bg: #ffffff;
-  --node-output-icon-bg: #f5f3ff;
-  --node-output-border: #c084fc;
-  --node-output-text: #6d28d9;
+	/* Unparsed badge */
+	--badge-unparsed-bg: rgba(183, 129, 3, 0.1);
+	--badge-unparsed-border: rgba(183, 129, 3, 0.2);
+	--badge-unparsed-text: #b78103;
 
-  /* 4. Thinking */
-  --node-think-bg: #ffffff;
-  --node-think-icon-bg: #faf5ff;
-  --node-think-border: #d8b4fe;
-  --node-think-text: #7e22ce;
+	/* Placeholder badge (detail page) */
+	--badge-success-text: #2e7d32;
+	--badge-success-bg: rgba(46, 125, 50, 0.1);
+	--badge-success-border: rgba(46, 125, 50, 0.2);
 
-  /* 5. Actions */
-  --node-action-bg: #ffffff;
-  --node-action-icon-bg: #fff8e1;
-  --node-action-border: #ffe082;
-  --node-action-text: #b78103;
+	/* Spinner */
+	--spinner-track: rgba(9, 105, 218, 0.1);
 
-  /* 6. System Events */
-  --node-event-bg: #ffffff;
-  --node-event-icon-bg: #f6f8fa;
-  --node-event-border: #d0d7de;
-  --node-event-text: #57606a;
+	/* Accent badge (toolbar) */
+	--accent-badge-bg: rgba(9, 105, 218, 0.08);
+	--accent-badge-border: rgba(9, 105, 218, 0.2);
+	--accent-value-bg: rgba(9, 105, 218, 0.12);
 
-  /* 7. Warnings */
-  --node-warning-bg: #ffffff;
-  --node-warning-icon-bg: #ffebee;
-  --node-warning-border: #ef9a9a;
-  --node-warning-text: #c62828;
+	/* Search input */
+	--search-bg: rgba(246, 248, 250, 0.8);
+	--search-bg-focus: rgba(255, 255, 255, 0.95);
+	--search-focus-ring: rgba(9, 105, 218, 0.15);
+
+	/* Detail card */
+	--detail-card-bg: rgba(255, 255, 255, 0.6);
+	--mono-bg: rgba(0, 0, 0, 0.05);
+
+	/* Titlebar buttons */
+	--titlebar-bg: rgba(255, 255, 255, 0.8);
+	--btn-close-hover: #e81123;
+	--btn-close-active: #f1707a;
+	--btn-control-hover: rgba(0, 0, 0, 0.05);
+
+	/* Node theme colors: background / icon-bg / border / text-icon */
+	/* 1. Meta & Context */
+	--node-meta-bg: #ffffff;
+	--node-meta-icon-bg: #e8f5e9;
+	--node-meta-border: #a5d6a7;
+	--node-meta-text: #2e7d32;
+
+	/* 2. Inputs */
+	--node-input-bg: #ffffff;
+	--node-input-icon-bg: #e3f2fd;
+	--node-input-border: #90caf9;
+	--node-input-text: #1565c0;
+
+	/* 3. Outputs */
+	--node-output-bg: #ffffff;
+	--node-output-icon-bg: #f5f3ff;
+	--node-output-border: #c084fc;
+	--node-output-text: #6d28d9;
+
+	/* 4. Thinking */
+	--node-think-bg: #ffffff;
+	--node-think-icon-bg: #faf5ff;
+	--node-think-border: #d8b4fe;
+	--node-think-text: #7e22ce;
+
+	/* 5. Actions */
+	--node-action-bg: #ffffff;
+	--node-action-icon-bg: #fff8e1;
+	--node-action-border: #ffe082;
+	--node-action-text: #b78103;
+
+	/* 6. System Events */
+	--node-event-bg: #ffffff;
+	--node-event-icon-bg: #f6f8fa;
+	--node-event-border: #d0d7de;
+	--node-event-text: #57606a;
+
+	/* 7. Warnings */
+	--node-warning-bg: #ffffff;
+	--node-warning-icon-bg: #ffebee;
+	--node-warning-border: #ef9a9a;
+	--node-warning-text: #c62828;
 }

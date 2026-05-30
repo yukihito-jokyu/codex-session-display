@@ -1,7 +1,10 @@
 package main
 
 import (
+	"codex-session-display/internal/domain/dto"
+	"codex-session-display/internal/utils/logger"
 	"embed"
+	"errors"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -14,11 +17,21 @@ import (
 var assets embed.FS
 
 func main() {
-	// Create an instance of the app structure
-	app := NewApp()
+	// ロガーの初期化とクリーンアップ設定
+	cleanup := logger.InitLogger()
+	defer cleanup()
 
-	// Create application with options
-	err := wails.Run(&options.App{
+	logger.Info("Starting application...")
+
+	// アプリ構造体のインスタンスを作成
+	app, err := NewApp()
+	if err != nil {
+		logger.Error("Failed to initialize app", "error", err.Error())
+		return
+	}
+
+	// オプションを指定してアプリケーションを作成
+	err = wails.Run(&options.App{
 		Title:  "codex-session-display",
 		Width:  1024,
 		Height: 768,
@@ -29,6 +42,16 @@ func main() {
 		OnStartup:        app.startup,
 		Bind: []interface{}{
 			app,
+		},
+		ErrorFormatter: func(err error) interface{} {
+			var appErr *dto.AppError
+			if errors.As(err, &appErr) {
+				return appErr
+			}
+			return map[string]string{
+				"code":    "INTERNAL_ERROR",
+				"message": err.Error(),
+			}
 		},
 		// macOS 固有設定 (Vibrancy & TitleBarHidden)
 		Mac: &mac.Options{
@@ -48,8 +71,7 @@ func main() {
 			DisableWindowIcon:    false,
 		},
 	})
-
 	if err != nil {
-		println("Error:", err.Error())
+		logger.Error("Wails run error", "error", err.Error())
 	}
 }
