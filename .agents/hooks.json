@@ -1,0 +1,10 @@
+{
+    "notification": {
+        "Stop": [
+            {
+                "type": "command",
+                "command": "terminal-notifier -title \"Antigravity\" -subtitle \"タスク完了\" -message \"タスクが完了しました\" -sender \"com.apple.Terminal\" -sound \"Finished\""
+            }
+        ]
+    }
+}
