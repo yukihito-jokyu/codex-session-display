@@ -1,5 +1,323 @@
 export namespace dto {
 	
+	export class FlowEdge {
+	    id: string;
+	    source: string;
+	    target: string;
+	    type: string;
+	    animated: boolean;
+	
+	    static createFrom(source: any = {}) {
+	        return new FlowEdge(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.source = source["source"];
+	        this.target = source["target"];
+	        this.type = source["type"];
+	        this.animated = source["animated"];
+	    }
+	}
+	export class TokenBadgeData {
+	    totalTokens: number;
+	    tokenCountIndex: number;
+	    boundCount: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new TokenBadgeData(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.totalTokens = source["totalTokens"];
+	        this.tokenCountIndex = source["tokenCountIndex"];
+	        this.boundCount = source["boundCount"];
+	    }
+	}
+	export class NodeData {
+	    category: string;
+	    label: string;
+	    icon: string;
+	    summary: string;
+	    fullText?: string;
+	    meta?: Record<string, any>;
+	    batchIndex?: number;
+	    batchSize?: number;
+	    collapsed?: boolean;
+	    textLength?: number;
+	    turnIndex?: number;
+	    tokenBadge?: TokenBadgeData;
+	
+	    static createFrom(source: any = {}) {
+	        return new NodeData(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.category = source["category"];
+	        this.label = source["label"];
+	        this.icon = source["icon"];
+	        this.summary = source["summary"];
+	        this.fullText = source["fullText"];
+	        this.meta = source["meta"];
+	        this.batchIndex = source["batchIndex"];
+	        this.batchSize = source["batchSize"];
+	        this.collapsed = source["collapsed"];
+	        this.textLength = source["textLength"];
+	        this.turnIndex = source["turnIndex"];
+	        this.tokenBadge = this.convertValues(source["tokenBadge"], TokenBadgeData);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Position {
+	    x: number;
+	    y: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new Position(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.x = source["x"];
+	        this.y = source["y"];
+	    }
+	}
+	export class FlowNode {
+	    id: string;
+	    type: string;
+	    position: Position;
+	    data: NodeData;
+	
+	    static createFrom(source: any = {}) {
+	        return new FlowNode(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.type = source["type"];
+	        this.position = this.convertValues(source["position"], Position);
+	        this.data = this.convertValues(source["data"], NodeData);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	
+	
+	export class TokenCountEntry {
+	    index: number;
+	    turn_index: number;
+	    bound_to_node_id: string;
+	    last_token_usage?: model.TokenDetail;
+	    total_token_usage?: model.TokenDetail;
+	
+	    static createFrom(source: any = {}) {
+	        return new TokenCountEntry(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.index = source["index"];
+	        this.turn_index = source["turn_index"];
+	        this.bound_to_node_id = source["bound_to_node_id"];
+	        this.last_token_usage = this.convertValues(source["last_token_usage"], model.TokenDetail);
+	        this.total_token_usage = this.convertValues(source["total_token_usage"], model.TokenDetail);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class TokenBreakdown {
+	    total_tokens: number;
+	    input_tokens: number;
+	    output_tokens: number;
+	    reasoning_output_tokens: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new TokenBreakdown(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.total_tokens = source["total_tokens"];
+	        this.input_tokens = source["input_tokens"];
+	        this.output_tokens = source["output_tokens"];
+	        this.reasoning_output_tokens = source["reasoning_output_tokens"];
+	    }
+	}
+	export class TurnStatistics {
+	    index: number;
+	    collaboration_mode_kind: string;
+	    duration_ms: number;
+	    time_to_first_token_ms: number;
+	    token_count_count: number;
+	    consumed_tokens: TokenBreakdown;
+	
+	    static createFrom(source: any = {}) {
+	        return new TurnStatistics(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.index = source["index"];
+	        this.collaboration_mode_kind = source["collaboration_mode_kind"];
+	        this.duration_ms = source["duration_ms"];
+	        this.time_to_first_token_ms = source["time_to_first_token_ms"];
+	        this.token_count_count = source["token_count_count"];
+	        this.consumed_tokens = this.convertValues(source["consumed_tokens"], TokenBreakdown);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class Statistics {
+	    duration_ms: number;
+	    total_tokens: number;
+	    tool_call_count: number;
+	    token_count_count: number;
+	    context_window_size: number;
+	    turn_count: number;
+	    turns: TurnStatistics[];
+	
+	    static createFrom(source: any = {}) {
+	        return new Statistics(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.duration_ms = source["duration_ms"];
+	        this.total_tokens = source["total_tokens"];
+	        this.tool_call_count = source["tool_call_count"];
+	        this.token_count_count = source["token_count_count"];
+	        this.context_window_size = source["context_window_size"];
+	        this.turn_count = source["turn_count"];
+	        this.turns = this.convertValues(source["turns"], TurnStatistics);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class SessionDetailResponse {
+	    id: string;
+	    parsed_at: string;
+	    nodes: FlowNode[];
+	    edges: FlowEdge[];
+	    statistics: Statistics;
+	    token_counts: TokenCountEntry[];
+	
+	    static createFrom(source: any = {}) {
+	        return new SessionDetailResponse(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.parsed_at = source["parsed_at"];
+	        this.nodes = this.convertValues(source["nodes"], FlowNode);
+	        this.edges = this.convertValues(source["edges"], FlowEdge);
+	        this.statistics = this.convertValues(source["statistics"], Statistics);
+	        this.token_counts = this.convertValues(source["token_counts"], TokenCountEntry);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class SessionSummary {
 	    id: string;
 	    file_path: string;
@@ -32,6 +350,35 @@ export namespace dto {
 	        this.file_size = source["file_size"];
 	        this.file_modified_at = source["file_modified_at"];
 	        this.parsed = source["parsed"];
+	    }
+	}
+	
+	
+	
+	
+
+}
+
+export namespace model {
+	
+	export class TokenDetail {
+	    total_tokens: number;
+	    input_tokens: number;
+	    output_tokens: number;
+	    reasoning_output_tokens: number;
+	    cached_input_tokens: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new TokenDetail(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.total_tokens = source["total_tokens"];
+	        this.input_tokens = source["input_tokens"];
+	        this.output_tokens = source["output_tokens"];
+	        this.reasoning_output_tokens = source["reasoning_output_tokens"];
+	        this.cached_input_tokens = source["cached_input_tokens"];
 	    }
 	}
 
