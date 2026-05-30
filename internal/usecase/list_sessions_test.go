@@ -1,12 +1,11 @@
 package usecase
 
 import (
+	"codex-session-display/internal/domain/dto"
 	"context"
 	"errors"
 	"testing"
 	"time"
-
-	"codex-session-display/internal/domain/dto"
 )
 
 type mockSessionRepository struct {
@@ -15,7 +14,7 @@ type mockSessionRepository struct {
 	cacheRepo CacheRepository
 }
 
-func (m *mockSessionRepository) ListSessions(ctx context.Context, year int, month int, query string) ([]dto.SessionSummary, error) {
+func (m *mockSessionRepository) ListSessions(ctx context.Context, year, month int, query string) ([]dto.SessionSummary, error) {
 	if m.err != nil {
 		return nil, m.err
 	}
