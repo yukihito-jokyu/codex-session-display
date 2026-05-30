@@ -1,7 +1,10 @@
 package repository
 
 import (
+	"codex-session-display/internal/domain/dto"
+	"codex-session-display/internal/usecase"
 	"context"
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -9,13 +12,14 @@ import (
 	"regexp"
 	"strings"
 	"time"
-
-	"codex-session-display/internal/domain/dto"
-	"codex-session-display/internal/usecase"
 )
 
-var parseSessionFilenameFn = parseSessionFilename
-var filepathRelFn = filepath.Rel
+var (
+	parseSessionFilenameFn = parseSessionFilename
+	filepathRelFn          = filepath.Rel
+	ErrInvalidFilename     = errors.New("invalid filename format")
+	ErrInvalidTimestamp    = errors.New("invalid timestamp format")
+)
 
 // SessionFSRepository はローカルファイルシステムを使用して usecase.SessionRepository を実装します。
 type SessionFSRepository struct {
@@ -33,7 +37,7 @@ func NewSessionFSRepository(rootDir string, cacheRepo usecase.CacheRepository) *
 
 // ListSessions はルートディレクトリをスキャンして .jsonl ファイルを探し、指定された年月および検索クエリでフィルタリングして SessionSummary オブジェクトを構築します。
 // year == 0 && month == 0 の場合は、自動的に最新のセッションが存在する年月を特定してその月分のみを返します。
-func (r *SessionFSRepository) ListSessions(ctx context.Context, year int, month int, query string) ([]dto.SessionSummary, error) {
+func (r *SessionFSRepository) ListSessions(ctx context.Context, year, month int, query string) ([]dto.SessionSummary, error) {
 	// ディレクトリが存在するか確認
 	if _, err := os.Stat(r.rootDir); os.IsNotExist(err) {
 		return nil, nil // 空のリストを正常に返す
@@ -174,7 +178,6 @@ func (r *SessionFSRepository) ListSessions(ctx context.Context, year int, month 
 		sessions = append(sessions, sSummary)
 		return nil
 	})
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to scan session directory: %w", err)
 	}
@@ -185,10 +188,10 @@ func (r *SessionFSRepository) ListSessions(ctx context.Context, year int, month 
 var sessionFilenameRegex = regexp.MustCompile(`^rollout-(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2})-([a-fA-F0-9-]{36})\.jsonl$`)
 
 // parseSessionFilename はセッションIDとJSTから変換されたUTC ISO8601タイムスタンプを抽出します。
-func parseSessionFilename(filename string) (string, string, error) {
+func parseSessionFilename(filename string) (id, timestamp string, err error) {
 	matches := sessionFilenameRegex.FindStringSubmatch(filename)
 	if len(matches) != 3 {
-		return "", "", fmt.Errorf("invalid filename format: %s", filename)
+		return "", "", fmt.Errorf("%w: %s", ErrInvalidFilename, filename)
 	}
 
 	timestampPart := matches[1]
@@ -197,7 +200,7 @@ func parseSessionFilename(filename string) (string, string, error) {
 	// 'T' の後のタイムスタンプのハイフンをコロンに変換
 	tIndex := strings.Index(timestampPart, "T")
 	if tIndex == -1 {
-		return "", "", fmt.Errorf("invalid timestamp format (no 'T'): %s", timestampPart)
+		return "", "", fmt.Errorf("%w (no 'T'): %s", ErrInvalidTimestamp, timestampPart)
 	}
 	datePart := timestampPart[:tIndex]
 	timePart := timestampPart[tIndex+1:]
