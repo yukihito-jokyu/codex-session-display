@@ -1,59 +1,61 @@
 .titleBar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  height: 32px;
-  background-color: var(--titlebar-bg);
-  border-bottom: 1px solid var(--border-color);
-  color: var(--text-primary);
-  user-select: none;
-  position: relative;
-  z-index: 9999;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	height: 32px;
+	background-color: var(--titlebar-bg);
+	border-bottom: 1px solid var(--border-color);
+	color: var(--text-primary);
+	user-select: none;
+	position: relative;
+	z-index: 9999;
 }
 
 .dragArea {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  height: 100%;
-  padding-left: 12px;
-  /* Wails draggable area */
-  --wails-draggable: drag;
+	flex: 1;
+	display: flex;
+	align-items: center;
+	height: 100%;
+	padding-left: 12px;
+	/* Wails draggable area */
+	--wails-draggable: drag;
 }
 
 .title {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--text-secondary);
+	font-size: 12px;
+	font-weight: 500;
+	color: var(--text-secondary);
 }
 
 .controls {
-  display: flex;
-  height: 100%;
-  /* Controls must not be draggable */
-  --wails-draggable: no-drag;
+	display: flex;
+	height: 100%;
+	/* Controls must not be draggable */
+	--wails-draggable: no-drag;
 }
 
 .controlBtn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 46px;
-  height: 100%;
-  color: var(--text-secondary);
-  transition: background-color 0.15s, color 0.15s;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 46px;
+	height: 100%;
+	color: var(--text-secondary);
+	transition:
+		background-color 0.15s,
+		color 0.15s;
 }
 
 .controlBtn:hover {
-  background-color: var(--btn-control-hover);
-  color: var(--text-primary);
+	background-color: var(--btn-control-hover);
+	color: var(--text-primary);
 }
 
 .closeBtn:hover {
-  background-color: var(--btn-close-hover) !important;
-  color: #ffffff !important;
+	background-color: var(--btn-close-hover) !important;
+	color: #ffffff !important;
 }
 
 .closeBtn:active {
-  background-color: var(--btn-close-active) !important;
+	background-color: var(--btn-close-active) !important;
 }
