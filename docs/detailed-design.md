@@ -558,9 +558,11 @@ Build(session)
   │     ├─ 2g'. 非バッチの agent_message / response_item(message, assistant) を
   │     │       agentMessage ノードとしてハーネススタックに push
   │     │       バッチ検出（Step 6）でバッチに含まれなかったレコードが対象。
-  │     │       agent_message と response_item(message, assistant) が
-  │     │       連続して出現する場合は同一内容のことが多いため、1つのノードに統合し、
-  │     │       マッピングテーブルには両方のレコードを同じノードIDに紐付ける
+  │     │       - agent_message と response_item(message, assistant) が
+  │     │         連続して出現する場合は同一内容のことが多いため、1つのノードに統合し、
+  │     │         マッピングテーブルには両方のレコードを同じノードIDに紐付ける
+  │     │       - 単独で出現した場合は、単独の agentMessage ノードとしてハーネスに配置する
+  │     │         （実データ上は出現が確認されていないが、頑健性のためのフォールバック）
   │     │
   │     ├─ 2h. genericRecords から generic ノード生成 → ハーネススタックに push
   │     │   ※ call_id を持つ外部イベント（exec_command_end, mcp_tool_call_end,
