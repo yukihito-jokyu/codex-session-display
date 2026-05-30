@@ -1391,7 +1391,7 @@ type AppError struct {
   ├─ Step 4: ターン内レコード分類
   │   for turn in turns:
   │     for record in turn.Records:
-  │       ├─ turn_context → turn.TurnContext
+  │       ├─ turn_context → turn.TurnContext（※複数出現時は後続で上書き、警告ログ出力）
   │       ├─ event_msg(user_message) → turn.UserEventMsg
   │       ├─ event_msg(agent_message) → turn.AgentMessages
   │       ├─ event_msg(agent_reasoning) → 遅延マージ（Step 5で処理）
