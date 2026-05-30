@@ -1,0 +1,217 @@
+package repository
+
+import (
+	"context"
+	"fmt"
+	"io/fs"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+	"time"
+
+	"codex-session-display/internal/domain/dto"
+	"codex-session-display/internal/usecase"
+)
+
+var parseSessionFilenameFn = parseSessionFilename
+var filepathRelFn = filepath.Rel
+
+// SessionFSRepository はローカルファイルシステムを使用して usecase.SessionRepository を実装します。
+type SessionFSRepository struct {
+	rootDir   string
+	cacheRepo usecase.CacheRepository
+}
+
+// NewSessionFSRepository は新しい SessionFSRepository を作成します。
+func NewSessionFSRepository(rootDir string, cacheRepo usecase.CacheRepository) *SessionFSRepository {
+	return &SessionFSRepository{
+		rootDir:   rootDir,
+		cacheRepo: cacheRepo,
+	}
+}
+
+// ListSessions はルートディレクトリをスキャンして .jsonl ファイルを探し、指定された年月および検索クエリでフィルタリングして SessionSummary オブジェクトを構築します。
+// year == 0 && month == 0 の場合は、自動的に最新のセッションが存在する年月を特定してその月分のみを返します。
+func (r *SessionFSRepository) ListSessions(ctx context.Context, year int, month int, query string) ([]dto.SessionSummary, error) {
+	// ディレクトリが存在するか確認
+	if _, err := os.Stat(r.rootDir); os.IsNotExist(err) {
+		return nil, nil // 空のリストを正常に返す
+	}
+
+	var targetYear int
+	var targetMonth int
+
+	if year == 0 && month == 0 {
+		// ディレクトリ内の最新のセッションログの日付を特定する
+		var latestTime time.Time
+		scanErr := filepath.WalkDir(r.rootDir, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() {
+				return nil
+			}
+			filename := d.Name()
+			if !strings.HasPrefix(filename, "rollout-") || !strings.HasSuffix(filename, ".jsonl") {
+				return nil
+			}
+			_, timestamp, err := parseSessionFilenameFn(filename)
+			if err != nil {
+				return nil
+			}
+			t, err := time.Parse(time.RFC3339, timestamp)
+			if err == nil {
+				if t.After(latestTime) {
+					latestTime = t
+				}
+			}
+			return nil
+		})
+
+		if scanErr != nil {
+			return nil, scanErr
+		}
+
+		if latestTime.IsZero() {
+			return nil, nil // セッションが存在しない場合は空リストを返す
+		}
+		targetYear = latestTime.Year()
+		targetMonth = int(latestTime.Month())
+	} else {
+		targetYear = year
+		targetMonth = month
+	}
+
+	var sessions []dto.SessionSummary
+
+	err := filepath.WalkDir(r.rootDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+
+		// rollout-*.jsonl ファイルのみを処理する
+		filename := d.Name()
+		if !strings.HasPrefix(filename, "rollout-") || !strings.HasSuffix(filename, ".jsonl") {
+			return nil
+		}
+
+		id, timestamp, err := parseSessionFilenameFn(filename)
+		if err != nil {
+			// 無効なファイル名はスキップ
+			return nil
+		}
+
+		// 年月によるフィルタリング
+		parsedTime, err := time.Parse(time.RFC3339, timestamp)
+		if err != nil {
+			return nil
+		}
+		if parsedTime.Year() != targetYear || int(parsedTime.Month()) != targetMonth {
+			return nil // 対象の年月でないためスキップ
+		}
+
+		// ファイルの詳細を取得
+		info, err := d.Info()
+		if err != nil {
+			return nil // 情報を読み取れない場合はファイルをスキップ
+		}
+
+		// rootDir からの相対パスを計算
+		relPath, err := filepathRelFn(r.rootDir, path)
+		if err != nil {
+			relPath = path
+		}
+
+		modTimeStr := info.ModTime().UTC().Format(time.RFC3339)
+
+		// キャッシュから詳細情報をマージ
+		var sSummary dto.SessionSummary
+		cached, err := r.cacheRepo.GetSessionSummary(ctx, id)
+		if err == nil && cached != nil {
+			sSummary = *cached
+			sSummary.Parsed = true
+		} else {
+			sSummary = dto.SessionSummary{
+				ID:     id,
+				Parsed: false,
+			}
+		}
+
+		// ファイルスキャン側のメタデータを設定（キャッシュデータがなければこれを優先、あれば補完）
+		sSummary.FilePath = relPath
+		sSummary.FileSize = info.Size()
+		sSummary.FileModifiedAt = &modTimeStr
+		if sSummary.Timestamp == nil {
+			sSummary.Timestamp = &timestamp
+		}
+
+		// 検索クエリによるフィルタリング
+		if query != "" {
+			lowerQuery := strings.ToLower(query)
+			idMatch := strings.Contains(strings.ToLower(sSummary.ID), lowerQuery)
+			cwdMatch := false
+			if sSummary.Cwd != nil {
+				cwdMatch = strings.Contains(strings.ToLower(*sSummary.Cwd), lowerQuery)
+			}
+			branchMatch := false
+			if sSummary.Branch != nil {
+				branchMatch = strings.Contains(strings.ToLower(*sSummary.Branch), lowerQuery)
+			}
+			providerMatch := false
+			if sSummary.ModelProvider != nil {
+				providerMatch = strings.Contains(strings.ToLower(*sSummary.ModelProvider), lowerQuery)
+			}
+
+			if !idMatch && !cwdMatch && !branchMatch && !providerMatch {
+				return nil // マッチしないのでスキップ
+			}
+		}
+
+		sessions = append(sessions, sSummary)
+		return nil
+	})
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan session directory: %w", err)
+	}
+
+	return sessions, nil
+}
+
+var sessionFilenameRegex = regexp.MustCompile(`^rollout-(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2})-([a-fA-F0-9-]{36})\.jsonl$`)
+
+// parseSessionFilename はセッションIDとJSTから変換されたUTC ISO8601タイムスタンプを抽出します。
+func parseSessionFilename(filename string) (string, string, error) {
+	matches := sessionFilenameRegex.FindStringSubmatch(filename)
+	if len(matches) != 3 {
+		return "", "", fmt.Errorf("invalid filename format: %s", filename)
+	}
+
+	timestampPart := matches[1]
+	uuidPart := matches[2]
+
+	// 'T' の後のタイムスタンプのハイフンをコロンに変換
+	tIndex := strings.Index(timestampPart, "T")
+	if tIndex == -1 {
+		return "", "", fmt.Errorf("invalid timestamp format (no 'T'): %s", timestampPart)
+	}
+	datePart := timestampPart[:tIndex]
+	timePart := timestampPart[tIndex+1:]
+	timePart = strings.ReplaceAll(timePart, "-", ":")
+
+	localTimeStr := datePart + "T" + timePart
+
+	// ローカル時間を解析
+	loc := time.Local
+	t, err := time.ParseInLocation("2006-01-02T15:04:05", localTimeStr, loc)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to parse local time '%s': %w", localTimeStr, err)
+	}
+
+	utcTimeStr := t.UTC().Format(time.RFC3339)
+	return uuidPart, utcTimeStr, nil
+}
