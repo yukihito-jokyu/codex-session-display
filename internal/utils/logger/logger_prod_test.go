@@ -34,7 +34,7 @@ func TestInitLogger_Rotation(t *testing.T) {
 	}
 
 	logDir := filepath.Join(tempDir, ".codex-display", "logs")
-	if err := os.MkdirAll(logDir, 0755); err != nil {
+	if err := os.MkdirAll(logDir, 0o755); err != nil {
 		t.Fatalf("failed to create log dir: %v", err)
 	}
 
@@ -43,12 +43,12 @@ func TestInitLogger_Rotation(t *testing.T) {
 
 	// 1. 10MB を超えるダミーログファイルを作成
 	dummyData := make([]byte, maxLogSize+100)
-	if err := os.WriteFile(logPath, dummyData, 0644); err != nil {
+	if err := os.WriteFile(logPath, dummyData, 0o644); err != nil {
 		t.Fatalf("failed to write dummy log: %v", err)
 	}
 
 	// 2. 退避先（古い世代）ファイルもあらかじめ作成
-	if err := os.WriteFile(logPath1, []byte("old log"), 0644); err != nil {
+	if err := os.WriteFile(logPath1, []byte("old log"), 0o644); err != nil {
 		t.Fatalf("failed to write dummy log.1: %v", err)
 	}
 
