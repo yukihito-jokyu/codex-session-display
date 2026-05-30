@@ -59,7 +59,7 @@ JSONLレコード上では `task_started` イベントから `task_complete`（�
 function_call 群 → 中間メッセージ → function_call_output 群
 ```
 
-バッチサイズは1〜8以上を確認済み。同一バッチ内の `function_call` / `function_call_output` は `call_id` で1:1に対応する。
+バッチサイズは1〜8以上を確認済み。同一バッチ内の `function_call` / `function_call_output` は `call_id` で1:1に対応する。ただし、`call_id` が存在しない、または対応が取れない場合は、警告を出力した上で出現順での紐付け等のフォールバックが行われる。
 
 **関連用語**: [[中間メッセージ]], [[function_call]]
 
