@@ -71,12 +71,29 @@ func (m *mockCacheRepository) GetSessionSummary(ctx context.Context, sessionID s
 func TestNewListSessionsUseCase(t *testing.T) {
 	sessionRepo := &mockSessionRepository{}
 	cacheRepo := &mockCacheRepository{}
-	uc := NewListSessionsUseCase(sessionRepo, cacheRepo)
-	if uc.sessionRepo != sessionRepo {
-		t.Errorf("expected sessionRepo to be %v, got %v", sessionRepo, uc.sessionRepo)
+
+	tests := []struct {
+		name        string
+		sessionRepo SessionRepository
+		cacheRepo   CacheRepository
+	}{
+		{
+			name:        "success constructor",
+			sessionRepo: sessionRepo,
+			cacheRepo:   cacheRepo,
+		},
 	}
-	if uc.cacheRepo != cacheRepo {
-		t.Errorf("expected cacheRepo to be %v, got %v", cacheRepo, uc.cacheRepo)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			uc := NewListSessionsUseCase(tt.sessionRepo, tt.cacheRepo)
+			if uc.sessionRepo != tt.sessionRepo {
+				t.Errorf("expected sessionRepo to be %v, got %v", tt.sessionRepo, uc.sessionRepo)
+			}
+			if uc.cacheRepo != tt.cacheRepo {
+				t.Errorf("expected cacheRepo to be %v, got %v", tt.cacheRepo, uc.cacheRepo)
+			}
+		})
 	}
 }
 

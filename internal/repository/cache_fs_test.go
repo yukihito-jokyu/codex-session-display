@@ -10,9 +10,23 @@ import (
 )
 
 func TestNewCacheFSRepository(t *testing.T) {
-	repo := NewCacheFSRepository("test_dir")
-	if repo.cacheDir != "test_dir" {
-		t.Errorf("expected cacheDir to be 'test_dir', got '%s'", repo.cacheDir)
+	tests := []struct {
+		name     string
+		cacheDir string
+	}{
+		{
+			name:     "success constructor",
+			cacheDir: "test_dir",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			repo := NewCacheFSRepository(tt.cacheDir)
+			if repo.cacheDir != tt.cacheDir {
+				t.Errorf("expected cacheDir to be '%s', got '%s'", tt.cacheDir, repo.cacheDir)
+			}
+		})
 	}
 }
 
