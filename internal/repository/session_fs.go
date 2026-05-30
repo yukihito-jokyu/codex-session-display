@@ -39,7 +39,7 @@ func NewSessionFSRepository(rootDir string, cacheRepo usecase.CacheRepository) *
 // year == 0 && month == 0 の場合は、自動的に最新のセッションが存在する年月を特定してその月分のみを返します。
 func (r *SessionFSRepository) ListSessions(ctx context.Context, year, month int, query string) ([]dto.SessionSummary, error) {
 	// ディレクトリが存在するか確認
-	if _, err := os.Stat(r.rootDir); os.IsNotExist(err) {
+	if _, err := os.Stat(r.rootDir); errors.Is(err, os.ErrNotExist) {
 		return nil, nil // 空のリストを正常に返す
 	}
 
@@ -198,12 +198,9 @@ func parseSessionFilename(filename string) (id, timestamp string, err error) {
 	uuidPart := matches[2]
 
 	// 'T' の後のタイムスタンプのハイフンをコロンに変換
-	tIndex := strings.Index(timestampPart, "T")
-	if tIndex == -1 {
-		return "", "", fmt.Errorf("%w (no 'T'): %s", ErrInvalidTimestamp, timestampPart)
-	}
-	datePart := timestampPart[:tIndex]
-	timePart := timestampPart[tIndex+1:]
+	// 正規表現により timestampPart は必ず "YYYY-MM-DDThh-mm-ss" の形式 (19文字)
+	datePart := timestampPart[:10]
+	timePart := timestampPart[11:]
 	timePart = strings.ReplaceAll(timePart, "-", ":")
 
 	localTimeStr := datePart + "T" + timePart
