@@ -1,5 +1,5 @@
 import type React from "react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import styles from "./Toolbar.module.css";
 
 interface ToolbarProps {
@@ -16,18 +16,21 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 	const [inputValue, setInputValue] = useState("");
 	const timeoutRef = useRef<number | null>(null);
 
-	const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-		const value = e.target.value;
-		setInputValue(value);
+	const handleChange = useCallback(
+		(e: React.ChangeEvent<HTMLInputElement>) => {
+			const value = e.target.value;
+			setInputValue(value);
 
-		if (timeoutRef.current) {
-			window.clearTimeout(timeoutRef.current);
-		}
+			if (timeoutRef.current) {
+				window.clearTimeout(timeoutRef.current);
+			}
 
-		timeoutRef.current = window.setTimeout(() => {
-			onSearch(value);
-		}, 200); // 200ms デバウンス
-	};
+			timeoutRef.current = window.setTimeout(() => {
+				onSearch(value);
+			}, 200); // 200ms デバウンス
+		},
+		[onSearch],
+	);
 
 	useEffect(() => {
 		return () => {
@@ -52,13 +55,16 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 				</div>
 			</div>
 			<div className={styles.searchContainer}>
-				<span className={styles.searchIcon}>🔍</span>
+				<span className={styles.searchIcon} aria-hidden="true">
+					🔍
+				</span>
 				<input
 					type="text"
 					placeholder="Filter by ID, CWD, branch, provider..."
 					value={inputValue}
 					onChange={handleChange}
 					className={styles.searchInput}
+					aria-label="Filter sessions"
 				/>
 			</div>
 		</div>

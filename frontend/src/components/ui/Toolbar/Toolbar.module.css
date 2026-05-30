@@ -19,8 +19,8 @@
 .countBadge {
 	display: flex;
 	align-items: center;
-	background: rgba(88, 166, 255, 0.1);
-	border: 1px solid rgba(88, 166, 255, 0.2);
+	background: var(--accent-badge-bg);
+	border: 1px solid var(--accent-badge-border);
 	border-radius: 6px;
 	font-size: 11px;
 	font-weight: 600;
@@ -37,13 +37,13 @@
 }
 
 .badgeValue {
-	background: rgba(88, 166, 255, 0.2);
+	background: var(--accent-value-bg);
 	color: var(--text-primary);
 	padding: 0 10px;
 	display: flex;
 	align-items: center;
 	height: 100%;
-	border-left: 1px solid rgba(88, 166, 255, 0.2);
+	border-left: 1px solid var(--accent-badge-border);
 }
 
 .path {
@@ -86,7 +86,7 @@
 	padding: 6px 12px 6px 36px;
 	font-size: 13px;
 	color: var(--text-primary);
-	background: rgba(22, 27, 34, 0.6);
+	background: var(--search-bg);
 	border: 1px solid var(--border-color);
 	border-radius: 8px;
 	outline: none;
@@ -96,8 +96,8 @@
 
 .searchInput:focus {
 	border-color: var(--color-accent);
-	box-shadow: 0 0 0 3px rgba(88, 166, 255, 0.15);
-	background: rgba(22, 27, 34, 0.8);
+	box-shadow: 0 0 0 3px var(--search-focus-ring);
+	background: var(--search-bg-focus);
 }
 
 .searchInput::placeholder {

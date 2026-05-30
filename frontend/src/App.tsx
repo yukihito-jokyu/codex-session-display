@@ -63,11 +63,11 @@ function SessionListPage() {
 		}
 	}, [searchQuery, currentYear, currentMonth, fetchSessions]);
 
-	const handleSearch = (query: string) => {
+	const handleSearch = useCallback((query: string) => {
 		setSearchQuery(query);
-	};
+	}, []);
 
-	const handlePrevMonth = () => {
+	const handlePrevMonth = useCallback(() => {
 		if (!currentYear || !currentMonth) return;
 		if (currentMonth === 1) {
 			setCurrentYear(currentYear - 1);
@@ -75,9 +75,9 @@ function SessionListPage() {
 		} else {
 			setCurrentMonth(currentMonth - 1);
 		}
-	};
+	}, [currentYear, currentMonth]);
 
-	const handleNextMonth = () => {
+	const handleNextMonth = useCallback(() => {
 		if (!currentYear || !currentMonth) return;
 		if (currentMonth === 12) {
 			setCurrentYear(currentYear + 1);
@@ -85,7 +85,7 @@ function SessionListPage() {
 		} else {
 			setCurrentMonth(currentMonth + 1);
 		}
-	};
+	}, [currentYear, currentMonth]);
 
 	const filteredSessions = sessions;
 

@@ -21,36 +21,36 @@ interface SessionRowProps {
 	session: SessionSummary;
 }
 
+const formatTimestamp = (isoStr: string | null | undefined) => {
+	if (!isoStr) return "—";
+	try {
+		const d = new Date(isoStr);
+		if (Number.isNaN(d.getTime())) return isoStr;
+
+		const pad = (n: number) => n.toString().padStart(2, "0");
+		const year = d.getFullYear();
+		const month = pad(d.getMonth() + 1);
+		const date = pad(d.getDate());
+		const hours = pad(d.getHours());
+		const minutes = pad(d.getMinutes());
+		const seconds = pad(d.getSeconds());
+
+		return `${year}-${month}-${date} ${hours}:${minutes}:${seconds}`;
+	} catch (_e) {
+		return isoStr;
+	}
+};
+
+const formatFileSize = (bytes: number) => {
+	if (bytes === 0) return "0 B";
+	const k = 1024;
+	const sizes = ["B", "KB", "MB", "GB"];
+	const i = Math.floor(Math.log(bytes) / Math.log(k));
+	return `${parseFloat((bytes / k ** i).toFixed(1))} ${sizes[i]}`;
+};
+
 export const SessionRow: React.FC<SessionRowProps> = ({ session }) => {
 	const navigate = useNavigate();
-
-	const formatTimestamp = (isoStr: string | null | undefined) => {
-		if (!isoStr) return "—";
-		try {
-			const d = new Date(isoStr);
-			if (Number.isNaN(d.getTime())) return isoStr;
-
-			const pad = (n: number) => n.toString().padStart(2, "0");
-			const year = d.getFullYear();
-			const month = pad(d.getMonth() + 1);
-			const date = pad(d.getDate());
-			const hours = pad(d.getHours());
-			const minutes = pad(d.getMinutes());
-			const seconds = pad(d.getSeconds());
-
-			return `${year}-${month}-${date} ${hours}:${minutes}:${seconds}`;
-		} catch (_e) {
-			return isoStr;
-		}
-	};
-
-	const formatFileSize = (bytes: number) => {
-		if (bytes === 0) return "0 B";
-		const k = 1024;
-		const sizes = ["B", "KB", "MB", "GB"];
-		const i = Math.floor(Math.log(bytes) / Math.log(k));
-		return `${parseFloat((bytes / k ** i).toFixed(1))} ${sizes[i]}`;
-	};
 
 	const handleClick = () => {
 		navigate(`/sessions/${session.id}`);
@@ -64,7 +64,12 @@ export const SessionRow: React.FC<SessionRowProps> = ({ session }) => {
 			onClick={handleClick}
 			role="button"
 			tabIndex={0}
-			onKeyDown={(e) => e.key === "Enter" && handleClick()}
+			onKeyDown={(e) => {
+				if (e.key === "Enter" || e.key === " ") {
+					e.preventDefault();
+					handleClick();
+				}
+			}}
 		>
 			<div className={styles.mainInfo}>
 				<div className={styles.header}>
