@@ -11,13 +11,27 @@ func TestInitLogger(t *testing.T) {
 	defer func() { userHomeDirFn = oldHomeFn }()
 
 	tempDir := t.TempDir()
-	userHomeDirFn = func() (string, error) {
-		return tempDir, nil
+
+	tests := []struct {
+		name   string
+		homeFn func() (string, error)
+	}{
+		{
+			name: "success initialization in dev environment",
+			homeFn: func() (string, error) {
+				return tempDir, nil
+			},
+		},
 	}
 
-	cleanup := InitLogger()
-	if cleanup == nil {
-		t.Fatal("InitLogger returned nil cleanup")
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			userHomeDirFn = tt.homeFn
+			cleanup := InitLogger()
+			if cleanup == nil {
+				t.Fatal("InitLogger returned nil cleanup")
+			}
+			cleanup()
+		})
 	}
-	cleanup()
 }
