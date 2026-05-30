@@ -363,7 +363,8 @@ JSONLレコードはトップレベルの `type`、およびその配下の `pay
 | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | CallRecords    | 連続する function_call または custom_tool_call の配列（混在しない）                                                                                                                |
 | OutputRecords  | 対応する function_call_output または custom_tool_call_output の配列（null を含む場合がある）                                                                                       |
-| MiddleMessage  | バッチ中�  ├─ 2. 各 Turn を処理：
+| MiddleMessage  | バッチ中間メッセージ。agent_message + response_item(assistant) または response_item(assistant) のみ |
+  ├─ 2. 各 Turn を処理：
   │     ├─ 2-1. 通常のターンの場合 (turn.TaskStarted != null)（2a〜2d はステップ順、2e以降はレコードの出現順に処理）:
   │     │     ├─ 2a. task_started ノード生成 → ハーネススタックに push
   │     │     │
@@ -439,7 +440,7 @@ JSONLレコードはトップレベルの `type`、およびその配下の `pay
   │               レコードの型に応じたノード（ボーダー: 破線、背景: トーンダウンしたグレー、
   │               ラベル先頭に `[System]` プレフィックス、turnIndex = -1）を生成し、
   │               ハーネススタックに push
-��致あり → 警告ログを出力し、call_id マップで復旧:
+      - 一致あり → 警告ログを出力し、call_id マップで復旧:
       - outputMap[call_id] = outputRecord を構築
       - call の順序に従い output を再配置:
         OutputRecords[i] = outputMap[callBatch[i].call_id]（存在しない場合は null）
@@ -945,8 +946,148 @@ APIレスポンスの nodes / edges をそのまま React Flow の初期値と�
 
 - **node-header**: アイコン + ラベル + トークンバッジ（存在する場合）。boundCount ≥ 2 の場合は件数を併記（例: 「12.3K ×2」）
 - **node-body**: summary テキスト。クリックで BottomPanel に詳細を表示
-- **ホバー**: ボーダー色変化（青）+ ドロップシャドウ
-- **選択**: 2pxのブルーボーダー
+- **ホバー**: 各ノードカテゴリのテーマ色に応じたボーダー色への変化 ＋ ドロップシャドウ
+- **選択**: 2pxのテーマ色に応じたボーダー ＋ ドロップシャドウ
+
+##### テーマおよびカラーパレットの設計
+
+アプリケーションはダークモードとライトモードの2つのテーマをサポートし、CSSカスタムプロパティ（CSS変数）を用いて動的にスタイルを管理する。
+
+###### CSS変数定義（:root & body.light-theme）
+
+```css
+:root {
+  --bg-app: #0f1117;
+  --bg-header: #161b22;
+  --border-color: #30363d;
+  --text-primary: #e1e4e8;
+  --text-secondary: #8b949e;
+  --text-muted: #484f58;
+  --bg-btn: #21262d;
+  --bg-btn-hover: #30363d;
+  --color-accent: #58a6ff;
+  --grid-dot: #1c2128;
+  --panel-shadow: rgba(0, 0, 0, 0.5);
+
+  /* Node theme colors: background / icon-bg / border / text-icon */
+  /* 1. Meta & Context */
+  --node-meta-bg: #161b22;
+  --node-meta-icon-bg: #1c2d1c;
+  --node-meta-border: #3fb9504d;
+  --node-meta-text: #3fb950;
+  
+  /* 2. Inputs */
+  --node-input-bg: #161b22;
+  --node-input-icon-bg: #0d223a;
+  --node-input-border: #58a6ff4d;
+  --node-input-text: #58a6ff;
+
+  /* 3. Outputs */
+  --node-output-bg: #161b22;
+  --node-output-icon-bg: #131c38;
+  --node-output-border: #79c0ff4d;
+  --node-output-text: #79c0ff;
+
+  /* 4. Thinking */
+  --node-think-bg: #161b22;
+  --node-think-icon-bg: #241935;
+  --node-think-border: #bc8cff4d;
+  --node-think-text: #bc8cff;
+
+  /* 5. Actions */
+  --node-action-bg: #161b22;
+  --node-action-icon-bg: #2e1f0a;
+  --node-action-border: #e3b3414d;
+  --node-action-text: #e3b341;
+
+  /* 6. System Events */
+  --node-event-bg: #161b22;
+  --node-event-icon-bg: #1c2128;
+  --node-event-border: #30363d;
+  --node-event-text: #8b949e;
+
+  /* 7. Warnings */
+  --node-warning-bg: #161b22;
+  --node-warning-icon-bg: #3c181c;
+  --node-warning-border: #f8514966;
+  --node-warning-text: #f85149;
+}
+
+body.light-theme {
+  --bg-app: #f6f8fa;
+  --bg-header: #ffffff;
+  --border-color: #d0d7de;
+  --text-primary: #24292f;
+  --text-secondary: #57606a;
+  --text-muted: #8c959f;
+  --bg-btn: #f6f8fa;
+  --bg-btn-hover: #f3f4f6;
+  --color-accent: #0969da;
+  --grid-dot: #d0d7de;
+  --panel-shadow: rgba(0, 0, 0, 0.08);
+
+  /* Node theme colors: background / icon-bg / border / text-icon */
+  /* 1. Meta & Context */
+  --node-meta-bg: #ffffff;
+  --node-meta-icon-bg: #e8f5e9;
+  --node-meta-border: #a5d6a7;
+  --node-meta-text: #2e7d32;
+  
+  /* 2. Inputs */
+  --node-input-bg: #ffffff;
+  --node-input-icon-bg: #e3f2fd;
+  --node-input-border: #90caf9;
+  --node-input-text: #1565c0;
+
+  /* 3. Outputs */
+  --node-output-bg: #ffffff;
+  --node-output-icon-bg: #f5f3ff;
+  --node-output-border: #c084fc;
+  --node-output-text: #6d28d9;
+
+  /* 4. Thinking */
+  --node-think-bg: #ffffff;
+  --node-think-icon-bg: #faf5ff;
+  --node-think-border: #d8b4fe;
+  --node-think-text: #7e22ce;
+
+  /* 5. Actions */
+  --node-action-bg: #ffffff;
+  --node-action-icon-bg: #fff8e1;
+  --node-action-border: #ffe082;
+  --node-action-text: #b78103;
+
+  /* 6. System Events */
+  --node-event-bg: #ffffff;
+  --node-event-icon-bg: #f6f8fa;
+  --node-event-border: #d0d7de;
+  --node-event-text: #57606a;
+
+  /* 7. Warnings */
+  --node-warning-bg: #ffffff;
+  --node-warning-icon-bg: #ffebee;
+  --node-warning-border: #ef9a9a;
+  --node-warning-text: #c62828;
+}
+```
+
+###### カテゴリ別スタイル定義
+
+各カスタムノードは、フロントエンドでの React Flow レンダリング時に以下のクラスを付与され、対応する CSS 変数でスタイリングされる。
+
+| カテゴリ | 対象ノードクラス | 背景色 | ボーダー色 | アイコン・タイトル文字色 |
+| :--- | :--- | :--- | :--- | :--- |
+| **1. Meta & Context** | `.node-session`, `.node-turn-ctx`, `.node-context-doc` | `var(--node-meta-bg)` | `var(--node-meta-border)` | `var(--node-meta-text)` (アイコン背景: `var(--node-meta-icon-bg)`) |
+| **2. Inputs** | `.node-developer-message`, `.node-user-message`, `.node-user-api-message` | `var(--node-input-bg)` | `var(--node-input-border)` | `var(--node-input-text)` (アイコン背景: `var(--node-input-icon-bg)`) |
+| **3. Outputs** | `.node-agent-message` | `var(--node-output-bg)` | `var(--node-output-border)` | `var(--node-output-text)` (アイコン背景: `var(--node-output-icon-bg)`) |
+| **4. Thinking** | `.node-reasoning` | `var(--node-think-bg)` | `var(--node-think-border)` | `var(--node-think-text)` (アイコン背景: `var(--node-think-icon-bg)`) |
+| **5. Actions** | `.node-action`, `.node-web-search`, `.node-external-event` | `var(--node-action-bg)` | `var(--node-action-border)` | `var(--node-action-text)` (アイコン背景: `var(--node-action-icon-bg)`) |
+| **6. System Events** | `.node-turn-start`, `.node-turn-end`, `.node-item-completed`, `.node-event` | `var(--node-event-bg)` | `var(--node-event-border)` | `var(--node-event-text)` (アイコン背景: `var(--node-event-icon-bg)`) |
+| **7. Warnings** | `.node-warning` | `var(--node-warning-bg)` | `var(--node-warning-border)` | `var(--node-warning-text)` (アイコン背景: `var(--node-warning-icon-bg)`) |
+| **8. Default / Unknown** | `.node-generic` | `var(--node-event-bg)` | `var(--node-event-border)` | `var(--node-event-text)` (アイコン背景: `var(--node-event-icon-bg)`) |
+
+- ホバー時、選択時のボーダー色には、それぞれの文字色（`--node-*-text`）を使用して強調表示する。
+- ターン外ノード（破線ボーダー）は、それぞれのカテゴリに応じた枠・文字色を継承した上で `border-style: dashed` とする。
 
 #### 3.5.2 各カスタムノードの仕様
 
