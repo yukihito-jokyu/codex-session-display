@@ -56,13 +56,10 @@ test.describe("セッション一覧画面 E2E テスト", () => {
 
 	test("検索バーによるフィルタリングが正しく機能すること", async ({ page }) => {
 		// 検索入力欄を取得して「openai」と入力
-		const searchInput = page.locator("input[placeholder*='Search']");
-		if ((await searchInput.count()) === 0) {
-			// placeholderが異なる場合、汎用的にinputタグを取得
-			await page.locator("input").first().fill("openai");
-		} else {
-			await searchInput.fill("openai");
-		}
+		const searchInput = page.getByPlaceholder(
+			"Filter by ID, CWD, branch, provider...",
+		);
+		await searchInput.fill("openai");
 
 		// openai의モデルプロバイダを持つsession-2のみが表示され、session-1が消えることを確認
 		await expect(page.locator("text=sess-002")).toBeVisible();
@@ -111,12 +108,10 @@ test.describe("セッション一覧画面 E2E テスト", () => {
 		page,
 	}) => {
 		// 検索入力欄に「trigger-error」と入力してエラーを発生させる
-		const searchInput = page.locator("input[placeholder*='Search']");
-		if ((await searchInput.count()) === 0) {
-			await page.locator("input").first().fill("trigger-error");
-		} else {
-			await searchInput.fill("trigger-error");
-		}
+		const searchInput = page.getByPlaceholder(
+			"Filter by ID, CWD, branch, provider...",
+		);
+		await searchInput.fill("trigger-error");
 
 		// エラーメッセージが表示されることを確認
 		await expect(
@@ -125,11 +120,7 @@ test.describe("セッション一覧画面 E2E テスト", () => {
 		await expect(page.locator("text=Retry")).toBeVisible();
 
 		// 検索入力欄をクリアする
-		if ((await searchInput.count()) === 0) {
-			await page.locator("input").first().fill("");
-		} else {
-			await searchInput.fill("");
-		}
+		await searchInput.fill("");
 
 		// エラーメッセージが消え、セッション1が表示される（復帰）ことを確認
 		await expect(
@@ -140,12 +131,10 @@ test.describe("セッション一覧画面 E2E テスト", () => {
 
 	test("検索結果が0件の場合に空表示が表示されること", async ({ page }) => {
 		// 検索入力欄に存在しないセッションの条件を入力
-		const searchInput = page.locator("input[placeholder*='Search']");
-		if ((await searchInput.count()) === 0) {
-			await page.locator("input").first().fill("nonexistent-query-string");
-		} else {
-			await searchInput.fill("nonexistent-query-string");
-		}
+		const searchInput = page.getByPlaceholder(
+			"Filter by ID, CWD, branch, provider...",
+		);
+		await searchInput.fill("nonexistent-query-string");
 
 		// 空表示のメッセージが表示されることを確認
 		await expect(
