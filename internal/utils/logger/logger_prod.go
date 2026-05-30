@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 )
 
+const maxLogSize = 10 * 1024 * 1024 // 10MB
+
 // InitLogger は本番環境向けのロガーを初期化します。
 // 起動時に簡易ログローテーションを実行し、
 // 標準エラー出力 (stderr) および ~/.codex-display/logs/app.log に JSON形式 (slog.JSONHandler) で出力します。
@@ -21,7 +23,7 @@ func InitLogger() func() {
 	}
 
 	// ログディレクトリの作成
-	if err := os.MkdirAll(logDir, 0755); err != nil {
+	if err := os.MkdirAll(logDir, 0o755); err != nil {
 		setupFallbackLogger("failed to create log dir: " + err.Error())
 		return func() {}
 	}
@@ -40,7 +42,7 @@ func InitLogger() func() {
 	}
 
 	// 新しいログファイルを作成、または追記モードで開く
-	file, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	file, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0o644)
 	if err != nil {
 		setupFallbackLogger("failed to open log file: " + err.Error())
 		return func() {}
