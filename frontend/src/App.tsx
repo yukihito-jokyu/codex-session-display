@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import {
 	HashRouter,
 	Route,
@@ -21,36 +21,39 @@ function SessionListPage() {
 	const [currentYear, setCurrentYear] = useState<number | null>(null);
 	const [currentMonth, setCurrentMonth] = useState<number | null>(null);
 
-	const fetchSessions = (query: string, year: number, month: number) => {
-		setLoading(true);
-		setError(null);
-		ListSessions(query, year, month)
-			.then((data) => {
-				setSessions(data || []);
-				setLoading(false);
+	const fetchSessions = useCallback(
+		(query: string, year: number, month: number) => {
+			setLoading(true);
+			setError(null);
+			ListSessions(query, year, month)
+				.then((data) => {
+					setSessions(data || []);
+					setLoading(false);
 
-				// 初回起動時（year=0, month=0）の場合は、返ってきたデータのタイムスタンプから年月を割り出して同期する
-				if (year === 0 && month === 0) {
-					if (data && data.length > 0 && data[0].timestamp) {
-						const date = new Date(data[0].timestamp);
-						if (!Number.isNaN(date.getTime())) {
-							setCurrentYear(date.getFullYear());
-							setCurrentMonth(date.getMonth() + 1);
-							return;
+					// 初回起動時（year=0, month=0）の場合は、返ってきたデータのタイムスタンプから年月を割り出して同期する
+					if (year === 0 && month === 0) {
+						if (data && data.length > 0 && data[0].timestamp) {
+							const date = new Date(data[0].timestamp);
+							if (!Number.isNaN(date.getTime())) {
+								setCurrentYear(date.getFullYear());
+								setCurrentMonth(date.getMonth() + 1);
+								return;
+							}
 						}
+						// セッションが全くない場合は現在の年月をデフォルトにする
+						const now = new Date();
+						setCurrentYear(now.getFullYear());
+						setCurrentMonth(now.getMonth() + 1);
 					}
-					// セッションが全くない場合は現在の年月をデフォルトにする
-					const now = new Date();
-					setCurrentYear(now.getFullYear());
-					setCurrentMonth(now.getMonth() + 1);
-				}
-			})
-			.catch((err) => {
-				console.error(err);
-				setError(`Failed to fetch sessions: ${err.message || err}`);
-				setLoading(false);
-			});
-	};
+				})
+				.catch((err) => {
+					console.error(err);
+					setError(`Failed to fetch sessions: ${err.message || err}`);
+					setLoading(false);
+				});
+		},
+		[],
+	);
 
 	useEffect(() => {
 		if (currentYear === null || currentMonth === null) {
@@ -58,7 +61,7 @@ function SessionListPage() {
 		} else {
 			fetchSessions(searchQuery, currentYear, currentMonth);
 		}
-	}, [searchQuery, currentYear, currentMonth]);
+	}, [searchQuery, currentYear, currentMonth, fetchSessions]);
 
 	const handleSearch = (query: string) => {
 		setSearchQuery(query);
@@ -128,6 +131,7 @@ function SessionListPage() {
 					<span className={styles.errorIcon}>⚠️</span>
 					<span className={styles.errorMessage}>{error}</span>
 					<button
+						type="button"
 						className={styles.retryBtn}
 						onClick={() =>
 							fetchSessions(searchQuery, currentYear || 0, currentMonth || 0)
@@ -150,7 +154,11 @@ function SessionDetailPage() {
 	return (
 		<div className={styles.detailPage}>
 			<div className={styles.detailHeader}>
-				<button className={styles.backBtn} onClick={() => navigate("/")}>
+				<button
+					type="button"
+					className={styles.backBtn}
+					onClick={() => navigate("/")}
+				>
 					← Back to List
 				</button>
 				<span className={styles.detailTitle}>Session Detail</span>
