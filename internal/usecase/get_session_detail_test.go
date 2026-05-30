@@ -1,0 +1,990 @@
+package usecase_test
+
+import (
+	"codex-session-display/internal/domain/dto"
+	"codex-session-display/internal/domain/model"
+	"codex-session-display/internal/repository"
+	"codex-session-display/internal/usecase"
+	"context"
+	"errors"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+	"time"
+)
+
+// mockCacheRepositoryForDetail はテスト用のモックキャッシュリポジトリです。
+type mockCacheRepositoryForDetail struct {
+	cache   map[string]*dto.SessionDetailResponse
+	saveErr error
+}
+
+func (m *mockCacheRepositoryForDetail) GetSessionSummary(ctx context.Context, sessionID string) (*dto.SessionSummary, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (m *mockCacheRepositoryForDetail) GetSessionDetail(ctx context.Context, sessionID string) (*dto.SessionDetailResponse, error) {
+	if m.cache == nil {
+		return nil, errors.New("not found")
+	}
+	if detail, ok := m.cache[sessionID]; ok {
+		return detail, nil
+	}
+	return nil, errors.New("not found")
+}
+
+func (m *mockCacheRepositoryForDetail) SaveSessionDetail(ctx context.Context, sessionID string, detail *dto.SessionDetailResponse) error {
+	if m.saveErr != nil {
+		return m.saveErr
+	}
+	if m.cache == nil {
+		m.cache = make(map[string]*dto.SessionDetailResponse)
+	}
+	m.cache[sessionID] = detail
+	return nil
+}
+
+// mockSessionRepositoryForDetail はテスト用のモックセッションリポジトリです。
+type mockSessionRepositoryForDetail struct {
+	paths       map[string]string
+	filePathErr error
+	modTimeErr  error
+	modTimes    map[string]time.Time
+}
+
+func (m *mockSessionRepositoryForDetail) ListSessions(ctx context.Context, year, month int, query string) ([]dto.SessionSummary, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (m *mockSessionRepositoryForDetail) GetSessionFilePath(ctx context.Context, sessionID string) (string, error) {
+	if m.filePathErr != nil {
+		return "", m.filePathErr
+	}
+	if path, ok := m.paths[sessionID]; ok {
+		return path, nil
+	}
+	return "", errors.New("session not found")
+}
+
+func (m *mockSessionRepositoryForDetail) GetSessionModTime(ctx context.Context, sessionID string) (time.Time, error) {
+	if m.modTimeErr != nil {
+		return time.Time{}, m.modTimeErr
+	}
+	if m.modTimes != nil {
+		if t, ok := m.modTimes[sessionID]; ok {
+			return t, nil
+		}
+	}
+	path, err := m.GetSessionFilePath(ctx, sessionID)
+	if err != nil {
+		return time.Time{}, err
+	}
+	info, err := os.Stat(path)
+	if err != nil {
+		return time.Time{}, err
+	}
+	return info.ModTime(), nil
+}
+
+// mockSessionParser はテスト用のモックパーサーです。
+type mockSessionParser struct {
+	records []*model.TypedRecord
+	err     error
+}
+
+func (m *mockSessionParser) ParseSessionFile(ctx context.Context, filePath string) ([]*model.TypedRecord, error) {
+	if m.err != nil {
+		return nil, m.err
+	}
+	return m.records, nil
+}
+
+func TestGetSessionDetailUseCase_Execute(t *testing.T) {
+	tests := []struct {
+		name    string
+		setup   func(t *testing.T, tmpDir string) (sessionID string, sessionRepo usecase.SessionRepository, cacheRepo usecase.CacheRepository, parser usecase.SessionParser, cleanup func())
+		wantErr bool
+		verify  func(t *testing.T, res *dto.SessionDetailResponse, err error)
+	}{
+		{
+			name: "unsupported version",
+			setup: func(t *testing.T, tmpDir string) (string, usecase.SessionRepository, usecase.CacheRepository, usecase.SessionParser, func()) {
+				filePath := filepath.Join(tmpDir, "rollout-unsupported.jsonl")
+				logs := []string{
+					`{"type":"session_meta","timestamp":1717084800,"payload":{"id":"session-1","cli_version":"0.120.0"}}`,
+				}
+				if err := os.WriteFile(filePath, []byte(strings.Join(logs, "\n")), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				sessionRepo := &mockSessionRepositoryForDetail{
+					paths: map[string]string{"session-1": filePath},
+				}
+				cacheRepo := &mockCacheRepositoryForDetail{}
+				return "session-1", sessionRepo, cacheRepo, nil, nil
+			},
+			wantErr: true,
+			verify: func(t *testing.T, res *dto.SessionDetailResponse, err error) {
+				if !errors.Is(err, model.ErrUnsupportedFormat) {
+					t.Errorf("expected unsupported format error, got %v", err)
+				}
+			},
+		},
+		{
+			name: "normal flow and layout",
+			setup: func(t *testing.T, tmpDir string) (string, usecase.SessionRepository, usecase.CacheRepository, usecase.SessionParser, func()) {
+				filePath := filepath.Join(tmpDir, "rollout-success.jsonl")
+				logs := []string{
+					// Session Meta (v0.131.0)
+					`{"type":"session_meta","timestamp":1717084800,"payload":{"id":"session-1234","cwd":"/path/to/project","cli_version":"v0.131.0","base_instructions":{"text":"Base System Instructions"}}}`,
+					// Turn 1 Context
+					`{"type":"turn_context","timestamp":1717084805,"payload":{"turn_id":"turn-1","model":"gpt-4o","user_instructions":"Fix it","collaboration_mode":{"mode":"normal","developer_instructions":"Dev Instructions"}}}`,
+					// Turn 1 Start
+					`{"type":"event_msg","timestamp":1717084810,"payload":{"type":"task_started","turn_id":"turn-1","started_at":1717084810,"model_context_window":128000}}`,
+					// User message
+					`{"type":"event_msg","timestamp":1717084812,"payload":{"type":"user_message","message":"Let's go"}}`,
+					// Reasoning
+					`{"type":"event_msg","timestamp":1717084815,"payload":{"type":"agent_reasoning","text":"Thinking hard"}}`,
+					`{"type":"response_item","timestamp":1717084816,"payload":{"type":"reasoning","summary":[{"type":"summary_text","text":"Thinking summary"}]}}`,
+					// Batch function calls
+					`{"type":"response_item","timestamp":1717084820,"payload":{"type":"function_call","name":"read_file","call_id":"call-1","arguments":"{}"}}`,
+					`{"type":"response_item","timestamp":1717084821,"payload":{"type":"function_call","name":"write_file","call_id":"call-2","arguments":"{}"}}`,
+					// Batch Middle Message (Pattern A)
+					`{"type":"event_msg","timestamp":1717084822,"payload":{"type":"agent_message","message":"Running tool"}}`,
+					`{"type":"response_item","timestamp":1717084823,"payload":{"type":"message","role":"assistant","content":[{"type":"output_text","text":"Tool is running"}]}}`,
+					// Batch function outputs
+					`{"type":"response_item","timestamp":1717084825,"payload":{"type":"function_call_output","call_id":"call-1","output":"file content"}}`,
+					`{"type":"response_item","timestamp":1717084826,"payload":{"type":"function_call_output","call_id":"call-2","output":"success"}}`,
+					// External event branch (exec_command_end)
+					`{"type":"event_msg","timestamp":1717084828,"payload":{"type":"exec_command_end","call_id":"call-1","command":["cat","file"],"exit_code":0}}`,
+					// Token count
+					`{"type":"event_msg","timestamp":1717084830,"payload":{"type":"token_count","info":{"total_token_usage":{"total_tokens":1000,"input_tokens":800,"output_tokens":200},"last_token_usage":{"total_tokens":150,"input_tokens":100,"output_tokens":50}}}}`,
+					// Turn 1 End
+					`{"type":"event_msg","timestamp":1717084840,"payload":{"type":"task_complete","turn_id":"turn-1","completed_at":1717084840}}`,
+				}
+				if err := os.WriteFile(filePath, []byte(strings.Join(logs, "\n")), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				sessionRepo := &mockSessionRepositoryForDetail{
+					paths: map[string]string{"session-1234": filePath},
+				}
+				cacheRepo := &mockCacheRepositoryForDetail{}
+				return "session-1234", sessionRepo, cacheRepo, nil, nil
+			},
+			wantErr: false,
+			verify: func(t *testing.T, res *dto.SessionDetailResponse, err error) {
+				if res.ID != "session-1234" {
+					t.Errorf("expected ID 'session-1234', got '%s'", res.ID)
+				}
+
+				if len(res.Nodes) == 0 {
+					t.Fatal("expected nodes to be generated, got 0")
+				}
+
+				var metaNode, baseInstNode, contextNode, startNode, reasoningNode, middleNode, endNode *dto.FlowNode
+				for i := range res.Nodes {
+					n := &res.Nodes[i]
+					switch n.Type {
+					case "sessionMeta":
+						metaNode = n
+					case "contextDoc":
+						if strings.Contains(n.Data.Summary, "Base System Instructions") {
+							baseInstNode = n
+						}
+					case "turnContext":
+						contextNode = n
+					case "taskEvent":
+						switch n.Data.Label {
+						case "Task Started":
+							startNode = n
+						case "Task Complete":
+							endNode = n
+						}
+					case "reasoning":
+						reasoningNode = n
+					case "agentMessage":
+						if strings.Contains(n.Data.Summary, "Tool is running") {
+							middleNode = n
+						}
+					}
+				}
+
+				if metaNode == nil || metaNode.Position.X != 0 || metaNode.Position.Y != 0 {
+					t.Errorf("invalid sessionMeta node: %+v", metaNode)
+				}
+
+				if baseInstNode == nil || baseInstNode.Position.X != 400 || baseInstNode.Position.Y != 0 {
+					t.Errorf("invalid base_instructions contextDoc node: %+v", baseInstNode)
+				}
+
+				if startNode == nil || startNode.Position.X != 0 || startNode.Position.Y != 120 { // 0 + 80 + 40 = 120
+					t.Errorf("invalid task_started node: %+v", startNode)
+				}
+
+				if contextNode == nil || contextNode.Position.X != 0 || contextNode.Position.Y != 240 { // 120 + 80 + 40 = 240
+					t.Errorf("invalid turnContext node: %+v", contextNode)
+				}
+
+				if reasoningNode == nil || reasoningNode.Position.X != 0 {
+					t.Errorf("invalid reasoningNode: %+v", reasoningNode)
+				}
+
+				if middleNode == nil || middleNode.Position.X != 0 {
+					t.Errorf("invalid middleNode: %+v", middleNode)
+				}
+
+				if endNode == nil || endNode.Position.X != 0 {
+					t.Errorf("invalid endNode: %+v", endNode)
+				}
+
+				if len(res.TokenCounts) != 1 {
+					t.Errorf("expected 1 token count entry, got %d", len(res.TokenCounts))
+				} else {
+					entry := res.TokenCounts[0]
+					if entry.TotalTokenUsage == nil || entry.TotalTokenUsage.TotalTokens != 1000 {
+						t.Errorf("incorrect token usage in entry: %+v", entry.TotalTokenUsage)
+					}
+				}
+			},
+		},
+		{
+			name: "real data",
+			setup: func(t *testing.T, tmpDir string) (string, usecase.SessionRepository, usecase.CacheRepository, usecase.SessionParser, func()) {
+				filePath := filepath.Join("testdata", "rollout-2026-05-27T20-40-12-019e693c-2e17-7353-949f-d1d33ccbf6ff.jsonl")
+				if _, err := os.Stat(filePath); os.IsNotExist(err) {
+					t.Skip("real data file not found, skipping real data test")
+				}
+				sessionRepo := &mockSessionRepositoryForDetail{
+					paths: map[string]string{"real-session-id": filePath},
+				}
+				cacheRepo := &mockCacheRepositoryForDetail{}
+				return "real-session-id", sessionRepo, cacheRepo, nil, nil
+			},
+			wantErr: false,
+			verify: func(t *testing.T, res *dto.SessionDetailResponse, err error) {
+				if len(res.Nodes) == 0 {
+					t.Error("expected nodes from real data, got 0")
+				}
+				if len(res.Edges) == 0 {
+					t.Error("expected edges from real data, got 0")
+				}
+				for _, n := range res.Nodes {
+					if n.ID == "" {
+						t.Error("found node with empty ID")
+					}
+				}
+			},
+		},
+		{
+			name: "cache hit success",
+			setup: func(t *testing.T, tmpDir string) (string, usecase.SessionRepository, usecase.CacheRepository, usecase.SessionParser, func()) {
+				sessionID := "cached-session"
+				cachedResponse := &dto.SessionDetailResponse{
+					ID:       sessionID,
+					ParsedAt: "2026-05-31T01:00:00Z",
+				}
+				cacheRepo := &mockCacheRepositoryForDetail{
+					cache: map[string]*dto.SessionDetailResponse{
+						sessionID: cachedResponse,
+					},
+				}
+				sessionRepo := &mockSessionRepositoryForDetail{
+					modTimes: map[string]time.Time{
+						sessionID: time.Date(2026, 5, 30, 0, 0, 0, 0, time.UTC),
+					},
+				}
+				return sessionID, sessionRepo, cacheRepo, nil, nil
+			},
+			wantErr: false,
+			verify: func(t *testing.T, res *dto.SessionDetailResponse, err error) {
+				if res == nil || res.ID != "cached-session" {
+					t.Errorf("expected cached response, got %+v", res)
+				}
+			},
+		},
+		{
+			name: "GetSessionFilePath error",
+			setup: func(t *testing.T, tmpDir string) (string, usecase.SessionRepository, usecase.CacheRepository, usecase.SessionParser, func()) {
+				sessionRepo := &mockSessionRepositoryForDetail{
+					filePathErr: errors.New("file path error"),
+				}
+				cacheRepo := &mockCacheRepositoryForDetail{}
+				return "session-id", sessionRepo, cacheRepo, nil, nil
+			},
+			wantErr: true,
+			verify: func(t *testing.T, res *dto.SessionDetailResponse, err error) {
+				if !errors.Is(err, model.ErrSessionNotFound) {
+					t.Errorf("expected ErrSessionNotFound, got %v", err)
+				}
+			},
+		},
+		{
+			name: "parser ErrFileTooLarge",
+			setup: func(t *testing.T, tmpDir string) (string, usecase.SessionRepository, usecase.CacheRepository, usecase.SessionParser, func()) {
+				sessionRepo := &mockSessionRepositoryForDetail{
+					paths: map[string]string{"session-id": "dummy-path"},
+				}
+				parser := &mockSessionParser{
+					err: model.ErrFileTooLarge,
+				}
+				cacheRepo := &mockCacheRepositoryForDetail{}
+				return "session-id", sessionRepo, cacheRepo, parser, nil
+			},
+			wantErr: true,
+			verify: func(t *testing.T, res *dto.SessionDetailResponse, err error) {
+				if !errors.Is(err, model.ErrFileTooLarge) {
+					t.Errorf("expected ErrFileTooLarge, got %v", err)
+				}
+			},
+		},
+		{
+			name: "parser ErrParseFailed",
+			setup: func(t *testing.T, tmpDir string) (string, usecase.SessionRepository, usecase.CacheRepository, usecase.SessionParser, func()) {
+				sessionRepo := &mockSessionRepositoryForDetail{
+					paths: map[string]string{"session-id": "dummy-path"},
+				}
+				parser := &mockSessionParser{
+					err: model.ErrParseFailed,
+				}
+				cacheRepo := &mockCacheRepositoryForDetail{}
+				return "session-id", sessionRepo, cacheRepo, parser, nil
+			},
+			wantErr: true,
+			verify: func(t *testing.T, res *dto.SessionDetailResponse, err error) {
+				if !errors.Is(err, model.ErrParseFailed) {
+					t.Errorf("expected ErrParseFailed, got %v", err)
+				}
+			},
+		},
+		{
+			name: "parser fs.ErrPermission",
+			setup: func(t *testing.T, tmpDir string) (string, usecase.SessionRepository, usecase.CacheRepository, usecase.SessionParser, func()) {
+				sessionRepo := &mockSessionRepositoryForDetail{
+					paths: map[string]string{"session-id": "dummy-path"},
+				}
+				parser := &mockSessionParser{
+					err: os.ErrPermission,
+				}
+				cacheRepo := &mockCacheRepositoryForDetail{}
+				return "session-id", sessionRepo, cacheRepo, parser, nil
+			},
+			wantErr: true,
+			verify: func(t *testing.T, res *dto.SessionDetailResponse, err error) {
+				if !errors.Is(err, model.ErrFileReadError) {
+					t.Errorf("expected ErrFileReadError, got %v", err)
+				}
+			},
+		},
+		{
+			name: "parser generic error",
+			setup: func(t *testing.T, tmpDir string) (string, usecase.SessionRepository, usecase.CacheRepository, usecase.SessionParser, func()) {
+				sessionRepo := &mockSessionRepositoryForDetail{
+					paths: map[string]string{"session-id": "dummy-path"},
+				}
+				parser := &mockSessionParser{
+					err: errors.New("generic parser error"),
+				}
+				cacheRepo := &mockCacheRepositoryForDetail{}
+				return "session-id", sessionRepo, cacheRepo, parser, nil
+			},
+			wantErr: true,
+			verify: func(t *testing.T, res *dto.SessionDetailResponse, err error) {
+				if !errors.Is(err, model.ErrParseFailed) {
+					t.Errorf("expected ErrParseFailed, got %v", err)
+				}
+			},
+		},
+		{
+			name: "cache save error ignored",
+			setup: func(t *testing.T, tmpDir string) (string, usecase.SessionRepository, usecase.CacheRepository, usecase.SessionParser, func()) {
+				sessionRepo := &mockSessionRepositoryForDetail{
+					paths: map[string]string{"session-id": "dummy-path"},
+				}
+				parser := &mockSessionParser{
+					records: []*model.TypedRecord{
+						{
+							LineNumber: 1,
+							Type:       "session_meta",
+							SessionMeta: &model.SessionMetaPayload{
+								ID:         "session-id",
+								CliVersion: "v0.125.0",
+							},
+						},
+					},
+				}
+				cacheRepo := &mockCacheRepositoryForDetail{
+					saveErr: errors.New("failed to save cache"),
+				}
+				return "session-id", sessionRepo, cacheRepo, parser, nil
+			},
+			wantErr: false,
+			verify: func(t *testing.T, res *dto.SessionDetailResponse, err error) {
+				if res == nil || res.ID != "session-id" {
+					t.Errorf("expected successful response, got %+v", res)
+				}
+			},
+		},
+		{
+			name: "isUnsupportedVersion invalid version Sscanf fail",
+			setup: func(t *testing.T, tmpDir string) (string, usecase.SessionRepository, usecase.CacheRepository, usecase.SessionParser, func()) {
+				sessionRepo := &mockSessionRepositoryForDetail{
+					paths: map[string]string{"session-id": "dummy-path"},
+				}
+				parser := &mockSessionParser{
+					records: []*model.TypedRecord{
+						{
+							LineNumber: 1,
+							Type:       "session_meta",
+							SessionMeta: &model.SessionMetaPayload{
+								ID:         "session-id",
+								CliVersion: "invalid",
+							},
+						},
+					},
+				}
+				cacheRepo := &mockCacheRepositoryForDetail{}
+				return "session-id", sessionRepo, cacheRepo, parser, nil
+			},
+			wantErr: true,
+			verify: func(t *testing.T, res *dto.SessionDetailResponse, err error) {
+				if !errors.Is(err, model.ErrUnsupportedFormat) {
+					t.Errorf("expected ErrUnsupportedFormat, got %v", err)
+				}
+			},
+		},
+		{
+			name: "isUnsupportedVersion empty version",
+			setup: func(t *testing.T, tmpDir string) (string, usecase.SessionRepository, usecase.CacheRepository, usecase.SessionParser, func()) {
+				sessionRepo := &mockSessionRepositoryForDetail{
+					paths: map[string]string{"session-id": "dummy-path"},
+				}
+				parser := &mockSessionParser{
+					records: []*model.TypedRecord{
+						{
+							LineNumber: 1,
+							Type:       "session_meta",
+							SessionMeta: &model.SessionMetaPayload{
+								ID:         "session-id",
+								CliVersion: "",
+							},
+						},
+					},
+				}
+				cacheRepo := &mockCacheRepositoryForDetail{}
+				return "session-id", sessionRepo, cacheRepo, parser, nil
+			},
+			wantErr: false,
+			verify: func(t *testing.T, res *dto.SessionDetailResponse, err error) {
+				if res == nil || res.ID != "session-id" {
+					t.Errorf("expected successful response, got %+v", res)
+				}
+			},
+		},
+		{
+			name: "isUnsupportedVersion major version > 0",
+			setup: func(t *testing.T, tmpDir string) (string, usecase.SessionRepository, usecase.CacheRepository, usecase.SessionParser, func()) {
+				sessionRepo := &mockSessionRepositoryForDetail{
+					paths: map[string]string{"session-id": "dummy-path"},
+				}
+				parser := &mockSessionParser{
+					records: []*model.TypedRecord{
+						{
+							LineNumber: 1,
+							Type:       "session_meta",
+							SessionMeta: &model.SessionMetaPayload{
+								ID:         "session-id",
+								CliVersion: "v1.0.0",
+							},
+						},
+					},
+				}
+				cacheRepo := &mockCacheRepositoryForDetail{}
+				return "session-id", sessionRepo, cacheRepo, parser, nil
+			},
+			wantErr: false,
+			verify: func(t *testing.T, res *dto.SessionDetailResponse, err error) {
+				if res == nil || res.ID != "session-id" {
+					t.Errorf("expected successful response, got %+v", res)
+				}
+			},
+		},
+		{
+			name: "comprehensive edge cases and branch coverage",
+			setup: func(t *testing.T, tmpDir string) (string, usecase.SessionRepository, usecase.CacheRepository, usecase.SessionParser, func()) {
+				sessionRepo := &mockSessionRepositoryForDetail{
+					paths: map[string]string{"session-id": "dummy-path"},
+				}
+
+				records := []*model.TypedRecord{
+					// session_meta with git info and base instructions
+					{
+						LineNumber: 1,
+						Type:       "session_meta",
+						SessionMeta: &model.SessionMetaPayload{
+							ID:         "session-id",
+							CliVersion: "v0.125.0",
+							Git: &model.GitInfo{
+								Branch: "feat-branch",
+							},
+							BaseInstructions: &model.Instructions{
+								Text: "Base System Instructions",
+							},
+						},
+					},
+					// thread_name_updated (skipped)
+					{
+						LineNumber: 2,
+						Type:       "event_msg",
+						SubType:    "thread_name_updated",
+					},
+					// unmatched out of turn event msg (appends to outOfTurnBuffer)
+					{
+						LineNumber: 3,
+						Type:       "event_msg",
+						SubType:    "some_early_event",
+						EventMsg: &model.EventMsgPayload{
+							TurnID: "turn-1",
+						},
+					},
+					// task_started triggers turn parsing
+					{
+						LineNumber: 4,
+						Type:       "event_msg",
+						SubType:    "task_started",
+						EventMsg: &model.EventMsgPayload{
+							TurnID:             "turn-1",
+							ModelContextWindow: 64000,
+							Message:            "Started turn 1",
+						},
+					},
+					// Non-batch agent messages for merge logic (Case A: event_msg followed by response_item)
+					{
+						LineNumber: 37,
+						Type:       "event_msg",
+						SubType:    "agent_message",
+						EventMsg: &model.EventMsgPayload{
+							Message: "Non-batch message 1",
+						},
+					},
+					{
+						LineNumber: 38,
+						Type:       "response_item",
+						SubType:    "message",
+						ResponseItem: &model.ResponseItemPayload{
+							Role: "assistant",
+							Content: []model.MessageContent{
+								{Type: "text", Text: "Non-batch message 2"},
+							},
+						},
+					},
+					// Non-batch agent messages for merge logic (Case B: response_item followed by event_msg)
+					{
+						LineNumber: 47,
+						Type:       "response_item",
+						SubType:    "message",
+						ResponseItem: &model.ResponseItemPayload{
+							Role: "assistant",
+							Content: []model.MessageContent{
+								{Type: "text", Text: "Non-batch message 3"},
+							},
+						},
+					},
+					{
+						LineNumber: 48,
+						Type:       "event_msg",
+						SubType:    "agent_message",
+						EventMsg: &model.EventMsgPayload{
+							Message: "Non-batch message 4",
+						},
+					},
+					// duplicate turn_context inside the turn
+					{
+						LineNumber: 5,
+						Type:       "turn_context",
+						TurnContext: &model.TurnContextPayload{
+							TurnID: "turn-1",
+							Model:  "gpt-4",
+							CollaborationMode: &model.CollaborationMode{
+								Mode:                  "collaboration",
+								DeveloperInstructions: "Do something dev",
+							},
+							UserInstructions: "Do something user",
+						},
+					},
+					{
+						LineNumber: 6,
+						Type:       "turn_context",
+						TurnContext: &model.TurnContextPayload{
+							TurnID: "turn-1",
+							Model:  "gpt-4-overwrite",
+						},
+					},
+					// developer messages, one skipped because of nil/empty content, one valid
+					{
+						LineNumber: 7,
+						Type:       "response_item",
+						SubType:    "message",
+						ResponseItem: &model.ResponseItemPayload{
+							Role:    "developer",
+							Content: nil,
+						},
+					},
+					{
+						LineNumber: 8,
+						Type:       "response_item",
+						SubType:    "message",
+						ResponseItem: &model.ResponseItemPayload{
+							Role: "developer",
+							Content: []model.MessageContent{
+								{Type: "text", Text: "Dev message content"},
+							},
+						},
+					},
+					// user message, one skipped because of nil/empty content, one valid
+					{
+						LineNumber: 9,
+						Type:       "response_item",
+						SubType:    "message",
+						ResponseItem: &model.ResponseItemPayload{
+							Role:    "user",
+							Content: nil,
+						},
+					},
+					{
+						LineNumber: 10,
+						Type:       "response_item",
+						SubType:    "message",
+						ResponseItem: &model.ResponseItemPayload{
+							Role: "user",
+							Content: []model.MessageContent{
+								{Type: "text", Text: "User api message content"},
+							},
+						},
+					},
+					// web search call using Query
+					{
+						LineNumber: 11,
+						Type:       "response_item",
+						SubType:    "web_search_call",
+						ResponseItem: &model.ResponseItemPayload{
+							Action: &model.SearchAction{
+								Query: "search-1",
+							},
+						},
+					},
+					// web search call using Queries[0]
+					{
+						LineNumber: 12,
+						Type:       "response_item",
+						SubType:    "web_search_call",
+						ResponseItem: &model.ResponseItemPayload{
+							Action: &model.SearchAction{
+								Queries: []string{"search-2"},
+							},
+						},
+					},
+					// web search end
+					{
+						LineNumber: 13,
+						Type:       "event_msg",
+						SubType:    "web_search_end",
+					},
+					// item_completed: one valid, one nil EventMsg, one nil Item (skipped)
+					{
+						LineNumber: 14,
+						Type:       "event_msg",
+						SubType:    "item_completed",
+						EventMsg: &model.EventMsgPayload{
+							Item: &model.CompletedItem{
+								Text: "Item text",
+							},
+						},
+					},
+					{
+						LineNumber: 15,
+						Type:       "event_msg",
+						SubType:    "item_completed",
+						EventMsg:   nil,
+					},
+					{
+						LineNumber: 16,
+						Type:       "event_msg",
+						SubType:    "item_completed",
+						EventMsg: &model.EventMsgPayload{
+							Item: nil,
+						},
+					},
+					// generic record of event_msg type
+					{
+						LineNumber: 17,
+						Type:       "event_msg",
+						SubType:    "generic_subtype_event",
+					},
+					// external event record of event_msg type
+					{
+						LineNumber: 18,
+						Type:       "event_msg",
+						SubType:    "generic_subtype_ext",
+						EventMsg: &model.EventMsgPayload{
+							CallID: "call-ext-99",
+						},
+					},
+					// generic record of response_item type
+					{
+						LineNumber: 19,
+						Type:       "response_item",
+						SubType:    "generic_subtype_resp",
+					},
+					// external event record of response_item type
+					{
+						LineNumber: 20,
+						Type:       "response_item",
+						SubType:    "generic_subtype_resp_ext",
+						ResponseItem: &model.ResponseItemPayload{
+							CallID: "call-ext-98",
+						},
+					},
+					// reasoning pairing: more reasoning than agent_reasoning
+					{
+						LineNumber: 21,
+						Type:       "event_msg",
+						SubType:    "agent_reasoning",
+						EventMsg: &model.EventMsgPayload{
+							Text: "Agent thoughts",
+						},
+					},
+					{
+						LineNumber: 22,
+						Type:       "response_item",
+						SubType:    "reasoning",
+						ResponseItem: &model.ResponseItemPayload{
+							Summary: []model.MessageContent{
+								{Type: "text", Text: "Reasoning summary 1"},
+							},
+						},
+					},
+					{
+						LineNumber: 23,
+						Type:       "response_item",
+						SubType:    "reasoning",
+						ResponseItem: &model.ResponseItemPayload{
+							Summary: []model.MessageContent{
+								{Type: "text", Text: "Reasoning summary 2"},
+							},
+						},
+					},
+					// Batch call with middleMessage only (no output)
+					{
+						LineNumber: 24,
+						Type:       "response_item",
+						SubType:    "function_call",
+						ResponseItem: &model.ResponseItemPayload{
+							CallID:    "call-middle-only",
+							Name:      "middle_only_tool",
+							Arguments: "{}",
+						},
+					},
+					{
+						LineNumber: 25,
+						Type:       "response_item",
+						SubType:    "message",
+						ResponseItem: &model.ResponseItemPayload{
+							Role: "assistant",
+							Content: []model.MessageContent{
+								{Type: "text", Text: "Middle assistant message"},
+							},
+						},
+					},
+					// Batch call with no middleMessage
+					{
+						LineNumber: 26,
+						Type:       "response_item",
+						SubType:    "function_call",
+						ResponseItem: &model.ResponseItemPayload{
+							CallID:    "call-no-middle",
+							Name:      "no_middle_tool",
+							Arguments: "{}",
+						},
+					},
+					{
+						LineNumber: 27,
+						Type:       "response_item",
+						SubType:    "function_call_output",
+						ResponseItem: &model.ResponseItemPayload{
+							CallID: "call-no-middle",
+							Output: "output-no-middle",
+						},
+					},
+					// Custom tool call batch
+					{
+						LineNumber: 28,
+						Type:       "response_item",
+						SubType:    "custom_tool_call",
+						ResponseItem: &model.ResponseItemPayload{
+							CallID: "custom-1",
+							Name:   "custom_tool",
+						},
+					},
+					{
+						LineNumber: 29,
+						Type:       "response_item",
+						SubType:    "custom_tool_call_output",
+						ResponseItem: &model.ResponseItemPayload{
+							CallID: "custom-1",
+							Output: "custom-output",
+						},
+					},
+					// Consecutive token counts (bound to the preceding record, skipping token_count record itself)
+					{
+						LineNumber: 30,
+						Type:       "event_msg",
+						SubType:    "token_count",
+						EventMsg: &model.EventMsgPayload{
+							Info: &model.TokenInfo{
+								TotalTokenUsage: &model.TokenDetail{TotalTokens: 5000},
+								LastTokenUsage:  &model.TokenDetail{TotalTokens: 200, InputTokens: 150, OutputTokens: 50},
+							},
+						},
+					},
+					{
+						LineNumber: 31,
+						Type:       "event_msg",
+						SubType:    "token_count",
+						EventMsg: &model.EventMsgPayload{
+							Info: &model.TokenInfo{
+								TotalTokenUsage: &model.TokenDetail{TotalTokens: 5200},
+								LastTokenUsage:  &model.TokenDetail{TotalTokens: 200, InputTokens: 150, OutputTokens: 50},
+							},
+						},
+					},
+					// function call with nil ResponseItem
+					{
+						LineNumber:   36,
+						Type:         "response_item",
+						SubType:      "function_call",
+						ResponseItem: nil,
+					},
+					// task complete terminates turn-1
+					{
+						LineNumber: 32,
+						Type:       "event_msg",
+						SubType:    "task_complete",
+						EventMsg: &model.EventMsgPayload{
+							TurnID: "turn-1",
+							Reason: "Done with turn 1",
+						},
+					},
+					// orphan complete/abort messages (processed where turn index is -1)
+					{
+						LineNumber: 33,
+						Type:       "event_msg",
+						SubType:    "task_complete",
+						EventMsg: &model.EventMsgPayload{
+							Reason: "Orphan complete reason",
+						},
+					},
+					{
+						LineNumber: 34,
+						Type:       "event_msg",
+						SubType:    "turn_aborted",
+						EventMsg: &model.EventMsgPayload{
+							Reason: "Orphan abort reason",
+						},
+					},
+					// leftover record (triggers pseudo-turn index -1)
+					{
+						LineNumber: 35,
+						Type:       "event_msg",
+						SubType:    "generic_leftover",
+					},
+				}
+
+				parser := &mockSessionParser{
+					records: records,
+				}
+				cacheRepo := &mockCacheRepositoryForDetail{}
+				return "session-id", sessionRepo, cacheRepo, parser, nil
+			},
+			wantErr: false,
+			verify: func(t *testing.T, res *dto.SessionDetailResponse, err error) {
+				if res == nil || res.ID != "session-id" {
+					t.Fatalf("expected successful response, got %+v", res)
+				}
+
+				// Verify nodes were created
+				var orphanCompleteNode, orphanAbortNode, leftoverNode, customToolNode, middleOnlyNode, mergedAgentNode *dto.FlowNode
+				for i := range res.Nodes {
+					n := &res.Nodes[i]
+					switch n.Type {
+					case "taskEvent":
+						switch n.Data.Label {
+						case "Orphan Complete":
+							orphanCompleteNode = n
+						case "Orphan Aborted":
+							orphanAbortNode = n
+						}
+					case "generic":
+						if strings.Contains(n.Data.Summary, "generic_leftover") {
+							leftoverNode = n
+						}
+					case "action":
+						if n.Data.Label == "custom_tool" {
+							customToolNode = n
+						}
+					case "agentMessage":
+						if strings.Contains(n.Data.Summary, "Middle assistant message") {
+							middleOnlyNode = n
+						} else if strings.Contains(n.Data.Summary, "Non-batch message 1") {
+							mergedAgentNode = n
+						}
+					}
+				}
+
+				if orphanCompleteNode == nil {
+					t.Error("expected orphan complete node, got nil")
+				}
+				if orphanAbortNode == nil {
+					t.Error("expected orphan abort node, got nil")
+				}
+				if leftoverNode == nil {
+					t.Error("expected leftover node, got nil")
+				}
+				if customToolNode == nil {
+					t.Error("expected custom tool node, got nil")
+				}
+				if middleOnlyNode == nil {
+					t.Error("expected middle only node, got nil")
+				}
+				if mergedAgentNode == nil {
+					t.Error("expected merged non-batch agent message node, got nil")
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tmpDir := t.TempDir()
+			sessionID, sessionRepo, cacheRepo, parser, cleanup := tt.setup(t, tmpDir)
+			if cleanup != nil {
+				defer cleanup()
+			}
+
+			p := parser
+			if p == nil {
+				p = repository.NewJSONLParser()
+			}
+
+			uc := usecase.NewGetSessionDetailUseCase(sessionRepo, cacheRepo, p)
+			res, err := uc.Execute(context.Background(), sessionID)
+
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("expected error: %v, got %v", tt.wantErr, err)
+			}
+
+			if tt.verify != nil {
+				tt.verify(t, res, err)
+			}
+		})
+	}
+}

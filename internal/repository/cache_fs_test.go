@@ -220,3 +220,88 @@ func TestCacheFSRepository_GetSessionSummary(t *testing.T) {
 		})
 	}
 }
+
+func TestCacheFSRepository_SaveAndGetSessionDetail(t *testing.T) {
+	tmpDir := t.TempDir()
+	repo := NewCacheFSRepository(tmpDir)
+
+	sessionID := "test-detail-session"
+	detail := &dto.SessionDetailResponse{
+		ID:       sessionID,
+		ParsedAt: "2026-05-30T07:14:40Z",
+		Nodes: []dto.FlowNode{
+			{
+				ID:   "node-1",
+				Type: "sessionMeta",
+				Data: dto.NodeData{
+					Category: "meta",
+					Label:    "Meta",
+				},
+			},
+		},
+		Edges: []dto.FlowEdge{
+			{
+				ID:     "edge-1",
+				Source: "node-1",
+				Target: "node-2",
+			},
+		},
+	}
+
+	// 1. Save detail
+	if err := repo.SaveSessionDetail(context.Background(), sessionID, detail); err != nil {
+		t.Fatalf("failed to save session detail: %v", err)
+	}
+
+	// 2. Get detail
+	got, err := repo.GetSessionDetail(context.Background(), sessionID)
+	if err != nil {
+		t.Fatalf("failed to get session detail: %v", err)
+	}
+
+	if got.ID != detail.ID || len(got.Nodes) != len(detail.Nodes) || got.Nodes[0].ID != detail.Nodes[0].ID {
+		t.Errorf("got detail mismatch. Expected %+v, got %+v", detail, got)
+	}
+
+	// 3. Get non-existent detail
+	_, err = repo.GetSessionDetail(context.Background(), "non-existent")
+	if err == nil {
+		t.Error("expected error for non-existent session detail, got nil")
+	}
+
+	// 4. Decode JSON error
+	invalidJSONPath := filepath.Join(tmpDir, "invalid-json-detail.json")
+	if err := os.WriteFile(invalidJSONPath, []byte("{invalid}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err = repo.GetSessionDetail(context.Background(), "invalid-json-detail")
+	if err == nil {
+		t.Error("expected error for invalid json session detail, got nil")
+	}
+
+	// 5. Marshal error (channel cannot be marshaled to JSON)
+	invalidDetail := &dto.SessionDetailResponse{
+		ID: "invalid-marshal-session",
+		Nodes: []dto.FlowNode{
+			{
+				ID: "node-1",
+				Data: dto.NodeData{
+					Meta: map[string]interface{}{
+						"unmarshalable": make(chan int),
+					},
+				},
+			},
+		},
+	}
+	err = repo.SaveSessionDetail(context.Background(), "invalid-marshal-session", invalidDetail)
+	if err == nil {
+		t.Error("expected marshal error, got nil")
+	}
+
+	// 6. WriteFile error
+	badRepo := NewCacheFSRepository("/non-existent-dir-12345/sub")
+	err = badRepo.SaveSessionDetail(context.Background(), "any-session", detail)
+	if err == nil {
+		t.Error("expected write file error, got nil")
+	}
+}

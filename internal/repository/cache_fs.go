@@ -93,3 +93,37 @@ func getStringPtr(m map[string]interface{}, key string) *string {
 	}
 	return &str
 }
+
+// GetSessionDetail はキャッシュファイルを読み込み、SessionDetailResponse を返します。
+func (r *CacheFSRepository) GetSessionDetail(ctx context.Context, sessionID string) (*dto.SessionDetailResponse, error) {
+	cachePath := filepath.Join(r.cacheDir, sessionID+".json")
+
+	data, err := os.ReadFile(cachePath)
+	if err != nil {
+		return nil, err
+	}
+
+	var detail dto.SessionDetailResponse
+	if err := json.Unmarshal(data, &detail); err != nil {
+		return nil, fmt.Errorf("failed to decode cache JSON: %w", err)
+	}
+
+	return &detail, nil
+}
+
+// SaveSessionDetail は SessionDetailResponse をキャッシュファイルに書き込みます。
+func (r *CacheFSRepository) SaveSessionDetail(ctx context.Context, sessionID string, detail *dto.SessionDetailResponse) error {
+	cachePath := filepath.Join(r.cacheDir, sessionID+".json")
+
+	data, err := json.Marshal(detail)
+	if err != nil {
+		return fmt.Errorf("failed to marshal cache JSON: %w", err)
+	}
+
+	if err := os.WriteFile(cachePath, data, 0o644); err != nil {
+		return fmt.Errorf("failed to write cache file: %w", err)
+	}
+
+	logger.Info("cache write successful", "session_id", sessionID)
+	return nil
+}

@@ -53,6 +53,14 @@ func (m *mockSessionRepository) ListSessions(ctx context.Context, year, month in
 	return results, nil
 }
 
+func (m *mockSessionRepository) GetSessionFilePath(ctx context.Context, sessionID string) (string, error) {
+	return "", errors.New("not implemented")
+}
+
+func (m *mockSessionRepository) GetSessionModTime(ctx context.Context, sessionID string) (time.Time, error) {
+	return time.Time{}, errors.New("not implemented")
+}
+
 type mockCacheRepository struct {
 	cache map[string]*dto.SessionSummary
 	err   error
@@ -66,6 +74,14 @@ func (m *mockCacheRepository) GetSessionSummary(ctx context.Context, sessionID s
 		return s, nil
 	}
 	return nil, errors.New("not found")
+}
+
+func (m *mockCacheRepository) GetSessionDetail(ctx context.Context, sessionID string) (*dto.SessionDetailResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (m *mockCacheRepository) SaveSessionDetail(ctx context.Context, sessionID string, detail *dto.SessionDetailResponse) error {
+	return nil
 }
 
 func TestNewListSessionsUseCase(t *testing.T) {

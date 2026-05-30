@@ -6,15 +6,14 @@ import (
 	"codex-session-display/internal/utils/logger"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"strings"
 )
 
 var (
-	ErrFileTooLarge = errors.New("file too large")
-	ErrParseFailed  = errors.New("parse failed")
+	ErrFileTooLarge = model.ErrFileTooLarge
+	ErrParseFailed  = model.ErrParseFailed
 )
 
 const maxFileSize = 50 * 1024 * 1024
