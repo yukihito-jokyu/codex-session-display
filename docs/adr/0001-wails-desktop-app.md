@@ -43,7 +43,7 @@ Codex CLIのセッションログ（JSONL）は `~/.codex/sessions` にローカ
 
 ## 結果
 
-- Wails v3.x + Go 1.23+ + React 19.x の技術スタックを採用
+- Wails v2.x + Go 1.23+ + React 19.x の技術スタックを採用
 - 単一のネイティブ実行可能ファイル（`.app` / `.exe`）として配布可能
 - ランタイム不要で配布先でそのまま実行可能
 
