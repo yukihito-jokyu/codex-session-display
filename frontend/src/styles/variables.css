@@ -12,6 +12,45 @@
 	--grid-dot: #1c2128;
 	--panel-shadow: rgba(0, 0, 0, 0.5);
 
+	/* Card / Row */
+	--bg-card: rgba(22, 27, 34, 0.4);
+	--bg-card-hover: rgba(33, 38, 45, 0.6);
+	--card-hover-shadow: rgba(0, 0, 0, 0.15);
+
+	/* Tree / Accordion */
+	--tree-header-hover: rgba(255, 255, 255, 0.05);
+	--tree-line-color: rgba(255, 255, 255, 0.1);
+	--badge-count-bg: rgba(255, 255, 255, 0.08);
+	--size-badge-bg: rgba(255, 255, 255, 0.05);
+	--size-badge-border: rgba(255, 255, 255, 0.05);
+
+	/* Unparsed badge */
+	--badge-unparsed-bg: rgba(227, 179, 65, 0.1);
+	--badge-unparsed-border: rgba(227, 179, 65, 0.2);
+	--badge-unparsed-text: #e3b341;
+
+	/* Placeholder badge (detail page) */
+	--badge-success-text: #3fb950;
+	--badge-success-bg: rgba(63, 185, 80, 0.15);
+	--badge-success-border: rgba(63, 185, 80, 0.3);
+
+	/* Spinner */
+	--spinner-track: rgba(88, 166, 255, 0.1);
+
+	/* Accent badge (toolbar) */
+	--accent-badge-bg: rgba(88, 166, 255, 0.1);
+	--accent-badge-border: rgba(88, 166, 255, 0.2);
+	--accent-value-bg: rgba(88, 166, 255, 0.2);
+
+	/* Search input */
+	--search-bg: rgba(22, 27, 34, 0.6);
+	--search-bg-focus: rgba(22, 27, 34, 0.8);
+	--search-focus-ring: rgba(88, 166, 255, 0.15);
+
+	/* Detail card */
+	--detail-card-bg: rgba(22, 27, 34, 0.4);
+	--mono-bg: rgba(0, 0, 0, 0.3);
+
 	/* Titlebar buttons */
 	--titlebar-bg: rgba(22, 27, 34, 0.8);
 	--btn-close-hover: #e81123;
@@ -75,6 +114,45 @@ body.light-theme {
 	--color-accent: #0969da;
 	--grid-dot: #d0d7de;
 	--panel-shadow: rgba(0, 0, 0, 0.08);
+
+	/* Card / Row */
+	--bg-card: rgba(255, 255, 255, 0.6);
+	--bg-card-hover: rgba(243, 244, 246, 0.8);
+	--card-hover-shadow: rgba(0, 0, 0, 0.08);
+
+	/* Tree / Accordion */
+	--tree-header-hover: rgba(0, 0, 0, 0.04);
+	--tree-line-color: rgba(0, 0, 0, 0.1);
+	--badge-count-bg: rgba(0, 0, 0, 0.06);
+	--size-badge-bg: rgba(0, 0, 0, 0.04);
+	--size-badge-border: rgba(0, 0, 0, 0.06);
+
+	/* Unparsed badge */
+	--badge-unparsed-bg: rgba(183, 129, 3, 0.1);
+	--badge-unparsed-border: rgba(183, 129, 3, 0.2);
+	--badge-unparsed-text: #b78103;
+
+	/* Placeholder badge (detail page) */
+	--badge-success-text: #2e7d32;
+	--badge-success-bg: rgba(46, 125, 50, 0.1);
+	--badge-success-border: rgba(46, 125, 50, 0.2);
+
+	/* Spinner */
+	--spinner-track: rgba(9, 105, 218, 0.1);
+
+	/* Accent badge (toolbar) */
+	--accent-badge-bg: rgba(9, 105, 218, 0.08);
+	--accent-badge-border: rgba(9, 105, 218, 0.2);
+	--accent-value-bg: rgba(9, 105, 218, 0.12);
+
+	/* Search input */
+	--search-bg: rgba(246, 248, 250, 0.8);
+	--search-bg-focus: rgba(255, 255, 255, 0.95);
+	--search-focus-ring: rgba(9, 105, 218, 0.15);
+
+	/* Detail card */
+	--detail-card-bg: rgba(255, 255, 255, 0.6);
+	--mono-bg: rgba(0, 0, 0, 0.05);
 
 	/* Titlebar buttons */
 	--titlebar-bg: rgba(255, 255, 255, 0.8);
