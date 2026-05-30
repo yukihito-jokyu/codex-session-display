@@ -1,5 +1,5 @@
 import type React from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import styles from "./DateTree.module.css";
 import { SessionRow, type SessionSummary } from "./SessionRow";
 
@@ -32,31 +32,34 @@ export const DateTree: React.FC<DateTreeProps> = ({ sessions }) => {
 	const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
 
 	// セッションをグループ化
-	const grouped: GroupedData = {};
-	sessions.forEach((s) => {
-		if (!s.timestamp) return;
-		const date = new Date(s.timestamp);
-		if (Number.isNaN(date.getTime())) return;
+	const grouped = useMemo(() => {
+		const result: GroupedData = {};
+		sessions.forEach((s) => {
+			if (!s.timestamp) return;
+			const date = new Date(s.timestamp);
+			if (Number.isNaN(date.getTime())) return;
 
-		const y = date.getFullYear().toString();
-		const m = (date.getMonth() + 1).toString().padStart(2, "0");
-		const d = date.getDate().toString().padStart(2, "0");
+			const y = date.getFullYear().toString();
+			const m = (date.getMonth() + 1).toString().padStart(2, "0");
+			const d = date.getDate().toString().padStart(2, "0");
 
-		if (!grouped[y]) {
-			grouped[y] = { count: 0, months: {} };
-		}
-		if (!grouped[y].months[m]) {
-			grouped[y].months[m] = { count: 0, days: {} };
-		}
-		if (!grouped[y].months[m].days[d]) {
-			grouped[y].months[m].days[d] = { count: 0, sessions: [] };
-		}
+			if (!result[y]) {
+				result[y] = { count: 0, months: {} };
+			}
+			if (!result[y].months[m]) {
+				result[y].months[m] = { count: 0, days: {} };
+			}
+			if (!result[y].months[m].days[d]) {
+				result[y].months[m].days[d] = { count: 0, sessions: [] };
+			}
 
-		grouped[y].count++;
-		grouped[y].months[m].count++;
-		grouped[y].months[m].days[d].count++;
-		grouped[y].months[m].days[d].sessions.push(s);
-	});
+			result[y].count++;
+			result[y].months[m].count++;
+			result[y].months[m].days[d].count++;
+			result[y].months[m].days[d].sessions.push(s);
+		});
+		return result;
+	}, [sessions]);
 
 	// 初回ロード時に最新の年、月、日をデフォルトで展開する
 	useEffect(() => {
@@ -83,7 +86,7 @@ export const DateTree: React.FC<DateTreeProps> = ({ sessions }) => {
 		initialExpanded.add(`${latestYear}/${latestMonth}`);
 		initialExpanded.add(`${latestYear}/${latestMonth}/${latestDay}`);
 		setExpandedPaths(initialExpanded);
-	}, [sessions]);
+	}, [sessions, grouped]);
 
 	const togglePath = (path: string) => {
 		const nextExpanded = new Set(expandedPaths);
@@ -122,7 +125,14 @@ export const DateTree: React.FC<DateTreeProps> = ({ sessions }) => {
 						<div
 							className={styles.header}
 							onClick={() => togglePath(year)}
+							onKeyDown={(e) => {
+								if (e.key === "Enter" || e.key === " ") {
+									e.preventDefault();
+									togglePath(year);
+								}
+							}}
 							role="button"
+							tabIndex={0}
 						>
 							<span
 								className={`${styles.arrow} ${yearExpanded ? styles.open : ""}`}
@@ -148,7 +158,14 @@ export const DateTree: React.FC<DateTreeProps> = ({ sessions }) => {
 											<div
 												className={styles.header}
 												onClick={() => togglePath(monthPath)}
+												onKeyDown={(e) => {
+													if (e.key === "Enter" || e.key === " ") {
+														e.preventDefault();
+														togglePath(monthPath);
+													}
+												}}
 												role="button"
+												tabIndex={0}
 											>
 												<span
 													className={`${styles.arrow} ${monthExpanded ? styles.open : ""}`}
@@ -184,7 +201,14 @@ export const DateTree: React.FC<DateTreeProps> = ({ sessions }) => {
 																<div
 																	className={styles.header}
 																	onClick={() => togglePath(dayPath)}
+																	onKeyDown={(e) => {
+																		if (e.key === "Enter" || e.key === " ") {
+																			e.preventDefault();
+																			togglePath(dayPath);
+																		}
+																	}}
 																	role="button"
+																	tabIndex={0}
 																>
 																	<span
 																		className={`${styles.arrow} ${dayExpanded ? styles.open : ""}`}
