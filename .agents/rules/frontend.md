@@ -55,6 +55,13 @@
    - 文字列のクォート: JavaScript / TypeScript では **ダブルクォート (")** を使用します。
    - インポート順序: Biome の `organizeImports` が有効なため、自動的にソートされます。
 
+3. **厳格な静的解析ルール (Strict Biome Linter Rules)**
+   - **VCS 連携**: 有効化。プロジェクトルートの `.gitignore` を自動検知して除外対象を連動させます。
+   - **非 null アサーション禁止 (`noNonNullAssertion`)**: エラーとして有効。TypeScript の `!` アサーションはランタイムクラッシュの要因となるため原則禁止し、安全な存在チェック（`if`）やオプショナルチェイニング（`?.`）を使用します。
+   - **フック依存配列の厳格化 (`useExhaustiveDependencies`)**: エラーとして有効。フック内での古いクロージャ問題を防ぐため、依存配列は漏れなく指定する必要があります。関数の無駄な再生成を防ぐため `useCallback` / `useMemo` を適切に使用してください。
+   - **アクセシビリティ (`a11y`)**: `useSemanticElements`（セマンティック要素の強制）のみ `off` とし、その他の推奨アクセシビリティルール（ボタンの `type` 属性必須化、SVGの代替テキスト `<title>` 追加、クリックイベントを持つ `div` 等への `tabIndex` および `onKeyDown` によるキーボード操作対応）はエラーとして有効です。
+   - **CSS `!important` 禁止 (`noImportantStyles`)**: エラーとして有効。CSS カスケードの崩壊を防ぐため `!important` は使用せず、CSS セレクタの組み合わせ等により詳細度を制御します。
+
 ---
 
 ## 4. テスト方針 (Playwright E2E)
