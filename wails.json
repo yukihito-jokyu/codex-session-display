@@ -1,0 +1,13 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "codex-session-display",
+  "outputfilename": "tmp_init",
+  "frontend:install": "npm install",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "jokyu yukihito",
+    "email": "ok220020@oks.iput.ac.jp"
+  }
+}
