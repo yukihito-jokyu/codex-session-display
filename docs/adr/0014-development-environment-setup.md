@@ -27,6 +27,7 @@ tasks:
   setup:
     desc: Setup development dependencies for backend and frontend
     cmds:
+      - go install github.com/wailsapp/wails/v2/cmd/wails@latest
       - go mod download
       - cd frontend && npm install
 
