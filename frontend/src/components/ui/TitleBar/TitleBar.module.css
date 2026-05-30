@@ -51,11 +51,11 @@
 	color: var(--text-primary);
 }
 
-.closeBtn:hover {
-	background-color: var(--btn-close-hover) !important;
-	color: #ffffff !important;
+.controlBtn.closeBtn:hover {
+	background-color: var(--btn-close-hover);
+	color: #ffffff;
 }
 
-.closeBtn:active {
-	background-color: var(--btn-close-active) !important;
+.controlBtn.closeBtn:active {
+	background-color: var(--btn-close-active);
 }
