@@ -1,1 +1,19 @@
+# Wails build artifacts
+build/
+frontend/dist/
+codex-session-display
+
+# Node dependencies
+node_modules/
+
+# Go build artifacts & tooling
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+
+# Local tasks metadata
 docs/tasks

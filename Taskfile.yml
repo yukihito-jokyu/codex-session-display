@@ -1,0 +1,34 @@
+version: '3'
+
+tasks:
+  setup:
+    desc: Setup development dependencies for backend and frontend
+    cmds:
+      - go install github.com/wailsapp/wails/v2/cmd/wails@latest
+      - go mod download
+      - cd frontend && npm install
+
+  dev:
+    desc: Start development server with hot-reload
+    cmds:
+      - wails dev
+
+  build:
+    desc: Build production binary
+    cmds:
+      - wails build
+
+  test:
+    desc: Run tests for backend
+    cmds:
+      - go test ./...
+
+  lint:
+    desc: Run linters for backend
+    cmds:
+      - golangci-lint run
+
+  clean:
+    desc: Clean build artifacts
+    cmds:
+      - rm -rf build/
