@@ -1758,3 +1758,162 @@ IPCエラーは `AppError` 構造体（§4.1参照）で返す。
 | 最小高さ | 600                     |
 | 中央配置 | 有効                    |
 | リサイズ | 可                      |
+
+---
+
+## 9. テスト設計
+
+### 9.1 テスト構成と使用ツール
+
+本プロジェクトでは、コード品質の保証と開発スピードを両立させるため、以下のテスト構成を採用する。
+
+| テスト種別 | 対象レイヤー | 実行ツール | 主な目的 |
+| :--- | :--- | :--- | :--- |
+| **Goユニットテスト** | `internal/` (domain, usecase, repository) | `go test` | ビジネスロジックの完全検証（カバレッジ80%以上目標） |
+| **Reactユニットテスト** | `frontend/` の Hooks, Utils | `Vitest` + `jsdom` | 画面非依存の共通ロジックの単体検証 |
+| **E2Eテスト** | フロントエンド全体 ＋ Wails APIモック | `Playwright` | ユーザーの主要操作シナリオおよびUIコンポーネントの統合検証 |
+
+### 9.2 Goユニットテスト設計
+
+#### 9.2.1 ディレクトリ・ファイル構成ルール
+Goバックエンドのユニットテストは、各実装ファイルと同じディレクトリに `_test.go` サフィックスを付与して配置する。
+
+```
+internal/
+├── repository/
+│   ├── session_fs.go
+│   ├── session_fs_test.go          (JSONLパース、tolerantパースの検証)
+│   └── testdata/                   (テスト用静的JSONLの配置場所)
+│       ├── valid-session.jsonl     (正常系)
+│       ├── invalid-format.jsonl    (パース失敗エラー検証用)
+│       └── call-id-fallback.jsonl  (call_id欠落フォールバック検証用)
+└── usecase/
+    ├── get_session_detail.go
+    └── get_session_detail_test.go   (レイアウト計算、ノード・エッジ変換の検証)
+```
+
+#### 9.2.2 依存モジュールのモック化
+`usecase` レイヤーのテストにおいて、ファイルシステムに依存する `repository` のインターフェース（`SessionRepository`, `CacheRepository`）は、Goのインターフェースを用いてモック化する。テストコード内に手動で実装したモック構造体、または自動生成ツール（`mockgen` 等）で生成したモックを使用し、純粋なユースケースのロジック（レイアウト配置、キャッシュ制御等）のみを検証する。
+
+#### 9.2.3 テストデータの読み込み
+`testdata` 配下の静的JSONLファイルは、`go test` 実行時に `t.Run` 内で相対パス（`testdata/xxx.jsonl`）で読み込む。一時的な出力検証（キャッシュの書き込み等）を行う場合は、Go標準の `t.TempDir()` を用いてテスト実行ごとにクリーンアップされる一時ディレクトリを利用する。
+
+#### 9.2.4 カバレッジ測定
+CI環境またはローカル開発環境で以下のコマンドを実行し、カバレッジが **80%以上** を満たしていることを確認する。
+
+```bash
+go test -coverprofile=coverage.out ./internal/...
+go tool cover -html=coverage.out -o coverage.html
+```
+
+### 9.3 Reactユニットテスト設計
+
+#### 9.3.1 テスト対象
+テスト対象は、DOM描画や外部ライブラリ（React Flow等）のコンポーネントツリーに依存しない純粋なロジックのみとする。
+- `frontend/src/utils/` 配下のフォーマット関数 (日付、ファイルサイズ、トークン数等)
+- `frontend/src/hooks/` 配下の共通カスタムHooks (Debounce、展開パスセット操作など)
+
+#### 9.3.2 テスト実行環境
+- 実行ツール: `Vitest`
+- 実行コマンド: `npm run test:unit` または `npx vitest`
+
+### 9.4 Playwright E2Eテスト設計
+
+#### 9.4.1 Wailsバインディングのモックの仕組み
+Wailsアプリは実行時に `window.go.main.App` 等のグローバルオブジェクトを介してGoのAPIを呼び出す。E2Eテストでは、Playwrightの `page.addInitScript` を使用して、ページ読み込み前にグローバルスコープにモックオブジェクトを注入する。
+
+##### モック注入コード例 (Playwright テスト内)
+```javascript
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => {
+    window.go = {
+      main: {
+        App: {
+          ListSessions: async () => {
+            // frontend/tests/mocks/sessions.json の内容を返す
+            return [
+              {
+                id: "019e5514-ed44-78b2-bf88-233d6e4273bf",
+                file_path: "/Users/user/.codex/sessions/2026/05/23/rollout-2026-05-23T22-44-55-019e5514-ed44-78b2-bf88-233d6e4273bf.jsonl",
+                cwd: "/Users/user/project",
+                cli_version: "0.131.0",
+                originator: "codex-tui",
+                model_provider: "openai",
+                branch: "main",
+                timestamp: "2026-05-23T13:44:55Z",
+                file_size: 1024,
+                parsed: true
+              }
+            ];
+          },
+          GetSessionDetail: async (id) => {
+            // id に対応した frontend/tests/mocks/session-detail-xyz.json の内容を返す
+            if (id === "019e5514-ed44-78b2-bf88-233d6e4273bf") {
+              return {
+                id: "019e5514-ed44-78b2-bf88-233d6e4273bf",
+                nodes: [ /* テスト用ノード配列 */ ],
+                edges: [ /* テスト用エッジ配列 */ ],
+                statistics: { /* 統計情報 */ },
+                token_counts: [ /* トークン推移 */ ]
+              };
+            }
+            throw new Error("Session not found");
+          }
+        }
+      }
+    };
+  });
+});
+```
+
+#### 9.4.2 テストケース定義
+以下のシナリオを Playwright テストコード（`frontend/tests/e2e/`）として実装する。
+
+##### TC-101: セッション一覧の表示とツリー操作
+- **前提**: `ListSessions` モックが複数日程（例: 2026/05/23 と 2026/05/24）のセッションを返す。
+- **操作**: アプリ（Vite開発サーバー）のトップ画面を開く。
+- **検証**:
+  - 最新の日付ツリー（例: 2026年 -> 5月 -> 24日）がデフォルトで展開されており、セッション情報が表示されていること。
+  - 過去の日付ツリー（例: 23日）が折りたたまれていること。
+  - 過去の日付ヘッダーをクリックすると、ツリーが展開されて配下のセッションが表示されること。
+
+##### TC-102: セッション検索とDebounce
+- **前提**: セッション一覧画面が表示されている。
+- **操作**: 検索窓に "project" や "main" などのキーワードを入力する。
+- **検証**:
+  - キーワード入力後、即座にフィルタリングが走らず、200ms のディレイ（Debounce）の後に一覧がフィルタリングされること。
+  - 一致しないセッションが非表示になり、合致するものだけが表示されていること。
+
+##### TC-103: セッション詳細画面への遷移とグラフ表示
+- **前提**: セッション一覧画面が表示されている。
+- **操作**: 任意のセッション行をクリックする。
+- **検証**:
+  - `/sessions/:id` に画面が遷移すること。
+  - React Flow キャンバスにノード（SessionMeta, TurnEvent, UserMessage, Action等）が正しく配置され描画されていること。
+  - 右パネル（RightPanel）に統計情報カード（所要時間、総トークン、ツール呼び出し数等）およびターン別トークン推移チャートが表示されていること。
+
+##### TC-104: ノード詳細表示（BottomPanel）の展開
+- **前提**: セッション詳細画面が表示されている。
+- **操作**: React Flow上の「ActionNode」をクリックする。
+- **検証**:
+  - 下部パネル（BottomPanel）が下からスライドイン（展開）して表示されること。
+  - パネル内に、クリックしたアクションの `arguments` や `fullText`（実行コマンドなどの詳細）が正しくキー・バリュー形式またはテキスト形式で表示されること。
+  - 別の箇所をクリックすると、BottomPanel が非表示になること。
+
+##### TC-105: トークンバッジと分割パネルリサイズ
+- **前提**: セッション詳細画面が表示されている。
+- **操作**: ノードに紐付いている「TokenBadge」（トークン数表示部分）をクリックする。
+- **検証**:
+  - BottomPanel が左右分割表示（左: ノード詳細, 右: トークン詳細）に切り替わること。
+  - 右側エリアに、紐付く `token_count` の内訳（Input, Output, Cached, Reasoning）が表示されること。
+  - 境界部分のドラッグにより、左右パネルの横幅比率が変更できること。
+
+### 9.5 テストデータの整合性管理ルール
+
+静的テストデータ変更時の整合性を維持するため、以下の開発手順を遵守する。
+
+1. **JSONLの追加・更新**: `internal/repository/testdata/` に新しいパターンのJSONLを追加または更新する。
+2. **Goテストの実行と出力の保存**: Goのテストコード、または専用のユーティリティスクリプトを走らせ、新JSONLのパース結果である `SessionDetailResponse` をJSON文字列として書き出す。
+3. **E2Eモックの同期**: 書き出したJSON文字列を `frontend/tests/mocks/` 配下にコピーまたは上書き保存し、フロントエンドが使用するモックデータとする。
+4. **コミット**: 上記のJSONLファイル、モックJSONファイルを同時にGitコミットする。これにより、テストデータに不整合が発生するのを防ぐ。
+
