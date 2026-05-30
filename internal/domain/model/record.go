@@ -1,11 +1,13 @@
 package model
 
-import "encoding/json"
+import (
+	"encoding/json"
+)
 
 // RecordEnvelope は JSONL レコードのエンベロープ（外枠）を表します。
 type RecordEnvelope struct {
 	Type      string          `json:"type"`
-	Timestamp int64           `json:"timestamp"`
+	Timestamp interface{}     `json:"timestamp"`
 	Payload   json.RawMessage `json:"payload"`
 }
 
