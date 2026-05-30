@@ -1,17 +1,16 @@
 package main
 
 import (
+	"codex-session-display/internal/domain/dto"
+	"codex-session-display/internal/repository"
+	"codex-session-display/internal/usecase"
+	"codex-session-display/internal/utils/logger"
 	"context"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
-
-	"codex-session-display/internal/domain/dto"
-	"codex-session-display/internal/repository"
-	"codex-session-display/internal/usecase"
-	"codex-session-display/internal/utils/logger"
 )
 
 // App はアプリケーションの構造体です。
@@ -33,7 +32,7 @@ func NewApp() *App {
 	cacheDir := filepath.Join(home, ".codex-display")
 
 	// キャッシュディレクトリが存在することを確認します。
-	if err := os.MkdirAll(cacheDir, 0755); err != nil {
+	if err := os.MkdirAll(cacheDir, 0o755); err != nil {
 		logger.Error("Failed to create cache directory", "error", err.Error(), "path", cacheDir)
 	}
 
@@ -60,7 +59,7 @@ func (a *App) Greet(name string) string {
 }
 
 // ListSessions は指定された検索クエリと年月でフィルタリングされたセッションの一覧を返します。
-func (a *App) ListSessions(query string, year int, month int) ([]dto.SessionSummary, error) {
+func (a *App) ListSessions(query string, year, month int) ([]dto.SessionSummary, error) {
 	logger.Info("ListSessions start", "query", query, "year", year, "month", month)
 	res, err := a.listSessionsUC.Execute(a.ctx, query, year, month)
 	if err != nil {
@@ -90,7 +89,7 @@ func (a *App) OpenLogDirectory() error {
 	}
 
 	// ログディレクトリの存在確認と作成
-	if err := os.MkdirAll(logDir, 0755); err != nil {
+	if err := os.MkdirAll(logDir, 0o755); err != nil {
 		appErr := &dto.AppError{
 			Code:    "INTERNAL_ERROR",
 			Message: "ログディレクトリの作成に失敗しました",
@@ -121,4 +120,3 @@ func (a *App) OpenLogDirectory() error {
 	logger.Info("OpenLogDirectory succeeded")
 	return nil
 }
-
