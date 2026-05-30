@@ -19,6 +19,7 @@ var (
 	filepathRelFn          = filepath.Rel
 	ErrInvalidFilename     = errors.New("invalid filename format")
 	ErrInvalidTimestamp    = errors.New("invalid timestamp format")
+	ErrSessionNotFound     = errors.New("session file not found")
 )
 
 // SessionFSRepository はローカルファイルシステムを使用して usecase.SessionRepository を実装します。
@@ -183,6 +184,51 @@ func (r *SessionFSRepository) ListSessions(ctx context.Context, year, month int,
 	}
 
 	return sessions, nil
+}
+
+var errSessionFound = errors.New("session found")
+
+// GetSessionFilePath はセッションIDに合致するセッションファイルの絶対パスを返します。
+func (r *SessionFSRepository) GetSessionFilePath(ctx context.Context, sessionID string) (string, error) {
+	var targetPath string
+	err := filepath.WalkDir(r.rootDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		filename := d.Name()
+		if !strings.HasPrefix(filename, "rollout-") || !strings.HasSuffix(filename, ".jsonl") {
+			return nil
+		}
+		id, _, err := parseSessionFilenameFn(filename)
+		if err == nil && id == sessionID {
+			targetPath = path
+			return errSessionFound
+		}
+		return nil
+	})
+	if errors.Is(err, errSessionFound) {
+		return targetPath, nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("failed to scan for session file path: %w", err)
+	}
+	return "", fmt.Errorf("%w: ID %s", ErrSessionNotFound, sessionID)
+}
+
+// GetSessionModTime はセッションIDに合致するセッションファイルの最終更新日時を返します。
+func (r *SessionFSRepository) GetSessionModTime(ctx context.Context, sessionID string) (time.Time, error) {
+	filePath, err := r.GetSessionFilePath(ctx, sessionID)
+	if err != nil {
+		return time.Time{}, err
+	}
+	info, err := os.Stat(filePath)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("failed to stat session file: %w", err)
+	}
+	return info.ModTime(), nil
 }
 
 var sessionFilenameRegex = regexp.MustCompile(`^rollout-(\d{4}-\d{2}-\d{2}T\d{2}-\d{2}-\d{2})-([a-fA-F0-9-]{36})\.jsonl$`)

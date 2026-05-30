@@ -27,6 +27,14 @@ func (m *mockCacheRepository) GetSessionSummary(ctx context.Context, sessionID s
 	return nil, errors.New("not found")
 }
 
+func (m *mockCacheRepository) GetSessionDetail(ctx context.Context, sessionID string) (*dto.SessionDetailResponse, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (m *mockCacheRepository) SaveSessionDetail(ctx context.Context, sessionID string, detail *dto.SessionDetailResponse) error {
+	return nil
+}
+
 func TestNewSessionFSRepository(t *testing.T) {
 	cacheRepo := &mockCacheRepository{}
 	tests := []struct {
@@ -497,4 +505,177 @@ func TestSessionFSRepository_ParseSessionFilename(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestSessionFSRepository_GetSessionFilePath(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create test directories and files
+	sessionID := "019e5514-ed44-78b2-bf88-233d6e4273bf"
+	filename := "rollout-2026-05-23T22-44-55-" + sessionID + ".jsonl"
+	subDir := filepath.Join(tmpDir, "2026", "05", "23")
+	if err := os.MkdirAll(subDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	filePath := filepath.Join(subDir, filename)
+	if err := os.WriteFile(filePath, []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	repo := NewSessionFSRepository(tmpDir, &mockCacheRepository{})
+
+	tests := []struct {
+		name      string
+		sessionID string
+		wantPath  string
+		wantErr   bool
+	}{
+		{
+			name:      "success",
+			sessionID: sessionID,
+			wantPath:  filePath,
+			wantErr:   false,
+		},
+		{
+			name:      "not found",
+			sessionID: "non-existent-session-id",
+			wantErr:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path, err := repo.GetSessionFilePath(context.Background(), tt.sessionID)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("expected error: %v, got %v", tt.wantErr, err)
+			}
+			if !tt.wantErr && path != tt.wantPath {
+				t.Errorf("expected path '%s', got '%s'", tt.wantPath, path)
+			}
+		})
+	}
+
+	t.Run("permission error", func(t *testing.T) {
+		permDir := filepath.Join(tmpDir, "perm_error")
+		if err := os.Mkdir(permDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		nopermDir := filepath.Join(permDir, "noperm")
+		if err := os.Mkdir(nopermDir, 0o000); err != nil {
+			t.Fatal(err)
+		}
+		defer func() {
+			_ = os.Chmod(nopermDir, 0o755)
+			_ = os.RemoveAll(permDir)
+		}()
+
+		repoErr := NewSessionFSRepository(permDir, &mockCacheRepository{})
+		_, err := repoErr.GetSessionFilePath(context.Background(), "any-id")
+		if err == nil {
+			t.Error("expected error due to permission issues, got nil")
+		}
+	})
+
+	t.Run("non-matching file skipped", func(t *testing.T) {
+		skipDir := filepath.Join(tmpDir, "skip_dir")
+		if err := os.Mkdir(skipDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = os.RemoveAll(skipDir) }()
+
+		// Create non-matching files
+		if err := os.WriteFile(filepath.Join(skipDir, "rollout-2026.txt"), []byte("{}"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(skipDir, "other.jsonl"), []byte("{}"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		repoSkip := NewSessionFSRepository(skipDir, &mockCacheRepository{})
+		_, err := repoSkip.GetSessionFilePath(context.Background(), "any-id")
+		if err == nil {
+			t.Error("expected session not found error, got nil")
+		}
+	})
+}
+
+func TestSessionFSRepository_GetSessionModTime(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	// Create test directories and files
+	sessionID := "019e5514-ed44-78b2-bf88-233d6e4273bf"
+	filename := "rollout-2026-05-23T22-44-55-" + sessionID + ".jsonl"
+	subDir := filepath.Join(tmpDir, "2026", "05", "23")
+	if err := os.MkdirAll(subDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	filePath := filepath.Join(subDir, filename)
+	if err := os.WriteFile(filePath, []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	repo := NewSessionFSRepository(tmpDir, &mockCacheRepository{})
+
+	// Get expected modification time
+	info, err := os.Stat(filePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantTime := info.ModTime()
+
+	tests := []struct {
+		name      string
+		sessionID string
+		wantTime  time.Time
+		wantErr   bool
+	}{
+		{
+			name:      "success",
+			sessionID: sessionID,
+			wantTime:  wantTime,
+			wantErr:   false,
+		},
+		{
+			name:      "not found",
+			sessionID: "non-existent-session-id",
+			wantErr:   true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotTime, err := repo.GetSessionModTime(context.Background(), tt.sessionID)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("expected error: %v, got %v", tt.wantErr, err)
+			}
+			if !tt.wantErr && !gotTime.Equal(tt.wantTime) {
+				t.Errorf("expected modification time '%v', got '%v'", tt.wantTime, gotTime)
+			}
+		})
+	}
+
+	t.Run("stat error with symlink", func(t *testing.T) {
+		symlinkDir := filepath.Join(tmpDir, "symlink_dir")
+		if err := os.MkdirAll(symlinkDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = os.RemoveAll(symlinkDir) }()
+
+		symlinkID := "11111111-2222-3333-4444-555555555555"
+		symlinkName := "rollout-2026-05-23T22-44-55-" + symlinkID + ".jsonl"
+		symlinkPath := filepath.Join(symlinkDir, symlinkName)
+
+		// Create a symlink pointing to a non-existent file
+		if err := os.Symlink(filepath.Join(symlinkDir, "non-existent-target.jsonl"), symlinkPath); err != nil {
+			t.Fatal(err)
+		}
+
+		repoSym := NewSessionFSRepository(symlinkDir, &mockCacheRepository{})
+		_, err := repoSym.GetSessionModTime(context.Background(), symlinkID)
+		if err == nil {
+			t.Error("expected error statting a broken symlink, got nil")
+		}
+	})
 }
