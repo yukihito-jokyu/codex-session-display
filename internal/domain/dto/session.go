@@ -65,10 +65,10 @@ type Statistics struct {
 
 // SessionDetailResponse はフロントエンドに返され、ディスクにキャッシュされるセッション詳細を表します。
 type SessionDetailResponse struct {
-	ID          string             `json:"id"`
-	ParsedAt    string             `json:"parsed_at"`
-	Nodes       []FlowNode         `json:"nodes"`
-	Edges       []FlowEdge         `json:"edges"`
-	Statistics  Statistics         `json:"statistics"`
-	TokenCounts []interface{}      `json:"token_counts"` // プレースホルダー
+	ID          string        `json:"id"`
+	ParsedAt    string        `json:"parsed_at"`
+	Nodes       []FlowNode    `json:"nodes"`
+	Edges       []FlowEdge    `json:"edges"`
+	Statistics  Statistics    `json:"statistics"`
+	TokenCounts []interface{} `json:"token_counts"` // プレースホルダー
 }
