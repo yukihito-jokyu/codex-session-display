@@ -1,11 +1,10 @@
 package main
 
 import (
-	"embed"
-	"errors"
-
 	"codex-session-display/internal/domain/dto"
 	"codex-session-display/internal/utils/logger"
+	"embed"
+	"errors"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -68,9 +67,7 @@ func main() {
 			DisableWindowIcon:    false,
 		},
 	})
-
 	if err != nil {
 		logger.Error("Wails run error", "error", err.Error())
 	}
 }
-
