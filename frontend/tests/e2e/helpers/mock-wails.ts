@@ -59,6 +59,62 @@ export const dummySessions: dto.SessionSummary[] = [
 		file_modified_at: "2026-05-20T14:00:00Z",
 		parsed: false,
 	},
+	{
+		id: "sess-005-timestamp-error",
+		file_path: "/path/to/session-5",
+		cwd: "/Users/test/projects/error-app",
+		cli_version: "1.0.0",
+		originator: "user-1",
+		model_provider: "anthropic",
+		branch: "main",
+		source: "cli",
+		timestamp: "1999-05-20T10:00:00Z", // 1999年
+		file_size: 1024,
+		file_modified_at: "1999-05-20T10:00:00Z",
+		parsed: true,
+	},
+	{
+		id: "sess-006-different-day",
+		file_path: "/path/to/session-6",
+		cwd: "/Users/test/projects/react-app",
+		cli_version: "1.0.0",
+		originator: "user-1",
+		model_provider: "anthropic",
+		branch: "main",
+		source: "cli",
+		timestamp: "2026-05-19T10:00:00Z", // 19日
+		file_size: 1024,
+		file_modified_at: "2026-05-19T10:00:00Z",
+		parsed: true,
+	},
+	{
+		id: "sess-007-null-fields",
+		file_path: "/path/to/session-7",
+		cwd: undefined,
+		cli_version: undefined,
+		originator: "user-1",
+		model_provider: undefined,
+		branch: undefined,
+		source: "cli",
+		timestamp: "2026-05-20T10:00:00Z", // 20日
+		file_size: 1024,
+		file_modified_at: "2026-05-20T10:00:00Z",
+		parsed: true, // 解析済だがフィールドが空
+	},
+	{
+		id: "sess-010-zero-size",
+		file_path: "/path/to/session-10",
+		cwd: "/Users/test/projects/zero-size-app",
+		cli_version: "1.0.0",
+		originator: "user-1",
+		model_provider: "openai",
+		branch: "zero-size",
+		source: "cli",
+		timestamp: "2026-05-20T01:00:00Z",
+		file_size: 0,
+		file_modified_at: "2026-05-20T01:00:00Z",
+		parsed: true,
+	},
 ];
 
 export async function mockWailsAPI(
@@ -86,6 +142,85 @@ export async function mockWailsAPI(
 			// クエリが trigger-error の場合は意図的に例外をスロー
 			if (query === "trigger-error") {
 				throw new Error("Mocked API Error");
+			}
+
+			if (query === "timestamp-error") {
+				return dummySessions.filter((s) => s.id === "sess-005-timestamp-error");
+			}
+
+			if (query === "hang") {
+				return new Promise(() => {}); // never resolves
+			}
+
+			if (query === "return-undefined") {
+				return undefined as any;
+			}
+
+			if (query === "trigger-string-error") {
+				throw "Mocked List String Error";
+			}
+
+			if (year === 0 && month === 0 && (window as any).__triggerInitialError) {
+				throw new Error("Initial Load Error");
+			}
+
+			if (year === 0 && month === 0 && (window as any).__hangInitialLoad) {
+				return new Promise(() => {}); // never resolves
+			}
+
+			if (query === "multi-date") {
+				return dummySessions;
+			}
+
+			if (query === "test-timestamp-fallbacks") {
+				const sessA = {
+					id: "sess-008-fallback-undefined",
+					file_path: "/path/to/session-8",
+					cwd: "/Users/test/projects/react-app",
+					cli_version: "1.0.0",
+					originator: "user-1",
+					model_provider: "anthropic",
+					branch: "main",
+					source: "cli",
+					timestamp: undefined,
+					file_size: 1024,
+					file_modified_at: "2026-05-20T10:00:00Z",
+					parsed: true,
+				};
+				const sessB = {
+					id: "sess-009-fallback-invalid",
+					file_path: "/path/to/session-9",
+					cwd: "/Users/test/projects/react-app",
+					cli_version: "1.0.0",
+					originator: "user-1",
+					model_provider: "anthropic",
+					branch: "main",
+					source: "cli",
+					timestamp: "invalid-date-format-string",
+					file_size: 1024,
+					file_modified_at: "2026-05-20T10:00:00Z",
+					parsed: true,
+				};
+				return [sessA, sessB];
+			}
+
+			if (query === "all-invalid-grouping-dates") {
+				return [
+					{
+						id: "sess-011-invalid-grouping",
+						file_path: "/path/to/session-11",
+						cwd: "/Users/test/projects/invalid-grouping",
+						cli_version: "1.0.0",
+						originator: "user-1",
+						model_provider: "openai",
+						branch: "broken-date",
+						source: "cli",
+						timestamp: "invalid-date-format-string",
+						file_size: 128,
+						file_modified_at: "also-invalid",
+						parsed: true,
+					},
+				];
 			}
 
 			let targetYear = year;
@@ -130,6 +265,114 @@ export async function mockWailsAPI(
 				throw new Error("Mocked Detail API Error");
 			}
 
+			if (id === "trigger-string-error") {
+				throw "Mocked Detail String Error";
+			}
+
+			if (id === "sess-002-uuid-long-name") {
+				return {
+					id: id,
+					parsed_at: "2026-05-20T12:00:00Z",
+					nodes: undefined,
+					edges: undefined,
+					statistics: {
+						duration_ms: 1000,
+						total_tokens: 0,
+						tool_call_count: 0,
+						token_count_count: 0,
+						context_window_size: 0,
+						turn_count: 0,
+						turns: [],
+					},
+					token_counts: [
+						{
+							index: 0,
+							turn_index: 0,
+							bound_to_node_id: "node-user-msg",
+							last_token_usage: undefined,
+							total_token_usage: undefined,
+						},
+					],
+				};
+			}
+
+			if (id === "sess-003-uuid-long-name") {
+				return {
+					id: id,
+					parsed_at: "2026-04-10T09:00:00Z",
+					nodes: [
+						{
+							id: "node-summary-only",
+							type: "agentMessage",
+							position: { x: 0, y: 0 },
+							data: {
+								category: "message",
+								label: "Summary Only",
+								icon: "🤖",
+								summary: "Token log omitted session",
+								turnIndex: 0,
+							},
+						},
+					],
+					edges: [],
+					statistics: {
+						duration_ms: 500,
+						total_tokens: 0,
+						tool_call_count: 0,
+						token_count_count: 0,
+						context_window_size: 0,
+						turn_count: 1,
+						turns: [
+							{
+								index: 0,
+								duration_ms: 500,
+								time_to_first_token_ms: 200,
+								token_count_count: 0,
+								consumed_tokens: {
+									total_tokens: 0,
+									input_tokens: 0,
+									output_tokens: 0,
+									reasoning_output_tokens: 0,
+								},
+							},
+						],
+					},
+					token_counts: undefined,
+				};
+			}
+
+			if (id === "sess-no-turns") {
+				return {
+					id: id,
+					parsed_at: "2026-05-20T09:00:00Z",
+					nodes: [
+						{
+							id: "node-no-turns",
+							type: "sessionMeta",
+							position: { x: 0, y: 0 },
+							data: {
+								category: "meta",
+								label: "No Turns",
+								icon: "⚙️",
+								summary: "No turn data",
+								turnIndex: -1,
+							},
+						},
+					],
+					edges: [],
+					statistics: {
+						duration_ms: 0,
+						total_tokens: 0,
+						tool_call_count: 0,
+						token_count_count: 0,
+						context_window_size: 0,
+						turn_count: 0,
+						turns: undefined,
+					},
+					token_counts: undefined,
+				};
+			}
+
 			return {
 				id: id,
 				parsed_at: "2026-05-20T10:00:00Z",
@@ -145,6 +388,15 @@ export async function mockWailsAPI(
 							summary: "CLI Version: 1.0.0",
 							fullText: "Full session meta details here",
 							turnIndex: -1,
+							tokenBadge: {
+								totalTokens: 2500000, // 2.5M
+								tokenCountIndex: 0,
+								boundCount: 1,
+							},
+							meta: {
+								version: "1.0.0",
+								config: { debug: true },
+							},
 						},
 					},
 					{
@@ -162,6 +414,46 @@ export async function mockWailsAPI(
 						},
 					},
 					{
+						id: "node-context-doc-long",
+						type: "contextDoc",
+						position: { x: 650, y: 0 },
+						data: {
+							category: "context",
+							label: "Long Context",
+							icon: "",
+							summary: "▸ クリックして展開",
+							fullText: "L".repeat(1201),
+							turnIndex: 0,
+						},
+					},
+					{
+						id: "node-context-doc-warning",
+						type: "contextDoc",
+						position: { x: 900, y: 0 },
+						data: {
+							category: "context",
+							label: "Warning Context",
+							icon: "⚠️",
+							summary: "▸ クリックして展開",
+							fullText: "Warning context details",
+							textLength: 42,
+							turnIndex: -1,
+						},
+					},
+					{
+						id: "node-context-doc-empty",
+						type: "contextDoc",
+						position: { x: 1150, y: 0 },
+						data: {
+							category: "context",
+							label: "Empty Context",
+							icon: "",
+							summary: "▸ クリックして展開",
+							fullText: undefined,
+							turnIndex: 0,
+						},
+					},
+					{
 						id: "node-user-msg",
 						type: "userMessage",
 						position: { x: 0, y: 120 },
@@ -173,7 +465,7 @@ export async function mockWailsAPI(
 							fullText: "Hello, agent, please help me.",
 							turnIndex: 0,
 							tokenBadge: {
-								totalTokens: 150000,
+								totalTokens: 1000000, // 1M
 								tokenCountIndex: 0,
 								boundCount: 2,
 							},
@@ -188,8 +480,181 @@ export async function mockWailsAPI(
 							label: "Orphan Complete",
 							icon: "⚠️",
 							summary: "Orphan complete/aborted event without task_started",
-							fullText: "Orphan complete details",
+							fullText: undefined, // fullTextを空にして「No additional details...」を検証
 							turnIndex: -1,
+							tokenBadge: {
+								totalTokens: 1500, // 1.5K
+								tokenCountIndex: 0,
+								boundCount: 1,
+							},
+						},
+					},
+					{
+						id: "node-agent-msg",
+						type: "agentMessage",
+						position: { x: 200, y: 240 },
+						data: {
+							category: "message",
+							label: "Agent Message",
+							icon: "🤖",
+							summary: "Helpful agent response",
+							fullText: "Here is how to solve...",
+							turnIndex: 1,
+							tokenBadge: {
+								totalTokens: 500, // 500
+								tokenCountIndex: 1,
+								boundCount: 1,
+							},
+						},
+					},
+					{
+						id: "node-turn-ctx",
+						type: "turnContext",
+						position: { x: 0, y: 360 },
+						data: {
+							category: "context",
+							label: "Turn Context",
+							icon: "🔄",
+							summary: "Context summary",
+							turnIndex: 0,
+						},
+					},
+					{
+						id: "node-dev-msg",
+						type: "developerMessage",
+						position: { x: 200, y: 360 },
+						data: {
+							category: "message",
+							label: "Developer Message",
+							icon: "",
+							summary: "Developer instructions",
+							turnIndex: 0,
+						},
+					},
+					{
+						id: "node-user-api-msg",
+						type: "userApiMessage",
+						position: { x: 400, y: 360 },
+						data: {
+							category: "message",
+							label: "User API Message",
+							icon: "🔌",
+							summary: "API Call message",
+							turnIndex: 0,
+							tokenBadge: {
+								totalTokens: 1000,
+								tokenCountIndex: 2,
+								boundCount: 1,
+							},
+						},
+					},
+					{
+						id: "node-reasoning",
+						type: "reasoning",
+						position: { x: 600, y: 360 },
+						data: {
+							category: "thought",
+							label: "Reasoning Step",
+							icon: "🧠",
+							summary: "Thinking process details",
+							turnIndex: 0,
+						},
+					},
+					{
+						id: "node-action",
+						type: "action",
+						position: { x: 800, y: 360 },
+						data: {
+							category: "action",
+							label: "Call Tool",
+							icon: "🛠️",
+							summary: "Tool invocation details",
+							turnIndex: 0,
+						},
+					},
+					{
+						id: "node-websearch",
+						type: "webSearchAction",
+						position: { x: 1000, y: 360 },
+						data: {
+							category: "action",
+							label: "Web Search",
+							icon: "🔍",
+							summary: "Searching the web details",
+							turnIndex: 0,
+						},
+					},
+					{
+						id: "node-external-event",
+						type: "externalEvent",
+						position: { x: 0, y: 480 },
+						data: {
+							category: "event",
+							label: "External Input",
+							icon: "📡",
+							summary: "External system trigger",
+							turnIndex: 0,
+						},
+					},
+					{
+						id: "node-task-event-started",
+						type: "taskEvent",
+						position: { x: 200, y: 480 },
+						data: {
+							category: "event",
+							label: "Task Started",
+							icon: "▶️",
+							summary: "Workflow process start",
+							turnIndex: 0,
+						},
+					},
+					{
+						id: "node-task-event-aborted",
+						type: "taskEvent",
+						position: { x: 400, y: 480 },
+						data: {
+							category: "event",
+							label: "Task Aborted",
+							icon: "⏹️",
+							summary: "Workflow process aborted",
+							turnIndex: 0,
+						},
+					},
+					{
+						id: "node-item-completed",
+						type: "itemCompleted",
+						position: { x: 600, y: 480 },
+						data: {
+							category: "event",
+							label: "Item Completed",
+							icon: "✅",
+							summary: "Item completed details",
+							turnIndex: 0,
+						},
+					},
+					{
+						id: "node-generic",
+						type: "generic", // typeをgenericにしてnodeTypesにマッピング
+						position: { x: 800, y: 480 },
+						data: {
+							category: "generic",
+							label: "", // labelを空にしてidへのフォールバックを検証
+							icon: "❓",
+							summary: "Fallback node details",
+							turnIndex: 0,
+							meta: {},
+						},
+					},
+					{
+						id: "node-task-event-general",
+						type: "taskEvent",
+						position: { x: 1000, y: 480 },
+						data: {
+							category: "event",
+							label: "Task Event", // Started/Complete/Aborted を含まないラベル
+							icon: "🔔",
+							summary: "General workflow event",
+							turnIndex: 0,
 						},
 					},
 				],
@@ -210,15 +675,115 @@ export async function mockWailsAPI(
 					},
 				],
 				statistics: {
-					duration_ms: 5000,
-					total_tokens: 150,
-					tool_call_count: 0,
-					token_count_count: 0,
-					context_window_size: 2048,
-					turn_count: 1,
-					turns: [],
+					duration_ms: 75000, // 1分15秒 (1m 15s)
+					total_tokens: 150000,
+					tool_call_count: 5,
+					token_count_count: 10,
+					context_window_size: 128000,
+					turn_count: 3,
+					turns: [
+						{
+							index: 0,
+							collaboration_mode_kind: "normal",
+							duration_ms: 5000,
+							time_to_first_token_ms: 500,
+							token_count_count: 4,
+							consumed_tokens: {
+								total_tokens: 50000,
+								input_tokens: 40000,
+								output_tokens: 10000,
+								reasoning_output_tokens: 2000,
+							},
+						},
+						{
+							index: 1,
+							collaboration_mode_kind: "collaboration",
+							duration_ms: 10500,
+							time_to_first_token_ms: 800,
+							token_count_count: 6,
+							consumed_tokens: {
+								total_tokens: 100000,
+								input_tokens: 80000,
+								output_tokens: 20000,
+								reasoning_output_tokens: 8000,
+							},
+						},
+						{
+							index: 2,
+							collaboration_mode_kind: undefined,
+							duration_ms: 500,
+							time_to_first_token_ms: 200,
+							token_count_count: 0,
+							consumed_tokens: undefined,
+						},
+					],
 				},
-				token_counts: [],
+				token_counts: [
+					{
+						index: 0,
+						turn_index: 0,
+						bound_to_node_id: "node-user-msg",
+						last_token_usage: {
+							total_tokens: 20000,
+							input_tokens: 15000,
+							output_tokens: 5000,
+							reasoning_output_tokens: 1000,
+							cached_input_tokens: 5000,
+						},
+						total_token_usage: {
+							total_tokens: 20000,
+							input_tokens: 15000,
+							output_tokens: 5000,
+							reasoning_output_tokens: 1000,
+							cached_input_tokens: 5000,
+						},
+					},
+					{
+						index: 1,
+						turn_index: 0,
+						bound_to_node_id: "node-user-msg",
+						last_token_usage: {
+							total_tokens: 30000,
+							input_tokens: 25000,
+							output_tokens: 5000,
+							reasoning_output_tokens: 1000,
+							cached_input_tokens: 5000,
+						},
+						total_token_usage: {
+							total_tokens: 50000,
+							input_tokens: 40000,
+							output_tokens: 10000,
+							reasoning_output_tokens: 2000,
+							cached_input_tokens: 10000,
+						},
+					},
+					{
+						index: 2,
+						turn_index: 1,
+						bound_to_node_id: "node-orphan-event",
+						last_token_usage: {
+							total_tokens: 50000,
+							input_tokens: 40000,
+							output_tokens: 10000,
+							reasoning_output_tokens: 6000,
+							cached_input_tokens: 10000,
+						},
+						total_token_usage: {
+							total_tokens: 100000,
+							input_tokens: 80000,
+							output_tokens: 20000,
+							reasoning_output_tokens: 8000,
+							cached_input_tokens: 20000,
+						},
+					},
+					{
+						index: 3,
+						turn_index: 1,
+						bound_to_node_id: undefined, // 未定義フィールド検証用
+						last_token_usage: undefined,
+						total_token_usage: undefined,
+					},
+				],
 			};
 		};
 

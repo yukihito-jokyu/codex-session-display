@@ -29,7 +29,6 @@ export function SessionListPage() {
 					type="button"
 					className={styles.navBtn}
 					onClick={handlePrevMonth}
-					disabled={loading || currentYear === null}
 				>
 					◀
 				</button>
@@ -42,7 +41,6 @@ export function SessionListPage() {
 					type="button"
 					className={styles.navBtn}
 					onClick={handleNextMonth}
-					disabled={loading || currentYear === null}
 				>
 					▶
 				</button>

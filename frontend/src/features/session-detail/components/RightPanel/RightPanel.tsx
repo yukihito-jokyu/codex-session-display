@@ -53,10 +53,10 @@ export function RightPanel({
 			const idx = turn.index;
 			return {
 				name: `T${idx + 1}`,
-				input: Number(turn.consumed_tokens.input_tokens),
-				output: Number(turn.consumed_tokens.output_tokens),
-				reasoning: Number(turn.consumed_tokens.reasoning_output_tokens),
-				total: Number(turn.consumed_tokens.total_tokens),
+				input: Number(turn.consumed_tokens?.input_tokens ?? 0),
+				output: Number(turn.consumed_tokens?.output_tokens ?? 0),
+				reasoning: Number(turn.consumed_tokens?.reasoning_output_tokens ?? 0),
+				total: Number(turn.consumed_tokens?.total_tokens ?? 0),
 				toolCalls: toolCallsPerTurn[idx] || 0,
 				duration: (Number(turn.duration_ms) / 1000).toFixed(1), // 秒単位に変換
 			};
@@ -406,59 +406,68 @@ export function RightPanel({
 			<div className={styles.summarySection}>
 				<h3 className={styles.subsectionTitle}>Turn Summary Cards</h3>
 				<div className={styles.turnsContainer}>
-					{(statistics.turns || []).map((turn) => (
-						<div key={turn.index} className={styles.turnCard}>
-							<div className={styles.turnCardHeader}>
-								<span className={styles.turnIndexLabel}>
-									Turn #{turn.index + 1}
-								</span>
-								<span className={styles.turnModeBadge}>
-									{turn.collaboration_mode_kind || "normal"}
-								</span>
-							</div>
-							<div className={styles.turnCardDetails}>
-								<div className={styles.detailRow}>
-									<span>Duration:</span>
-									<span>{formatDuration(Number(turn.duration_ms))}</span>
-								</div>
-								<div className={styles.detailRow}>
-									<span>TTFT:</span>
-									<span>
-										{formatDuration(Number(turn.time_to_first_token_ms))}
+					{(statistics.turns || []).map((turn) => {
+						const consumedTokens = turn.consumed_tokens;
+						return (
+							<div key={turn.index} className={styles.turnCard}>
+								<div className={styles.turnCardHeader}>
+									<span className={styles.turnIndexLabel}>
+										Turn #{turn.index + 1}
+									</span>
+									<span className={styles.turnModeBadge}>
+										{turn.collaboration_mode_kind || "normal"}
 									</span>
 								</div>
-								<div className={styles.tokenTitle}>Consumed Tokens</div>
-								<div className={styles.tokenGrid}>
-									<div className={styles.tokenSub}>
-										<span>Total</span>
+								<div className={styles.turnCardDetails}>
+									<div className={styles.detailRow}>
+										<span>Duration:</span>
+										<span>{formatDuration(Number(turn.duration_ms))}</span>
+									</div>
+									<div className={styles.detailRow}>
+										<span>TTFT:</span>
 										<span>
-											{formatNumber(Number(turn.consumed_tokens.total_tokens))}
+											{formatDuration(Number(turn.time_to_first_token_ms))}
 										</span>
 									</div>
-									<div className={styles.tokenSub}>
-										<span>Input</span>
-										<span>
-											{formatNumber(Number(turn.consumed_tokens.input_tokens))}
-										</span>
-									</div>
-									<div className={styles.tokenSub}>
-										<span>Output</span>
-										<span>
-											{formatNumber(Number(turn.consumed_tokens.output_tokens))}
-										</span>
-									</div>
-									<div className={styles.tokenSub}>
-										<span>Reasoning</span>
-										<span>
-											{formatNumber(
-												Number(turn.consumed_tokens.reasoning_output_tokens),
-											)}
-										</span>
+									<div className={styles.tokenTitle}>Consumed Tokens</div>
+									<div className={styles.tokenGrid}>
+										<div className={styles.tokenSub}>
+											<span>Total</span>
+											<span>
+												{formatNumber(
+													Number(consumedTokens?.total_tokens ?? 0),
+												)}
+											</span>
+										</div>
+										<div className={styles.tokenSub}>
+											<span>Input</span>
+											<span>
+												{formatNumber(
+													Number(consumedTokens?.input_tokens ?? 0),
+												)}
+											</span>
+										</div>
+										<div className={styles.tokenSub}>
+											<span>Output</span>
+											<span>
+												{formatNumber(
+													Number(consumedTokens?.output_tokens ?? 0),
+												)}
+											</span>
+										</div>
+										<div className={styles.tokenSub}>
+											<span>Reasoning</span>
+											<span>
+												{formatNumber(
+													Number(consumedTokens?.reasoning_output_tokens ?? 0),
+												)}
+											</span>
+										</div>
 									</div>
 								</div>
 							</div>
-						</div>
-					))}
+						);
+					})}
 				</div>
 			</div>
 

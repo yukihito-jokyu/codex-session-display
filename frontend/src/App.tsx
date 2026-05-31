@@ -12,6 +12,7 @@ function App() {
 				<main className={styles.mainContent}>
 					<Routes>
 						<Route path="/" element={<SessionListPage />} />
+						<Route path="/sessions" element={<SessionDetailPage />} />
 						<Route path="/sessions/:id" element={<SessionDetailPage />} />
 					</Routes>
 				</main>

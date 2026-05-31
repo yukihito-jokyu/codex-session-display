@@ -4,9 +4,11 @@ import {
 	Controls,
 	type Node,
 	ReactFlow,
+	ReactFlowProvider,
+	useReactFlow,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import type { dto } from "wailsjs/go/models";
 import { nodeTypes } from "./CustomNodes";
 import styles from "./FlowCanvas.module.css";
@@ -14,16 +16,20 @@ import styles from "./FlowCanvas.module.css";
 interface FlowCanvasProps {
 	nodes: dto.FlowNode[];
 	edges: dto.FlowEdge[];
-	onNodeSelect?: (node: dto.FlowNode | null) => void;
+	onNodeSelect: (node: dto.FlowNode | null) => void;
 	selectedNodeId?: string;
+	zoomTarget?: { nodeId: string; timestamp: number } | null;
 }
 
-export function FlowCanvas({
+function FlowCanvasInner({
 	nodes,
 	edges,
 	onNodeSelect,
 	selectedNodeId,
+	zoomTarget,
 }: FlowCanvasProps) {
+	const { fitView } = useReactFlow();
+
 	// React Flowのノード表現に合わせ、選択状態をマッピング
 	const flowNodes = useMemo(() => {
 		return nodes.map((node) => ({
@@ -33,17 +39,24 @@ export function FlowCanvas({
 	}, [nodes, selectedNodeId]);
 
 	const onNodeClick = (_event: React.MouseEvent, node: Node) => {
-		if (onNodeSelect) {
-			const originalNode = nodes.find((n) => n.id === node.id);
-			onNodeSelect(originalNode || (node as unknown as dto.FlowNode));
-		}
+		const originalNode = nodes.find((n) => n.id === node.id);
+		onNodeSelect(originalNode as dto.FlowNode);
 	};
 
 	const onPaneClick = () => {
-		if (onNodeSelect) {
-			onNodeSelect(null);
-		}
+		onNodeSelect(null);
 	};
+
+	// zoomTargetが更新されたら、該当ノードへズームインする
+	useEffect(() => {
+		if (zoomTarget) {
+			fitView({
+				nodes: [{ id: zoomTarget.nodeId }],
+				duration: 800,
+				maxZoom: 1.2, // 適度なズーム倍率に制限
+			});
+		}
+	}, [zoomTarget, fitView]);
 
 	return (
 		<div className={styles.canvasContainer}>
@@ -72,4 +85,13 @@ export function FlowCanvas({
 		</div>
 	);
 }
+
+export function FlowCanvas(props: FlowCanvasProps) {
+	return (
+		<ReactFlowProvider>
+			<FlowCanvasInner {...props} />
+		</ReactFlowProvider>
+	);
+}
+
 export default FlowCanvas;

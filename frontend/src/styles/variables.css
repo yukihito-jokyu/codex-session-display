@@ -72,9 +72,9 @@
 
 	/* 3. Outputs */
 	--node-output-bg: #161b22;
-	--node-output-icon-bg: #131c38;
-	--node-output-border: #79c0ff4d;
-	--node-output-text: #79c0ff;
+	--node-output-icon-bg: #0d2830;
+	--node-output-border: #00f2fe4d;
+	--node-output-text: #00f2fe;
 
 	/* 4. Thinking */
 	--node-think-bg: #161b22;
@@ -175,9 +175,9 @@ body.light-theme {
 
 	/* 3. Outputs */
 	--node-output-bg: #ffffff;
-	--node-output-icon-bg: #f5f3ff;
-	--node-output-border: #c084fc;
-	--node-output-text: #6d28d9;
+	--node-output-icon-bg: #e0f7fa;
+	--node-output-border: #00838f4d;
+	--node-output-text: #00838f;
 
 	/* 4. Thinking */
 	--node-think-bg: #ffffff;

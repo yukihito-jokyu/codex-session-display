@@ -34,8 +34,7 @@ const getCategoryClass = (type: string, data: CustomNodeProps["data"]) => {
 			return styles.nodeMeta;
 		case "turnContext":
 			return styles.nodeTurnCtx;
-		case "contextDoc":
-			return styles.nodeContextDoc;
+
 		case "developerMessage":
 			return styles.nodeDeveloperMessage;
 		case "userMessage":
@@ -234,5 +233,6 @@ export const nodeTypes = {
 	action: BaseCustomNode,
 	webSearchAction: BaseCustomNode,
 	externalEvent: BaseCustomNode,
+	itemCompleted: BaseCustomNode,
 	generic: BaseCustomNode,
 };
