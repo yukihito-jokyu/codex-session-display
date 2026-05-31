@@ -1,8 +1,9 @@
 {
 	"compilerOptions": {
 		"composite": true,
-		"module": "ESNext",
-		"moduleResolution": "Node",
+		"module": "NodeNext",
+		"moduleResolution": "NodeNext",
+		"ignoreDeprecations": "6.0",
 		"allowSyntheticDefaultImports": true
 	},
 	"include": ["vite.config.ts", "playwright.config.ts"]

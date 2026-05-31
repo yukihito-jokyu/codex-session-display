@@ -14,7 +14,8 @@
 		"@xyflow/react": "^12.10.2",
 		"react": "^18.2.0",
 		"react-dom": "^18.2.0",
-		"react-router-dom": "^7.16.0"
+		"react-router-dom": "^7.16.0",
+		"recharts": "^3.8.1"
 	},
 	"devDependencies": {
 		"@biomejs/biome": "2.4.16",
@@ -23,7 +24,24 @@
 		"@types/react": "^18.0.17",
 		"@types/react-dom": "^18.0.6",
 		"@vitejs/plugin-react": "^2.0.1",
+		"nyc": "^18.0.0",
 		"typescript": "^4.6.4",
-		"vite": "^3.0.7"
+		"vite": "^3.0.7",
+		"vite-plugin-istanbul": "^3.0.4"
+	},
+	"nyc": {
+		"report-dir": "coverage-e2e",
+		"reporter": [
+			"html",
+			"text"
+		],
+		"include": [
+			"src/**/*.{ts,tsx}"
+		],
+		"exclude": [
+			"src/main.tsx",
+			"wailsjs/**"
+		],
+		"all": true
 	}
 }

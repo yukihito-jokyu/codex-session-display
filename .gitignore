@@ -24,3 +24,5 @@ docs/tasks
 # Playwright test artifacts
 frontend/test-results/
 frontend/playwright-report/
+frontend/.nyc_output
+frontend/coverage-e2e
