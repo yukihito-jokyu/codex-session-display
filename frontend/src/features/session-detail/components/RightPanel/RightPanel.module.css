@@ -1,0 +1,309 @@
+.rightPanel {
+	width: 380px;
+	min-width: 380px;
+	height: 100%;
+	background: var(--bg-header);
+	border-left: 1px solid var(--border-color);
+	display: flex;
+	flex-direction: column;
+	padding: 16px;
+	overflow-y: auto;
+	box-sizing: border-box;
+	gap: 20px;
+}
+
+.sectionTitle {
+	font-size: 16px;
+	font-weight: 700;
+	margin: 0 0 4px 0;
+	color: var(--text-primary);
+	letter-spacing: 0.5px;
+}
+
+.statsGrid {
+	display: grid;
+	grid-template-columns: repeat(2, 1fr);
+	gap: 12px;
+}
+
+.statCard {
+	background: var(--bg-card);
+	border: 1px solid var(--border-color);
+	border-radius: 8px;
+	padding: 12px;
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	box-shadow: 0 2px 8px var(--panel-shadow);
+	transition:
+		transform 0.2s,
+		background-color 0.2s;
+}
+
+.statCard:hover {
+	background: var(--bg-card-hover);
+	transform: translateY(-2px);
+}
+
+.statLabel {
+	font-size: 10px;
+	font-weight: 600;
+	color: var(--text-secondary);
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+}
+
+.statValue {
+	font-size: 16px;
+	font-weight: 700;
+	color: var(--color-accent);
+	font-family: monospace;
+}
+
+.sparklineSection,
+.chartsSection,
+.summarySection,
+.tableSection {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.subsectionTitle {
+	font-size: 12px;
+	font-weight: 600;
+	margin: 0;
+	color: var(--text-primary);
+	border-left: 3px solid var(--color-accent);
+	padding-left: 8px;
+	text-transform: uppercase;
+	letter-spacing: 0.5px;
+}
+
+.chartWrapper {
+	background: var(--bg-card);
+	border: 1px solid var(--border-color);
+	border-radius: 8px;
+	padding: 12px 8px 4px 8px;
+	box-shadow: 0 2px 8px var(--panel-shadow);
+}
+
+.chartWrapperSpark {
+	background: var(--bg-card);
+	border: 1px solid var(--border-color);
+	border-radius: 8px;
+	padding: 8px 8px 0 8px;
+	box-shadow: 0 2px 8px var(--panel-shadow);
+}
+
+.turnsContainer {
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.turnCard {
+	background: var(--bg-card);
+	border: 1px solid var(--border-color);
+	border-radius: 8px;
+	padding: 12px;
+	box-shadow: 0 2px 8px var(--panel-shadow);
+	transition: background-color 0.2s;
+}
+
+.turnCard:hover {
+	background: var(--bg-card-hover);
+}
+
+.turnCardHeader {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 8px;
+	padding-bottom: 6px;
+	border-bottom: 1px solid var(--border-color);
+}
+
+.turnIndexLabel {
+	font-weight: 700;
+	font-size: 12px;
+	color: var(--text-primary);
+}
+
+.turnModeBadge {
+	font-size: 9px;
+	font-weight: 600;
+	padding: 2px 6px;
+	border-radius: 4px;
+	background: var(--accent-badge-bg);
+	border: 1px solid var(--accent-badge-border);
+	color: var(--color-accent);
+	text-transform: uppercase;
+}
+
+.turnCardDetails {
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	font-size: 11px;
+}
+
+.detailRow {
+	display: flex;
+	justify-content: space-between;
+	color: var(--text-secondary);
+}
+
+.detailRow span:last-child {
+	color: var(--text-primary);
+	font-family: monospace;
+}
+
+.tokenTitle {
+	font-weight: 700;
+	color: var(--text-secondary);
+	font-size: 10px;
+	text-transform: uppercase;
+	margin-top: 6px;
+	border-top: 1px dashed var(--border-color);
+	padding-top: 6px;
+}
+
+.tokenGrid {
+	display: grid;
+	grid-template-columns: repeat(2, 1fr);
+	gap: 6px 12px;
+}
+
+.tokenSub {
+	display: flex;
+	justify-content: space-between;
+	color: var(--text-secondary);
+}
+
+.tokenSub span:last-child {
+	color: var(--text-primary);
+	font-family: monospace;
+	font-weight: 600;
+}
+
+.tableWrapper {
+	max-height: 250px;
+	overflow-y: auto;
+	border: 1px solid var(--border-color);
+	border-radius: 8px;
+	background: var(--bg-card);
+	box-shadow: 0 2px 8px var(--panel-shadow);
+}
+
+.tokenTable {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 10px;
+	text-align: left;
+}
+
+.tokenTable th,
+.tokenTable td {
+	padding: 6px 8px;
+	border-bottom: 1px solid var(--border-color);
+}
+
+.tokenTable th {
+	background: var(--bg-btn);
+	color: var(--text-secondary);
+	font-weight: 600;
+	position: sticky;
+	top: 0;
+	z-index: 10;
+}
+
+.tokenTable td {
+	color: var(--text-primary);
+	font-family: monospace;
+}
+
+.separatorRow {
+	background: rgba(88, 166, 255, 0.03);
+}
+
+.separatorCell {
+	font-weight: 700;
+	color: var(--color-accent);
+	font-size: 9px;
+	text-align: center;
+	border-top: 1px solid var(--border-color);
+	border-bottom: 1px solid var(--border-color);
+	letter-spacing: 0.5px;
+}
+
+.barInput :global(.recharts-rectangle),
+.barInput {
+	/* biome-ignore lint/complexity/noImportantStyles: Recharts overrides */
+	fill: var(--node-input-text) !important;
+}
+
+.barOutput :global(.recharts-rectangle),
+.barOutput {
+	/* biome-ignore lint/complexity/noImportantStyles: Recharts overrides */
+	fill: var(--node-output-text) !important;
+}
+
+.barReasoning :global(.recharts-rectangle),
+.barReasoning {
+	/* biome-ignore lint/complexity/noImportantStyles: Recharts overrides */
+	fill: var(--node-think-text) !important;
+}
+
+.tokenRow {
+	cursor: pointer;
+	transition: background-color 0.2s;
+}
+
+.tokenRow:hover {
+	background: var(--bg-card-hover);
+}
+
+.tokenRow:focus-visible {
+	outline: 2px solid var(--color-accent);
+	outline-offset: -2px;
+	background: var(--bg-card-hover);
+}
+
+.tableHeaderArea {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-bottom: 4px;
+}
+
+.modeToggle {
+	display: flex;
+	background: rgba(0, 0, 0, 0.2);
+	border: 1px solid var(--border-color);
+	border-radius: 6px;
+	padding: 2px;
+}
+
+.toggleBtn {
+	background: transparent;
+	border: none;
+	color: var(--text-secondary);
+	font-size: 10px;
+	font-weight: 600;
+	padding: 4px 8px;
+	border-radius: 4px;
+	cursor: pointer;
+	transition:
+		background-color 0.2s,
+		color 0.2s;
+}
+
+.toggleBtn:hover {
+	color: var(--text-primary);
+}
+
+.toggleBtnActive {
+	background: var(--bg-btn-hover);
+	color: var(--color-accent);
+}
