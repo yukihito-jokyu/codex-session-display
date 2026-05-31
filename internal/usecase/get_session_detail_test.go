@@ -960,6 +960,399 @@ func TestGetSessionDetailUseCase_Execute(t *testing.T) {
 				}
 			},
 		},
+		{
+			name: "binds token count when output is separated by other events",
+			setup: func(t *testing.T, tmpDir string) (string, usecase.SessionRepository, usecase.CacheRepository, usecase.SessionParser, func()) {
+				sessionRepo := &mockSessionRepositoryForDetail{
+					paths: map[string]string{"session-separated-output": "dummy-path"},
+				}
+
+				records := []*model.TypedRecord{
+					{
+						LineNumber: 1,
+						Type:       "session_meta",
+						SessionMeta: &model.SessionMetaPayload{
+							ID:         "session-separated-output",
+							CliVersion: "v0.135.0",
+						},
+					},
+					{
+						LineNumber: 2,
+						Type:       "event_msg",
+						SubType:    "task_started",
+						EventMsg: &model.EventMsgPayload{
+							TurnID:             "turn-1",
+							ModelContextWindow: 258400,
+						},
+					},
+					{
+						LineNumber: 3,
+						Type:       "response_item",
+						SubType:    "function_call",
+						ResponseItem: &model.ResponseItemPayload{
+							CallID:    "call-1",
+							Name:      "exec_command",
+							Arguments: "{\"cmd\":\"echo hi\"}",
+						},
+					},
+					{
+						LineNumber: 4,
+						Type:       "event_msg",
+						SubType:    "thread_goal_updated",
+						EventMsg:   &model.EventMsgPayload{},
+					},
+					{
+						LineNumber: 5,
+						Type:       "response_item",
+						SubType:    "function_call_output",
+						ResponseItem: &model.ResponseItemPayload{
+							CallID: "call-1",
+							Output: "done",
+						},
+					},
+					{
+						LineNumber: 6,
+						Type:       "event_msg",
+						SubType:    "token_count",
+						EventMsg: &model.EventMsgPayload{
+							Info: &model.TokenInfo{
+								TotalTokenUsage: &model.TokenDetail{TotalTokens: 1200},
+								LastTokenUsage:  &model.TokenDetail{TotalTokens: 200},
+							},
+						},
+					},
+					{
+						LineNumber: 7,
+						Type:       "response_item",
+						SubType:    "custom_tool_call",
+						ResponseItem: &model.ResponseItemPayload{
+							CallID: "custom-1",
+							Name:   "apply_patch",
+							Input:  "*** Begin Patch",
+						},
+					},
+					{
+						LineNumber: 8,
+						Type:       "event_msg",
+						SubType:    "thread_goal_updated",
+						EventMsg:   &model.EventMsgPayload{},
+					},
+					{
+						LineNumber: 9,
+						Type:       "response_item",
+						SubType:    "custom_tool_call_output",
+						ResponseItem: &model.ResponseItemPayload{
+							CallID: "custom-1",
+							Output: "patched",
+						},
+					},
+					{
+						LineNumber: 10,
+						Type:       "event_msg",
+						SubType:    "token_count",
+						EventMsg: &model.EventMsgPayload{
+							Info: &model.TokenInfo{
+								TotalTokenUsage: &model.TokenDetail{TotalTokens: 1400},
+								LastTokenUsage:  &model.TokenDetail{TotalTokens: 200},
+							},
+						},
+					},
+					{
+						LineNumber: 11,
+						Type:       "event_msg",
+						SubType:    "task_complete",
+						EventMsg: &model.EventMsgPayload{
+							TurnID: "turn-1",
+						},
+					},
+				}
+
+				parser := &mockSessionParser{records: records}
+				cacheRepo := &mockCacheRepositoryForDetail{}
+				return "session-separated-output", sessionRepo, cacheRepo, parser, nil
+			},
+			wantErr: false,
+			verify: func(t *testing.T, res *dto.SessionDetailResponse, err error) {
+				if err != nil {
+					t.Fatalf("expected no error, got %v", err)
+				}
+				if len(res.TokenCounts) != 2 {
+					t.Fatalf("expected 2 token count entries, got %d", len(res.TokenCounts))
+				}
+
+				if res.TokenCounts[0].BoundToNodeID != "node-5" {
+					t.Fatalf("expected first token count to bind to node-5, got %q", res.TokenCounts[0].BoundToNodeID)
+				}
+				if res.TokenCounts[1].BoundToNodeID != "node-9" {
+					t.Fatalf("expected second token count to bind to node-9, got %q", res.TokenCounts[1].BoundToNodeID)
+				}
+
+				var outputNode, customOutputNode *dto.FlowNode
+				for i := range res.Nodes {
+					node := &res.Nodes[i]
+					switch node.ID {
+					case "node-5":
+						outputNode = node
+					case "node-9":
+						customOutputNode = node
+					}
+				}
+
+				if outputNode == nil {
+					t.Fatal("expected function_call_output node to exist")
+				}
+				if customOutputNode == nil {
+					t.Fatal("expected custom_tool_call_output node to exist")
+				}
+				if outputNode.Data.TokenBadge == nil || outputNode.Data.TokenBadge.TotalTokens != 1200 {
+					t.Fatalf("expected output node badge to be set, got %+v", outputNode.Data.TokenBadge)
+				}
+				if customOutputNode.Data.TokenBadge == nil || customOutputNode.Data.TokenBadge.TotalTokens != 1400 {
+					t.Fatalf("expected custom output node badge to be set, got %+v", customOutputNode.Data.TokenBadge)
+				}
+			},
+		},
+		{
+			name: "falls back to previous mapped node when bound record has no node",
+			setup: func(t *testing.T, tmpDir string) (string, usecase.SessionRepository, usecase.CacheRepository, usecase.SessionParser, func()) {
+				sessionRepo := &mockSessionRepositoryForDetail{
+					paths: map[string]string{"session-token-fallback": "dummy-path"},
+				}
+
+				records := []*model.TypedRecord{
+					{
+						LineNumber: 1,
+						Type:       "session_meta",
+						SessionMeta: &model.SessionMetaPayload{
+							ID:         "session-token-fallback",
+							CliVersion: "v0.135.0",
+						},
+					},
+					{
+						LineNumber: 2,
+						Type:       "event_msg",
+						SubType:    "task_started",
+						EventMsg: &model.EventMsgPayload{
+							TurnID: "turn-1",
+						},
+					},
+					{
+						LineNumber: 3,
+						Type:       "event_msg",
+						SubType:    "agent_message",
+						EventMsg: &model.EventMsgPayload{
+							Message: "Mapped agent message",
+						},
+					},
+					{
+						LineNumber:   4,
+						Type:         "response_item",
+						SubType:      "function_call",
+						ResponseItem: nil,
+					},
+					{
+						LineNumber: 5,
+						Type:       "event_msg",
+						SubType:    "token_count",
+						EventMsg: &model.EventMsgPayload{
+							Info: &model.TokenInfo{
+								TotalTokenUsage: &model.TokenDetail{TotalTokens: 900},
+								LastTokenUsage:  &model.TokenDetail{TotalTokens: 100},
+							},
+						},
+					},
+					{
+						LineNumber: 6,
+						Type:       "event_msg",
+						SubType:    "task_complete",
+						EventMsg: &model.EventMsgPayload{
+							TurnID: "turn-1",
+						},
+					},
+				}
+
+				parser := &mockSessionParser{records: records}
+				cacheRepo := &mockCacheRepositoryForDetail{}
+				return "session-token-fallback", sessionRepo, cacheRepo, parser, nil
+			},
+			wantErr: false,
+			verify: func(t *testing.T, res *dto.SessionDetailResponse, err error) {
+				if err != nil {
+					t.Fatalf("expected no error, got %v", err)
+				}
+				if len(res.TokenCounts) != 1 {
+					t.Fatalf("expected 1 token count entry, got %d", len(res.TokenCounts))
+				}
+				if res.TokenCounts[0].BoundToNodeID != "node-3" {
+					t.Fatalf("expected token count to fall back to node-3, got %q", res.TokenCounts[0].BoundToNodeID)
+				}
+
+				var fallbackNode *dto.FlowNode
+				for i := range res.Nodes {
+					node := &res.Nodes[i]
+					if node.ID == "node-3" {
+						fallbackNode = node
+						break
+					}
+				}
+
+				if fallbackNode == nil {
+					t.Fatal("expected fallback agent message node to exist")
+				}
+				if fallbackNode.Data.TokenBadge == nil {
+					t.Fatal("expected fallback node to receive token badge")
+				}
+				if fallbackNode.Data.TokenBadge.TotalTokens != 900 {
+					t.Fatalf("expected fallback badge total tokens to be 900, got %+v", fallbackNode.Data.TokenBadge)
+				}
+			},
+		},
+		{
+			name: "consumed tokens difference calculation",
+			setup: func(t *testing.T, tmpDir string) (string, usecase.SessionRepository, usecase.CacheRepository, usecase.SessionParser, func()) {
+				sessionRepo := &mockSessionRepositoryForDetail{
+					paths: map[string]string{"session-diff": "dummy-path"},
+				}
+
+				records := []*model.TypedRecord{
+					// session_meta
+					{
+						LineNumber: 1,
+						Type:       "session_meta",
+						SessionMeta: &model.SessionMetaPayload{
+							ID:         "session-diff",
+							CliVersion: "v0.125.0",
+						},
+					},
+					// Turn 1
+					{
+						LineNumber: 2,
+						Type:       "event_msg",
+						SubType:    "task_started",
+						EventMsg: &model.EventMsgPayload{
+							TurnID:             "turn-1",
+							ModelContextWindow: 64000,
+						},
+					},
+					{
+						LineNumber: 3,
+						Type:       "event_msg",
+						SubType:    "token_count",
+						EventMsg: &model.EventMsgPayload{
+							Info: &model.TokenInfo{
+								TotalTokenUsage: &model.TokenDetail{TotalTokens: 1000, InputTokens: 800, OutputTokens: 200, ReasoningOutputTokens: 0},
+								LastTokenUsage:  &model.TokenDetail{TotalTokens: 1000, InputTokens: 800, OutputTokens: 200, ReasoningOutputTokens: 0},
+							},
+						},
+					},
+					{
+						LineNumber: 4,
+						Type:       "event_msg",
+						SubType:    "task_complete",
+						EventMsg: &model.EventMsgPayload{
+							TurnID: "turn-1",
+						},
+					},
+					// Turn 2
+					{
+						LineNumber: 5,
+						Type:       "event_msg",
+						SubType:    "task_started",
+						EventMsg: &model.EventMsgPayload{
+							TurnID:             "turn-2",
+							ModelContextWindow: 64000,
+						},
+					},
+					{
+						LineNumber: 6,
+						Type:       "event_msg",
+						SubType:    "token_count",
+						EventMsg: &model.EventMsgPayload{
+							Info: &model.TokenInfo{
+								TotalTokenUsage: &model.TokenDetail{TotalTokens: 1200, InputTokens: 900, OutputTokens: 300, ReasoningOutputTokens: 50},
+								LastTokenUsage:  &model.TokenDetail{TotalTokens: 200, InputTokens: 100, OutputTokens: 100, ReasoningOutputTokens: 50},
+							},
+						},
+					},
+					{
+						LineNumber: 7,
+						Type:       "event_msg",
+						SubType:    "token_count",
+						EventMsg: &model.EventMsgPayload{
+							Info: &model.TokenInfo{
+								// ターン最後の token_count
+								TotalTokenUsage: &model.TokenDetail{TotalTokens: 1500, InputTokens: 1100, OutputTokens: 400, ReasoningOutputTokens: 100},
+								LastTokenUsage:  &model.TokenDetail{TotalTokens: 9999, InputTokens: 9999, OutputTokens: 9999, ReasoningOutputTokens: 9999},
+							},
+						},
+					},
+					{
+						LineNumber: 8,
+						Type:       "event_msg",
+						SubType:    "task_complete",
+						EventMsg: &model.EventMsgPayload{
+							TurnID: "turn-2",
+						},
+					},
+					// Turn 3 (No token counts)
+					{
+						LineNumber: 9,
+						Type:       "event_msg",
+						SubType:    "task_started",
+						EventMsg: &model.EventMsgPayload{
+							TurnID:             "turn-3",
+							ModelContextWindow: 64000,
+						},
+					},
+					{
+						LineNumber: 10,
+						Type:       "event_msg",
+						SubType:    "task_complete",
+						EventMsg: &model.EventMsgPayload{
+							TurnID: "turn-3",
+						},
+					},
+				}
+
+				parser := &mockSessionParser{
+					records: records,
+				}
+				cacheRepo := &mockCacheRepositoryForDetail{}
+				return "session-diff", sessionRepo, cacheRepo, parser, nil
+			},
+			wantErr: false,
+			verify: func(t *testing.T, res *dto.SessionDetailResponse, err error) {
+				if res == nil {
+					t.Fatalf("expected response, got nil")
+				}
+				turns := res.Statistics.Turns
+				if len(turns) != 3 {
+					t.Fatalf("expected 3 turns statistics, got %d", len(turns))
+				}
+
+				// Turn 1 (index 0) - should be 1000, 800, 200, 0
+				t1 := turns[0]
+				if t1.ConsumedTokens.TotalTokens != 1000 || t1.ConsumedTokens.InputTokens != 800 || t1.ConsumedTokens.OutputTokens != 200 || t1.ConsumedTokens.ReasoningOutputTokens != 0 {
+					t.Errorf("turn 1 consumed tokens mismatch: %+v", t1.ConsumedTokens)
+				}
+
+				// Turn 2 (index 1) - should be:
+				// Total: 1500 - 1000 = 500
+				// Input: 1100 - 800 = 300
+				// Output: 400 - 200 = 200
+				// Reasoning: 100 - 0 = 100
+				t2 := turns[1]
+				if t2.ConsumedTokens.TotalTokens != 500 || t2.ConsumedTokens.InputTokens != 300 || t2.ConsumedTokens.OutputTokens != 200 || t2.ConsumedTokens.ReasoningOutputTokens != 100 {
+					t.Errorf("turn 2 consumed tokens mismatch: %+v (expected: Total=500, Input=300, Output=200, Reasoning=100)", t2.ConsumedTokens)
+				}
+
+				// Turn 3 (index 2) - should be 0, 0, 0, 0 (no token counts in this turn)
+				t3 := turns[2]
+				if t3.ConsumedTokens.TotalTokens != 0 || t3.ConsumedTokens.InputTokens != 0 || t3.ConsumedTokens.OutputTokens != 0 || t3.ConsumedTokens.ReasoningOutputTokens != 0 {
+					t.Errorf("turn 3 consumed tokens mismatch: %+v", t3.ConsumedTokens)
+				}
+			},
+		},
 	}
 
 	for _, tt := range tests {

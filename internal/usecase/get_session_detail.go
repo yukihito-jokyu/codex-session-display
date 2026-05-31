@@ -165,6 +165,8 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 		var tokenCounts []*model.TypedRecord
 		var externalEvents []*model.TypedRecord
 		var genericRecords []*model.TypedRecord
+		functionOutputsByCallID := make(map[string]*model.TypedRecord)
+		customOutputsByCallID := make(map[string]*model.TypedRecord)
 
 		for _, record := range turn.Records {
 			switch record.Type {
@@ -220,6 +222,15 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 				}
 			default:
 				genericRecords = append(genericRecords, record)
+			}
+
+			if record.Type == "response_item" && record.ResponseItem != nil && record.ResponseItem.CallID != "" {
+				switch record.SubType {
+				case "function_call_output":
+					functionOutputsByCallID[record.ResponseItem.CallID] = record
+				case "custom_tool_call_output":
+					customOutputsByCallID[record.ResponseItem.CallID] = record
+				}
 			}
 		}
 
@@ -284,27 +295,10 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 					}
 				}
 
-				var outputBatch []*model.TypedRecord
-				for k < len(turn.Records) {
-					r := turn.Records[k]
-					if r.Type == "response_item" && r.SubType == "function_call_output" {
-						outputBatch = append(outputBatch, r)
-						k++
-					} else {
-						break
-					}
-				}
-
 				outputRecords := make([]*model.TypedRecord, len(callBatch))
-				outputMap := make(map[string]*model.TypedRecord)
-				for _, out := range outputBatch {
-					if out.ResponseItem != nil && out.ResponseItem.CallID != "" {
-						outputMap[out.ResponseItem.CallID] = out
-					}
-				}
 				for i, call := range callBatch {
 					if call.ResponseItem != nil {
-						if out, ok := outputMap[call.ResponseItem.CallID]; ok {
+						if out, ok := functionOutputsByCallID[call.ResponseItem.CallID]; ok && out.LineNumber > call.LineNumber {
 							outputRecords[i] = out
 						}
 					}
@@ -323,8 +317,10 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 				for _, r := range middleMessage {
 					batchRecordsSet[r.LineNumber] = true
 				}
-				for _, r := range outputBatch {
-					batchRecordsSet[r.LineNumber] = true
+				for _, r := range outputRecords {
+					if r != nil {
+						batchRecordsSet[r.LineNumber] = true
+					}
 				}
 				continue
 			}
@@ -341,27 +337,10 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 					}
 				}
 
-				var outputBatch []*model.TypedRecord
-				for k < len(turn.Records) {
-					r := turn.Records[k]
-					if r.Type == "response_item" && r.SubType == "custom_tool_call_output" {
-						outputBatch = append(outputBatch, r)
-						k++
-					} else {
-						break
-					}
-				}
-
 				outputRecords := make([]*model.TypedRecord, len(callBatch))
-				outputMap := make(map[string]*model.TypedRecord)
-				for _, out := range outputBatch {
-					if out.ResponseItem != nil && out.ResponseItem.CallID != "" {
-						outputMap[out.ResponseItem.CallID] = out
-					}
-				}
 				for i, call := range callBatch {
 					if call.ResponseItem != nil {
-						if out, ok := outputMap[call.ResponseItem.CallID]; ok {
+						if out, ok := customOutputsByCallID[call.ResponseItem.CallID]; ok && out.LineNumber > call.LineNumber {
 							outputRecords[i] = out
 						}
 					}
@@ -376,8 +355,10 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 				for _, r := range callBatch {
 					batchRecordsSet[r.LineNumber] = true
 				}
-				for _, r := range outputBatch {
-					batchRecordsSet[r.LineNumber] = true
+				for _, r := range outputRecords {
+					if r != nil {
+						batchRecordsSet[r.LineNumber] = true
+					}
 				}
 				continue
 			}
@@ -1003,12 +984,29 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 	// Step 4: 各 token_count を Binding
 	var tokenCountsList []dto.TokenCountEntry
 	var tcIdx int
+	resolveBoundNodeID := func(turn *model.Turn, tc *model.TokenCountWithBinding) string {
+		if tc.BoundToRecord != nil {
+			if nodeID := RecordToNodeID[tc.BoundToRecord.LineNumber]; nodeID != "" {
+				return nodeID
+			}
+		}
+		for i := len(turn.Records) - 1; i >= 0; i-- {
+			record := turn.Records[i]
+			if record.LineNumber >= tc.Record.LineNumber {
+				continue
+			}
+			if record.Type == "event_msg" && record.SubType == "token_count" {
+				continue
+			}
+			if nodeID := RecordToNodeID[record.LineNumber]; nodeID != "" {
+				return nodeID
+			}
+		}
+		return ""
+	}
 	for _, turn := range turns {
 		for _, tc := range turn.TokenCounts {
-			var boundNodeID string
-			if tc.BoundToRecord != nil {
-				boundNodeID = RecordToNodeID[tc.BoundToRecord.LineNumber]
-			}
+			boundNodeID := resolveBoundNodeID(turn, tc)
 
 			var totalUsage, lastUsage *model.TokenDetail
 			if tc.Record.EventMsg != nil && tc.Record.EventMsg.Info != nil {
@@ -1067,6 +1065,8 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 	var lastTotalTokens int64
 	var turnStats []dto.TurnStatistics
 
+	var prevTotalTokens, prevInputTokens, prevOutputTokens, prevReasoningTokens int64
+
 	for _, turn := range turns {
 		if turn.Index < 0 {
 			continue
@@ -1099,15 +1099,19 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 
 		// Turn Statistics
 		var turnTotalTokens, turnInputTokens, turnOutputTokens, turnReasoningTokens int64
-		for _, tc := range turn.TokenCounts {
-			if tc.Record.EventMsg != nil && tc.Record.EventMsg.Info != nil {
-				l := tc.Record.EventMsg.Info.LastTokenUsage
-				if l != nil {
-					turnTotalTokens += l.TotalTokens
-					turnInputTokens += l.InputTokens
-					turnOutputTokens += l.OutputTokens
-					turnReasoningTokens += l.ReasoningOutputTokens
-				}
+		if len(turn.TokenCounts) > 0 {
+			lastTc := turn.TokenCounts[len(turn.TokenCounts)-1]
+			if lastTc.Record.EventMsg != nil && lastTc.Record.EventMsg.Info != nil && lastTc.Record.EventMsg.Info.TotalTokenUsage != nil {
+				tUsage := lastTc.Record.EventMsg.Info.TotalTokenUsage
+				turnTotalTokens = tUsage.TotalTokens - prevTotalTokens
+				turnInputTokens = tUsage.InputTokens - prevInputTokens
+				turnOutputTokens = tUsage.OutputTokens - prevOutputTokens
+				turnReasoningTokens = tUsage.ReasoningOutputTokens - prevReasoningTokens
+
+				prevTotalTokens = tUsage.TotalTokens
+				prevInputTokens = tUsage.InputTokens
+				prevOutputTokens = tUsage.OutputTokens
+				prevReasoningTokens = tUsage.ReasoningOutputTokens
 			}
 		}
 
