@@ -25,7 +25,12 @@ export function useSessionDetail(id: string | undefined) {
 	}, []);
 
 	useEffect(() => {
-		if (!id) return;
+		if (!id) {
+			setSessionData(null);
+			setError("Session ID is missing.");
+			setLoading(false);
+			return;
+		}
 		fetchSessionDetail(id);
 	}, [id, fetchSessionDetail]);
 

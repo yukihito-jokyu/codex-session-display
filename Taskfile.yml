@@ -34,6 +34,14 @@ tasks:
     cmds:
       - cd frontend && npx playwright test --ui
 
+  test:e2e:cover:
+    desc: フロントエンドのE2Eテストを実行し、テストカバレッジを測定してHTMLで表示します
+    cmds:
+      - cd frontend && rm -rf .nyc_output coverage-e2e
+      - cd frontend && VITE_COVERAGE=true npx playwright test
+      - cd frontend && npx nyc report
+
+
   cover:
     desc: バックエンドのテストカバレッジを測定し、HTMLで表示します
     cmds:

@@ -7,10 +7,15 @@ interface DateTreeProps {
 	sessions: SessionSummary[];
 }
 
+interface GroupedSessionEntry {
+	session: SessionSummary;
+	sortKey: string;
+}
+
 interface GroupedDays {
 	[day: string]: {
 		count: number;
-		sessions: SessionSummary[];
+		sessions: GroupedSessionEntry[];
 	};
 }
 
@@ -28,6 +33,18 @@ interface GroupedData {
 	};
 }
 
+const getGroupingDate = (session: SessionSummary) => {
+	const candidates = [session.timestamp, session.file_modified_at];
+	for (const candidate of candidates) {
+		if (!candidate) continue;
+		const date = new Date(candidate);
+		if (!Number.isNaN(date.getTime())) {
+			return date;
+		}
+	}
+	return null;
+};
+
 export const DateTree: React.FC<DateTreeProps> = ({ sessions }) => {
 	const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
 
@@ -35,13 +52,13 @@ export const DateTree: React.FC<DateTreeProps> = ({ sessions }) => {
 	const grouped = useMemo(() => {
 		const result: GroupedData = {};
 		sessions.forEach((s) => {
-			if (!s.timestamp) return;
-			const date = new Date(s.timestamp);
-			if (Number.isNaN(date.getTime())) return;
+			const date = getGroupingDate(s);
+			if (!date) return;
 
 			const y = date.getFullYear().toString();
 			const m = (date.getMonth() + 1).toString().padStart(2, "0");
 			const d = date.getDate().toString().padStart(2, "0");
+			const sortKey = date.toISOString();
 
 			if (!result[y]) {
 				result[y] = { count: 0, months: {} };
@@ -56,7 +73,7 @@ export const DateTree: React.FC<DateTreeProps> = ({ sessions }) => {
 			result[y].count++;
 			result[y].months[m].count++;
 			result[y].months[m].days[d].count++;
-			result[y].months[m].days[d].sessions.push(s);
+			result[y].months[m].days[d].sessions.push({ session: s, sortKey });
 		});
 		return result;
 	}, [sessions]);
@@ -72,13 +89,11 @@ export const DateTree: React.FC<DateTreeProps> = ({ sessions }) => {
 		const months = Object.keys(grouped[latestYear].months).sort((a, b) =>
 			b.localeCompare(a),
 		);
-		if (months.length === 0) return;
 		const latestMonth = months[0];
 
 		const days = Object.keys(grouped[latestYear].months[latestMonth].days).sort(
 			(a, b) => b.localeCompare(a),
 		);
-		if (days.length === 0) return;
 		const latestDay = days[0];
 
 		const initialExpanded = new Set<string>();
@@ -100,7 +115,7 @@ export const DateTree: React.FC<DateTreeProps> = ({ sessions }) => {
 
 	const sortedYears = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
 
-	if (sessions.length === 0) {
+	if (sessions.length === 0 || sortedYears.length === 0) {
 		return (
 			<div className={styles.empty}>
 				<div className={styles.emptyIcon}>📂</div>
@@ -190,9 +205,7 @@ export const DateTree: React.FC<DateTreeProps> = ({ sessions }) => {
 														// 念のため、日のセッションをタイムスタンプの降順でソートする
 														const sortedSessions = [...daySessions].sort(
 															(a, b) => {
-																const ta = a.timestamp || "";
-																const tb = b.timestamp || "";
-																return tb.localeCompare(ta);
+																return b.sortKey.localeCompare(a.sortKey);
 															},
 														);
 
@@ -225,7 +238,7 @@ export const DateTree: React.FC<DateTreeProps> = ({ sessions }) => {
 
 																{dayExpanded && (
 																	<div className={styles.sessionsList}>
-																		{sortedSessions.map((session) => (
+																		{sortedSessions.map(({ session }) => (
 																			<SessionRow
 																				key={session.id}
 																				session={session}
