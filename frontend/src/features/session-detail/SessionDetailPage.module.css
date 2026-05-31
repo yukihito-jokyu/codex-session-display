@@ -1,0 +1,233 @@
+.detailPage {
+	display: flex;
+	flex-direction: column;
+	height: 100%;
+	overflow: hidden;
+	background: var(--bg-app);
+}
+
+.detailHeader {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+	padding: 12px 24px;
+	background: var(--bg-header);
+	border-bottom: 1px solid var(--border-color);
+}
+
+.backBtn {
+	padding: 6px 12px;
+	font-size: 12px;
+	font-weight: 500;
+	color: var(--text-primary);
+	background: var(--bg-btn);
+	border: 1px solid var(--border-color);
+	border-radius: 6px;
+	cursor: pointer;
+	transition: all 0.2s;
+}
+
+.backBtn:hover {
+	background: var(--bg-btn-hover);
+	border-color: var(--text-secondary);
+}
+
+.detailTitle {
+	font-size: 14px;
+	font-weight: 600;
+	color: var(--text-primary);
+}
+
+/* Detail Page Content layout */
+.detailContent {
+	flex: 1;
+	position: relative;
+	display: flex;
+	overflow: hidden;
+	height: 100%;
+}
+
+.canvasWrapper {
+	flex: 1;
+	height: 100%;
+	position: relative;
+	overflow: hidden;
+}
+
+/* Bottom Panel styles */
+.bottomPanel {
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	height: 200px;
+	background: var(--bg-header);
+	border-top: 1px solid var(--border-color);
+	display: flex;
+	flex-direction: column;
+	z-index: 100;
+	box-shadow: 0 -4px 16px var(--panel-shadow);
+	transition: transform 0.2s ease-in-out;
+}
+
+.bottomPanelHeader {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 8px 16px;
+	border-bottom: 1px solid var(--border-color);
+	background: rgba(255, 255, 255, 0.02);
+}
+
+.bottomPanelTitle {
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--text-primary);
+}
+
+.panelCloseBtn {
+	background: transparent;
+	border: none;
+	color: var(--text-secondary);
+	font-size: 16px;
+	cursor: pointer;
+	padding: 4px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 4px;
+	width: 24px;
+	height: 24px;
+	transition: background-color 0.2s;
+}
+
+.panelCloseBtn:hover {
+	background: var(--bg-btn-hover);
+	color: var(--text-primary);
+}
+
+.bottomPanelContent {
+	flex: 1;
+	padding: 16px;
+	overflow-y: auto;
+	display: flex;
+	gap: 16px;
+	font-size: 12px;
+}
+
+.panelLeft {
+	flex: 1;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	min-width: 0;
+}
+
+.metaTable {
+	width: 100%;
+	border-collapse: collapse;
+	margin-bottom: 8px;
+}
+
+.metaTable th,
+.metaTable td {
+	padding: 4px 8px;
+	text-align: left;
+	border-bottom: 1px solid var(--border-color);
+}
+
+.metaTable th {
+	font-weight: 600;
+	color: var(--text-secondary);
+	width: 120px;
+}
+
+.metaTable td {
+	color: var(--text-primary);
+	font-family: monospace;
+	word-break: break-all;
+}
+
+.fullTextLabel {
+	font-weight: 600;
+	color: var(--text-secondary);
+	margin-bottom: 4px;
+}
+
+.fullTextContent {
+	font-family: monospace;
+	white-space: pre-wrap;
+	background: var(--mono-bg);
+	padding: 8px;
+	border-radius: 4px;
+	border: 1px solid var(--border-color);
+	color: var(--text-primary);
+	overflow-x: auto;
+}
+
+/* Loading state */
+.loading {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	flex: 1;
+	gap: 16px;
+	color: var(--text-secondary);
+	font-size: 14px;
+}
+
+.spinner {
+	width: 32px;
+	height: 32px;
+	border: 3px solid var(--spinner-track);
+	border-radius: 50%;
+	border-top-color: var(--color-accent);
+	animation: spin 1s ease-in-out infinite;
+}
+
+@keyframes spin {
+	to {
+		transform: rotate(360deg);
+	}
+}
+
+/* Error Container */
+.errorContainer {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	flex: 1;
+	gap: 16px;
+	padding: 32px;
+	text-align: center;
+}
+
+.errorIcon {
+	font-size: 48px;
+}
+
+.errorMessage {
+	font-size: 14px;
+	color: var(--node-warning-text);
+	max-width: 400px;
+	line-height: 1.5;
+}
+
+.retryBtn {
+	padding: 8px 16px;
+	font-size: 13px;
+	font-weight: 500;
+	color: var(--text-primary);
+	background: var(--bg-btn);
+	border: 1px solid var(--border-color);
+	border-radius: 6px;
+	cursor: pointer;
+	transition: all 0.2s;
+}
+
+.retryBtn:hover {
+	background: var(--bg-btn-hover);
+	border-color: var(--text-secondary);
+}
