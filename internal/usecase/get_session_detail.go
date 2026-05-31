@@ -640,7 +640,7 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 			// 2d. user_message ノード
 			if turn.UserEventMsg != nil && turn.UserEventMsg.EventMsg != nil {
 				userMsgNodeID := fmt.Sprintf("node-%d", turn.UserEventMsg.LineNumber)
-				pushHarnessNode(userMsgNodeID, "userMessage", "turn", "User Message", "👤", turn.UserEventMsg.EventMsg.Message, "", nil, turn.Index, NodeHeight)
+				pushHarnessNode(userMsgNodeID, "userMessage", "turn", "User Message", "👤", turn.UserEventMsg.EventMsg.Message, turn.UserEventMsg.EventMsg.Message, nil, turn.Index, NodeHeight)
 				RecordToNodeID[turn.UserEventMsg.LineNumber] = userMsgNodeID
 			}
 
@@ -700,7 +700,7 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 					callNodeID := fmt.Sprintf("node-%d", call.LineNumber)
 					xPos := BranchOffsetX + float64(i)*(NodeWidth+BranchNodeGapX)
 
-					addBranchNode(callNodeID, "action", "action", call.ResponseItem.Name, "🛠️", call.ResponseItem.Arguments, "", nil, turn.Index, xPos, harnessTopY)
+					addBranchNode(callNodeID, "action", "action", call.ResponseItem.Name, "🛠️", call.ResponseItem.Arguments, call.ResponseItem.Arguments, nil, turn.Index, xPos, harnessTopY)
 					RecordToNodeID[call.LineNumber] = callNodeID
 					callIDToNodeID[call.ResponseItem.CallID] = callNodeID
 
@@ -721,7 +721,7 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 						outputNodeIDs = append(outputNodeIDs, outNodeID)
 						yPos := harnessTopY + NodeHeight + BatchNodeGap
 
-						addBranchNode(outNodeID, "action", "action", "Tool Output", "📤", output.ResponseItem.Output, "", nil, turn.Index, xPos, yPos)
+						addBranchNode(outNodeID, "action", "action", "Tool Output", "📤", output.ResponseItem.Output, output.ResponseItem.Output, nil, turn.Index, xPos, yPos)
 						RecordToNodeID[output.LineNumber] = outNodeID
 						callIDToNodeID[output.ResponseItem.CallID] = outNodeID
 
@@ -763,6 +763,7 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 							Label:     "Agent Message",
 							Icon:      "🤖",
 							Summary:   middleSummary,
+							FullText:  middleSummary,
 							TurnIndex: turn.Index,
 						},
 					}
@@ -896,7 +897,7 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 						}
 					}
 
-					pushHarnessNode(nodeID, "agentMessage", "turn", "Agent Message", "🤖", strings.Join(texts, "\n"), "", nil, turn.Index, NodeHeight)
+					pushHarnessNode(nodeID, "agentMessage", "turn", "Agent Message", "🤖", strings.Join(texts, "\n"), strings.Join(texts, "\n"), nil, turn.Index, NodeHeight)
 				}
 				idx++
 			}
