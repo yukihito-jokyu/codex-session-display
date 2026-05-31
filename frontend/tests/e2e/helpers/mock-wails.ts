@@ -121,6 +121,107 @@ export async function mockWailsAPI(
 			return filtered;
 		};
 
+		go.main.App.GetSessionDetail = async (id: string) => {
+			(window as any).__getSessionDetailCalls =
+				(window as any).__getSessionDetailCalls || [];
+			(window as any).__getSessionDetailCalls.push({ id });
+
+			if (id === "trigger-error") {
+				throw new Error("Mocked Detail API Error");
+			}
+
+			return {
+				id: id,
+				parsed_at: "2026-05-20T10:00:00Z",
+				nodes: [
+					{
+						id: "node-meta",
+						type: "sessionMeta",
+						position: { x: 0, y: 0 },
+						data: {
+							category: "meta",
+							label: "Session Meta",
+							icon: "⚙️",
+							summary: "CLI Version: 1.0.0",
+							fullText: "Full session meta details here",
+							turnIndex: -1,
+						},
+					},
+					{
+						id: "node-context-doc",
+						type: "contextDoc",
+						position: { x: 400, y: 0 },
+						data: {
+							category: "context",
+							label: "User Instructions",
+							icon: "📜",
+							summary: "▸ クリックして展開",
+							fullText:
+								"This is a detailed user instruction text that can be expanded.",
+							turnIndex: -1,
+						},
+					},
+					{
+						id: "node-user-msg",
+						type: "userMessage",
+						position: { x: 0, y: 120 },
+						data: {
+							category: "message",
+							label: "User Message",
+							icon: "👤",
+							summary: "Hello, agent",
+							fullText: "Hello, agent, please help me.",
+							turnIndex: 0,
+							tokenBadge: {
+								totalTokens: 150000,
+								tokenCountIndex: 0,
+								boundCount: 2,
+							},
+						},
+					},
+					{
+						id: "node-orphan-event",
+						type: "taskEvent",
+						position: { x: 0, y: 240 },
+						data: {
+							category: "event",
+							label: "Orphan Complete",
+							icon: "⚠️",
+							summary: "Orphan complete/aborted event without task_started",
+							fullText: "Orphan complete details",
+							turnIndex: -1,
+						},
+					},
+				],
+				edges: [
+					{
+						id: "edge-meta-usermsg",
+						source: "node-meta",
+						target: "node-user-msg",
+						type: "default",
+						animated: false,
+					},
+					{
+						id: "edge-context-meta",
+						source: "node-context-doc",
+						target: "node-meta",
+						type: "step",
+						animated: false,
+					},
+				],
+				statistics: {
+					duration_ms: 5000,
+					total_tokens: 150,
+					tool_call_count: 0,
+					token_count_count: 0,
+					context_window_size: 2048,
+					turn_count: 1,
+					turns: [],
+				},
+				token_counts: [],
+			};
+		};
+
 		(window as any).go = go;
 	}, sessions);
 }

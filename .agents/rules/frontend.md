@@ -6,9 +6,13 @@
 
 ## 1. 技術スタックと構造
 
-1. **基本構成**
+1. **基本構成とディレクトリ設計**
    - React (v18) + TypeScript + Vite によるSPA構成。
-   - コンポーネントは `frontend/src/components/ui/` 配下に機能単位のディレクトリを作成して配置します（例: `Toolbar/Toolbar.tsx`）。
+   - 責務に応じてディレクトリを以下のように明確に分割・管理します：
+     - **`frontend/src/components/ui/`**: Wails API（IPC通信）や特定の画面の状態管理に依存しない、純粋に Props を受け取って表示する **Presentational（Dumb）コンポーネント** を配置します（例: `DateTree/`, `FlowCanvas/`, `Toolbar/` など）。
+     - **`frontend/src/features/`**: 機能・ドメインごとのモジュールを配置します。
+       - 各画面（ページ）の組み立てを行うコンポーネントと、画面固有の CSS Module を配置します（例: `SessionListPage.tsx`, `SessionListPage.module.css`）。
+       - 画面内の状態管理や Wails API の呼び出しなどのビジネスロジックは、すべて `features/{feature-name}/hooks/` 配下のカスタムフック（例: `useSessions.ts`）に切り出してカプセル化（ロジックの分離）を行います。
 
 2. **ルーティング**
    - デスクトップアプリ（Wails）特有の制約（ローカルのファイルプロトコルで動作する）があるため、`BrowserRouter` ではなく **`HashRouter`**（`react-router-dom`）を必ず使用してください。

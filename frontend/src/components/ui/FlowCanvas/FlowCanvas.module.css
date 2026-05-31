@@ -1,0 +1,212 @@
+.canvasContainer {
+	width: 100%;
+	height: 100%;
+	flex-grow: 1;
+	position: relative;
+	background: var(--bg-app);
+}
+
+.customNode {
+	border-radius: 6px;
+	padding: 10px;
+	width: 320px;
+	min-height: 80px;
+	font-size: 12px;
+	color: var(--text-primary);
+	box-shadow: 0 4px 6px var(--panel-shadow);
+	transition:
+		border-color 0.2s,
+		box-shadow 0.2s;
+	text-align: left;
+	box-sizing: border-box;
+	display: flex;
+	flex-direction: column;
+	background-color: var(--bg-card);
+	border: 1px solid var(--border-color);
+}
+
+.customNode:hover {
+	border-color: var(--node-accent, var(--color-accent));
+	box-shadow: 0 0 8px rgba(88, 166, 255, 0.15);
+}
+
+.customNode.selected {
+	border: 2px solid var(--node-accent, var(--color-accent));
+	padding: 9px; /* 枠線が2pxになるためpaddingを1px小さく調整 */
+	box-shadow: 0 0 12px rgba(88, 166, 255, 0.25);
+}
+
+.customNode.outOfTurn {
+	border-style: dashed;
+}
+
+/* Category mapping via classes */
+.nodeMeta,
+.nodeTurnCtx,
+.nodeContextDoc {
+	background-color: var(--node-meta-bg);
+	border: 1px solid var(--node-meta-border);
+	--node-accent: var(--node-meta-text);
+	--node-icon-bg: var(--node-meta-icon-bg);
+}
+
+.nodeDeveloperMessage,
+.nodeUserMessage,
+.nodeUserApiMessage {
+	background-color: var(--node-input-bg);
+	border: 1px solid var(--node-input-border);
+	--node-accent: var(--node-input-text);
+	--node-icon-bg: var(--node-input-icon-bg);
+}
+
+.nodeAgentMessage {
+	background-color: var(--node-output-bg);
+	border: 1px solid var(--node-output-border);
+	--node-accent: var(--node-output-text);
+	--node-icon-bg: var(--node-output-icon-bg);
+}
+
+.nodeReasoning {
+	background-color: var(--node-think-bg);
+	border: 1px solid var(--node-think-border);
+	--node-accent: var(--node-think-text);
+	--node-icon-bg: var(--node-think-icon-bg);
+}
+
+.nodeAction,
+.nodeWebSearch,
+.nodeExternalEvent {
+	background-color: var(--node-action-bg);
+	border: 1px solid var(--node-action-border);
+	--node-accent: var(--node-action-text);
+	--node-icon-bg: var(--node-action-icon-bg);
+}
+
+.nodeTurnStart,
+.nodeTurnEnd,
+.nodeItemCompleted,
+.nodeGeneric {
+	background-color: var(--node-event-bg);
+	border: 1px solid var(--node-event-border);
+	--node-accent: var(--node-event-text);
+	--node-icon-bg: var(--node-event-icon-bg);
+}
+
+.customNode.nodeWarning {
+	background-color: var(--node-warning-bg);
+	border: 1px solid var(--node-warning-border);
+	--node-accent: var(--node-warning-text);
+	--node-icon-bg: var(--node-warning-icon-bg);
+}
+
+/* Header */
+.nodeHeader {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding-bottom: 6px;
+	border-bottom: 1px solid var(--border-color);
+	margin-bottom: 6px;
+}
+
+.headerLeft {
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	min-width: 0;
+}
+
+.nodeIcon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	border-radius: 4px;
+	background-color: var(--node-icon-bg, rgba(255, 255, 255, 0.05));
+	color: var(--node-accent, var(--text-primary));
+	font-size: 12px;
+	flex-shrink: 0;
+}
+
+.nodeLabel {
+	font-weight: 600;
+	color: var(--node-accent, var(--text-primary));
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.tokenBadge {
+	font-size: 10px;
+	padding: 2px 4px;
+	border-radius: 3px;
+	background: var(--accent-badge-bg);
+	border: 1px solid var(--accent-badge-border);
+	color: var(--color-accent);
+	font-family: monospace;
+	flex-shrink: 0;
+}
+
+/* Body */
+.nodeBody {
+	color: var(--text-secondary);
+	font-size: 11px;
+	line-height: 1.4;
+	word-break: break-word;
+	overflow: hidden;
+	display: -webkit-box;
+	-webkit-line-clamp: 2;
+	-webkit-box-orient: vertical;
+}
+
+/* Context folding styles */
+.collapsedDoc {
+	cursor: pointer;
+	color: var(--text-secondary);
+	font-size: 11px;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	padding: 4px 0;
+	user-select: none;
+}
+
+.collapsedDoc:hover {
+	color: var(--node-accent, var(--color-accent));
+}
+
+.expandedDoc {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 4px 0;
+	width: 100%;
+}
+
+.expandedDocTitle {
+	font-size: 11px;
+	color: var(--text-muted);
+	cursor: pointer;
+	display: flex;
+	align-items: center;
+	gap: 4px;
+	user-select: none;
+}
+
+.expandedDocTitle:hover {
+	color: var(--node-accent, var(--color-accent));
+}
+
+.expandedDocContent {
+	font-family: monospace;
+	font-size: 10px;
+	white-space: pre-wrap;
+	background: var(--mono-bg);
+	padding: 6px;
+	border-radius: 4px;
+	max-height: 120px;
+	overflow-y: auto;
+	color: var(--text-primary);
+	border: 1px solid var(--border-color);
+}

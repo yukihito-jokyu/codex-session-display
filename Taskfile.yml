@@ -57,3 +57,8 @@ tasks:
     cmds:
       - rm -rf build/
       - rm -f coverage.out
+
+  clean:cache:
+    desc: 解析キャッシュのJSONファイルを削除します
+    cmds:
+      - rm -f ~/.codex-display/*.json
