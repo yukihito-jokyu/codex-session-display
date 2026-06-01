@@ -18,6 +18,7 @@ interface FlowCanvasProps {
 	edges: dto.FlowEdge[];
 	onNodeSelect: (node: dto.FlowNode | null) => void;
 	selectedNodeId?: string;
+	selectedNodeType?: string;
 	zoomTarget?: { nodeId: string; timestamp: number } | null;
 }
 
@@ -26,6 +27,7 @@ function FlowCanvasInner({
 	edges,
 	onNodeSelect,
 	selectedNodeId,
+	selectedNodeType,
 	zoomTarget,
 }: FlowCanvasProps) {
 	const { fitView } = useReactFlow();
@@ -39,6 +41,15 @@ function FlowCanvasInner({
 	}, [nodes, selectedNodeId]);
 
 	const onNodeClick = (_event: React.MouseEvent, node: Node) => {
+		if (
+			selectedNodeId &&
+			selectedNodeType !== "contextDoc" &&
+			node.id !== selectedNodeId
+		) {
+			onNodeSelect(null);
+			return;
+		}
+
 		const originalNode = nodes.find((n) => n.id === node.id);
 		onNodeSelect(originalNode as dto.FlowNode);
 	};

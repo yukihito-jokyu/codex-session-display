@@ -80,6 +80,7 @@ export function SessionDetailPage() {
 								edges={sessionData.edges || []}
 								onNodeSelect={handleNodeSelect}
 								selectedNodeId={selectedNode?.id}
+								selectedNodeType={selectedNode?.type}
 								zoomTarget={zoomTarget}
 							/>
 						)}
