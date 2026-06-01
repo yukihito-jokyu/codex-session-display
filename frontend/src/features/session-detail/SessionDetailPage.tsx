@@ -1,5 +1,6 @@
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { OpenLogDirectory } from "wailsjs/go/main/App";
 import type { dto } from "wailsjs/go/models";
 import { FlowCanvas } from "../../components/ui/FlowCanvas/FlowCanvas";
 import { useSessionDetail } from "./hooks/useSessionDetail";
@@ -10,6 +11,24 @@ const RightPanel = lazy(() =>
 		default: module.RightPanel,
 	})),
 );
+
+type AppWindow = Window & {
+	go?: {
+		main?: {
+			App?: {
+				GetLogFilePath?: () => Promise<string>;
+			};
+		};
+	};
+};
+
+async function getLogFilePath() {
+	const app = (window as AppWindow).go?.main?.App;
+	if (!app?.GetLogFilePath) {
+		throw new Error("GetLogFilePath is unavailable");
+	}
+	return app.GetLogFilePath();
+}
 
 export function SessionDetailPage() {
 	const { id } = useParams<{ id: string }>();
@@ -24,6 +43,7 @@ export function SessionDetailPage() {
 		nodeId: string;
 		timestamp: number;
 	} | null>(null);
+	const [logActionMessage, setLogActionMessage] = useState<string | null>(null);
 	const splitContainerRef = useRef<HTMLDivElement | null>(null);
 	const dragStateRef = useRef<{
 		startX: number;
@@ -51,6 +71,29 @@ export function SessionDetailPage() {
 	const handleTokenBadgeClick = (node: dto.FlowNode) => {
 		handleNodeSelect(node);
 		setBottomPanelMode("token");
+	};
+
+	const handleOpenLogDirectory = async () => {
+		try {
+			await OpenLogDirectory();
+			setLogActionMessage("ログフォルダを開きました");
+		} catch (openError) {
+			setLogActionMessage(
+				`ログフォルダを開けませんでした: ${String(openError)}`,
+			);
+		}
+	};
+
+	const handleCopyLogPath = async () => {
+		try {
+			const logPath = await getLogFilePath();
+			await navigator.clipboard.writeText(logPath);
+			setLogActionMessage("ログパスをコピーしました");
+		} catch (copyError) {
+			setLogActionMessage(
+				`ログパスをコピーできませんでした: ${String(copyError)}`,
+			);
+		}
 	};
 
 	useEffect(() => {
@@ -139,7 +182,7 @@ export function SessionDetailPage() {
 			<div className={styles.errorContainer}>
 				<span className={styles.errorIcon}>⚠️</span>
 				<span className={styles.errorMessage}>{error}</span>
-				<div style={{ display: "flex", gap: "8px" }}>
+				<div className={styles.errorActions}>
 					<button type="button" className={styles.retryBtn} onClick={retry}>
 						Retry
 					</button>
@@ -151,6 +194,25 @@ export function SessionDetailPage() {
 						Back to List
 					</button>
 				</div>
+				<div className={styles.errorActions}>
+					<button
+						type="button"
+						className={styles.secondaryBtn}
+						onClick={handleOpenLogDirectory}
+					>
+						ログフォルダを開く
+					</button>
+					<button
+						type="button"
+						className={styles.secondaryBtn}
+						onClick={handleCopyLogPath}
+					>
+						ログパスをコピー
+					</button>
+				</div>
+				{logActionMessage && (
+					<span className={styles.logActionMessage}>{logActionMessage}</span>
+				)}
 			</div>
 		);
 	}
