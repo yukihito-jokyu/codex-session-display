@@ -202,6 +202,63 @@ test.describe("セッション詳細画面 E2E テスト", () => {
 		await expect(badge).toBeVisible();
 	});
 
+	test("トークンバッジクリックで下部パネルが左右分割表示に切り替わり、トークン詳細が表示されること", async ({
+		page,
+	}) => {
+		await page.locator("text=sess-001").click();
+
+		await page
+			.getByRole("button", { name: "User Message token badge" })
+			.click();
+
+		await expect(page.getByTestId("bottom-panel")).toBeVisible();
+		await expect(page.getByTestId("bottom-panel-split")).toBeVisible();
+		await expect(page.getByTestId("bottom-panel-token-detail")).toBeVisible();
+		await expect(page.locator("text=Token Detail")).toBeVisible();
+		await expect(page.locator("text=2 entries")).toBeVisible();
+		await expect(page.locator("text=Index #0")).toBeVisible();
+		await expect(page.locator("text=Index #1")).toBeVisible();
+	});
+
+	test("左右分割表示の境界ドラッグでノード詳細ペインの幅が変わること", async ({
+		page,
+	}) => {
+		await page.locator("text=sess-001").click();
+		await page
+			.getByRole("button", { name: "User Message token badge" })
+			.click();
+
+		const leftPane = page.getByTestId("bottom-panel-node-detail");
+		const resizer = page.getByTestId("bottom-panel-resizer");
+		const before = await leftPane.boundingBox();
+		if (!before) {
+			throw new Error("left pane bounding box not found");
+		}
+
+		const handle = await resizer.boundingBox();
+		if (!handle) {
+			throw new Error("resizer bounding box not found");
+		}
+
+		await page.mouse.move(
+			handle.x + handle.width / 2,
+			handle.y + handle.height / 2,
+		);
+		await page.mouse.down();
+		await page.mouse.move(
+			handle.x + handle.width / 2 + 120,
+			handle.y + handle.height / 2,
+		);
+		await page.mouse.up();
+
+		const after = await leftPane.boundingBox();
+		if (!after) {
+			throw new Error("left pane bounding box not found after drag");
+		}
+
+		expect(after.width).toBeGreaterThan(before.width + 40);
+	});
+
 	test("右パネル（Session Analytics）に統計カード、グラフ、サマリー、トークンテーブルが正しく描画されること", async ({
 		page,
 	}) => {
