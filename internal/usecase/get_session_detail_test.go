@@ -1,12 +1,14 @@
 package usecase_test
 
 import (
+	"bytes"
 	"codex-session-display/internal/domain/dto"
 	"codex-session-display/internal/domain/model"
 	"codex-session-display/internal/repository"
 	"codex-session-display/internal/usecase"
 	"context"
 	"errors"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"strings"
@@ -116,6 +118,17 @@ func (m *mockSessionParser) ParseSessionFile(ctx context.Context, filePath strin
 		return nil, m.err
 	}
 	return m.records, nil
+}
+
+func setupUsecaseTestLogger(t *testing.T) (*bytes.Buffer, func()) {
+	t.Helper()
+	var buf bytes.Buffer
+	handler := slog.NewTextHandler(&buf, &slog.HandlerOptions{Level: slog.LevelDebug})
+	oldDefault := slog.Default()
+	slog.SetDefault(slog.New(handler))
+	return &buf, func() {
+		slog.SetDefault(oldDefault)
+	}
 }
 
 func TestGetSessionDetailUseCase_Execute(t *testing.T) {
@@ -1374,6 +1387,236 @@ func TestGetSessionDetailUseCase_Execute(t *testing.T) {
 				}
 				if fallbackNode.Data.TokenBadge.TotalTokens != 900 {
 					t.Fatalf("expected fallback badge total tokens to be 900, got %+v", fallbackNode.Data.TokenBadge)
+				}
+			},
+		},
+		{
+			name: "falls back to index based mapping when call ids are entirely missing",
+			setup: func(t *testing.T, tmpDir string) (string, usecase.SessionRepository, usecase.CacheRepository, usecase.SessionParser, func()) {
+				sessionID := "session-index-fallback"
+				sessionRepo := &mockSessionRepositoryForDetail{
+					paths: map[string]string{sessionID: filepath.Join(tmpDir, "rollout-index-fallback.jsonl")},
+				}
+
+				records := []*model.TypedRecord{
+					{
+						LineNumber: 1,
+						Type:       "session_meta",
+						SessionMeta: &model.SessionMetaPayload{
+							ID:         sessionID,
+							CliVersion: "v0.135.0",
+						},
+					},
+					{
+						LineNumber: 2,
+						Type:       "event_msg",
+						SubType:    "task_started",
+						EventMsg: &model.EventMsgPayload{
+							TurnID: "turn-index-fallback",
+						},
+					},
+					{
+						LineNumber: 3,
+						Type:       "response_item",
+						SubType:    "function_call",
+						ResponseItem: &model.ResponseItemPayload{
+							Name:      "read_file",
+							Arguments: "{\"path\":\"a.txt\"}",
+						},
+					},
+					{
+						LineNumber: 4,
+						Type:       "response_item",
+						SubType:    "function_call",
+						ResponseItem: &model.ResponseItemPayload{
+							Name:      "write_file",
+							Arguments: "{\"path\":\"b.txt\"}",
+						},
+					},
+					{
+						LineNumber: 5,
+						Type:       "response_item",
+						SubType:    "function_call_output",
+						ResponseItem: &model.ResponseItemPayload{
+							Output: "alpha output",
+						},
+					},
+					{
+						LineNumber: 6,
+						Type:       "response_item",
+						SubType:    "function_call_output",
+						ResponseItem: &model.ResponseItemPayload{
+							Output: "beta output",
+						},
+					},
+					{
+						LineNumber: 7,
+						Type:       "event_msg",
+						SubType:    "task_complete",
+						EventMsg: &model.EventMsgPayload{
+							TurnID: "turn-index-fallback",
+						},
+					},
+				}
+
+				parser := &mockSessionParser{records: records}
+				cacheRepo := &mockCacheRepositoryForDetail{}
+
+				var cleanup func()
+				return sessionID, sessionRepo, cacheRepo, parser, func() {
+					if cleanup != nil {
+						cleanup()
+					}
+				}
+			},
+			wantErr: false,
+			verify: func(t *testing.T, res *dto.SessionDetailResponse, err error) {
+				if err != nil {
+					t.Fatalf("expected no error, got %v", err)
+				}
+
+				var outputLabels []string
+				for _, node := range res.Nodes {
+					if node.Type == "action" && strings.HasPrefix(node.Data.Label, "Output:") {
+						outputLabels = append(outputLabels, node.Data.Label+"="+node.Data.Summary)
+					}
+				}
+
+				expected := []string{
+					"Output: read_file=alpha output",
+					"Output: write_file=beta output",
+				}
+				if strings.Join(outputLabels, "|") != strings.Join(expected, "|") {
+					t.Fatalf("expected output mapping %v, got %v", expected, outputLabels)
+				}
+			},
+		},
+		{
+			name: "prefers matching call ids and falls back remaining outputs by index with warn log",
+			setup: func(t *testing.T, tmpDir string) (string, usecase.SessionRepository, usecase.CacheRepository, usecase.SessionParser, func()) {
+				sessionID := "session-partial-fallback"
+				filePath := filepath.Join(tmpDir, "rollout-partial-fallback.jsonl")
+				sessionRepo := &mockSessionRepositoryForDetail{
+					paths: map[string]string{sessionID: filePath},
+				}
+
+				records := []*model.TypedRecord{
+					{
+						LineNumber: 1,
+						Type:       "session_meta",
+						SessionMeta: &model.SessionMetaPayload{
+							ID:         sessionID,
+							CliVersion: "v0.135.0",
+						},
+					},
+					{
+						LineNumber: 2,
+						Type:       "event_msg",
+						SubType:    "task_started",
+						EventMsg: &model.EventMsgPayload{
+							TurnID: "turn-partial-fallback",
+						},
+					},
+					{
+						LineNumber: 3,
+						Type:       "response_item",
+						SubType:    "function_call",
+						ResponseItem: &model.ResponseItemPayload{
+							CallID:    "call-1",
+							Name:      "read_file",
+							Arguments: "{\"path\":\"a.txt\"}",
+						},
+					},
+					{
+						LineNumber: 4,
+						Type:       "response_item",
+						SubType:    "function_call",
+						ResponseItem: &model.ResponseItemPayload{
+							Name:      "write_file",
+							Arguments: "{\"path\":\"b.txt\"}",
+						},
+					},
+					{
+						LineNumber: 5,
+						Type:       "response_item",
+						SubType:    "function_call",
+						ResponseItem: &model.ResponseItemPayload{
+							CallID:    "call-3",
+							Name:      "delete_file",
+							Arguments: "{\"path\":\"c.txt\"}",
+						},
+					},
+					{
+						LineNumber: 6,
+						Type:       "response_item",
+						SubType:    "function_call_output",
+						ResponseItem: &model.ResponseItemPayload{
+							CallID: "call-1",
+							Output: "alpha output",
+						},
+					},
+					{
+						LineNumber: 7,
+						Type:       "response_item",
+						SubType:    "function_call_output",
+						ResponseItem: &model.ResponseItemPayload{
+							Output: "beta output",
+						},
+					},
+					{
+						LineNumber: 8,
+						Type:       "event_msg",
+						SubType:    "task_complete",
+						EventMsg: &model.EventMsgPayload{
+							TurnID: "turn-partial-fallback",
+						},
+					},
+				}
+
+				parser := &mockSessionParser{records: records}
+				cacheRepo := &mockCacheRepositoryForDetail{}
+				logBuf, restoreLogger := setupUsecaseTestLogger(t)
+
+				return sessionID, sessionRepo, cacheRepo, parser, func() {
+					restoreLogger()
+					logOutput := logBuf.String()
+					if !strings.Contains(logOutput, "call_id mismatch or missing, falling back to index-based mapping") {
+						t.Fatalf("expected warn log for fallback, got %s", logOutput)
+					}
+					for _, expected := range []string{
+						"file_path=" + filePath,
+						"turn_id=turn-partial-fallback",
+						"call_count=3",
+						"output_count=2",
+						"details=\"matched: 2, null_assigned: 1, discarded: 0\"",
+					} {
+						if !strings.Contains(logOutput, expected) {
+							t.Fatalf("expected fallback log to contain %q, got %s", expected, logOutput)
+						}
+					}
+				}
+			},
+			wantErr: false,
+			verify: func(t *testing.T, res *dto.SessionDetailResponse, err error) {
+				if err != nil {
+					t.Fatalf("expected no error, got %v", err)
+				}
+
+				outputs := map[string]string{}
+				for _, node := range res.Nodes {
+					if node.Type == "action" && strings.HasPrefix(node.Data.Label, "Output: ") {
+						outputs[node.Data.Label] = node.Data.Summary
+					}
+				}
+
+				if outputs["Output: read_file"] != "alpha output" {
+					t.Fatalf("expected read_file output to stay id-matched, got %q", outputs["Output: read_file"])
+				}
+				if outputs["Output: write_file"] != "beta output" {
+					t.Fatalf("expected write_file output to use index fallback, got %q", outputs["Output: write_file"])
+				}
+				if _, exists := outputs["Output: delete_file"]; exists {
+					t.Fatalf("expected delete_file to have null output and no output node, got %v", outputs["Output: delete_file"])
 				}
 			},
 		},
