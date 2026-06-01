@@ -18,12 +18,94 @@ type GetSessionDetailUseCase struct {
 	parser      SessionParser
 }
 
+type batchOutputResolution struct {
+	OutputRecords []*model.TypedRecord
+	Matched       int
+	NullAssigned  int
+	Discarded     int
+	FallbackUsed  bool
+}
+
 func NewGetSessionDetailUseCase(sessionRepo SessionRepository, cacheRepo CacheRepository, parser SessionParser) *GetSessionDetailUseCase {
 	return &GetSessionDetailUseCase{
 		sessionRepo: sessionRepo,
 		cacheRepo:   cacheRepo,
 		parser:      parser,
 	}
+}
+
+func resolveFunctionCallOutputs(filePath, turnID string, callBatch, outputBatch []*model.TypedRecord) batchOutputResolution {
+	result := batchOutputResolution{
+		OutputRecords: make([]*model.TypedRecord, len(callBatch)),
+	}
+	if len(callBatch) == 0 {
+		return result
+	}
+
+	callMatched := make([]bool, len(callBatch))
+	outputMatched := make([]bool, len(outputBatch))
+
+	for callIndex, call := range callBatch {
+		if call == nil || call.ResponseItem == nil || call.ResponseItem.CallID == "" {
+			continue
+		}
+		for outputIndex, output := range outputBatch {
+			if outputMatched[outputIndex] || output == nil || output.ResponseItem == nil {
+				continue
+			}
+			if output.ResponseItem.CallID == "" || output.ResponseItem.CallID != call.ResponseItem.CallID {
+				continue
+			}
+			result.OutputRecords[callIndex] = output
+			callMatched[callIndex] = true
+			outputMatched[outputIndex] = true
+			result.Matched++
+			break
+		}
+	}
+
+	var unmatchedCallIndexes []int
+	var unmatchedOutputs []*model.TypedRecord
+	for i := range callBatch {
+		if !callMatched[i] {
+			unmatchedCallIndexes = append(unmatchedCallIndexes, i)
+		}
+	}
+	for i, output := range outputBatch {
+		if !outputMatched[i] {
+			unmatchedOutputs = append(unmatchedOutputs, output)
+		}
+	}
+
+	if len(unmatchedCallIndexes) > 0 || len(unmatchedOutputs) > 0 {
+		result.FallbackUsed = true
+	}
+
+	for i, callIndex := range unmatchedCallIndexes {
+		if i < len(unmatchedOutputs) {
+			result.OutputRecords[callIndex] = unmatchedOutputs[i]
+			result.Matched++
+			continue
+		}
+		result.NullAssigned++
+	}
+
+	if len(unmatchedOutputs) > len(unmatchedCallIndexes) {
+		result.Discarded = len(unmatchedOutputs) - len(unmatchedCallIndexes)
+	}
+
+	if result.FallbackUsed {
+		logger.Warn(
+			"call_id mismatch or missing, falling back to index-based mapping",
+			"file_path", filePath,
+			"turn_id", turnID,
+			"call_count", len(callBatch),
+			"output_count", len(outputBatch),
+			"details", fmt.Sprintf("matched: %d, null_assigned: %d, discarded: %d", result.Matched, result.NullAssigned, result.Discarded),
+		)
+	}
+
+	return result
 }
 
 func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string) (*dto.SessionDetailResponse, error) {
@@ -166,7 +248,6 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 		var tokenCounts []*model.TypedRecord
 		var externalEvents []*model.TypedRecord
 		var genericRecords []*model.TypedRecord
-		functionOutputsByCallID := make(map[string]*model.TypedRecord)
 		customOutputsByCallID := make(map[string]*model.TypedRecord)
 
 		for _, record := range turn.Records {
@@ -224,12 +305,8 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 			default:
 				genericRecords = append(genericRecords, record)
 			}
-
 			if record.Type == "response_item" && record.ResponseItem != nil && record.ResponseItem.CallID != "" {
-				switch record.SubType {
-				case "function_call_output":
-					functionOutputsByCallID[record.ResponseItem.CallID] = record
-				case "custom_tool_call_output":
+				if record.SubType == "custom_tool_call_output" {
 					customOutputsByCallID[record.ResponseItem.CallID] = record
 				}
 			}
@@ -296,18 +373,30 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 					}
 				}
 
-				outputRecords := make([]*model.TypedRecord, len(callBatch))
-				for i, call := range callBatch {
-					if call.ResponseItem != nil {
-						if out, ok := functionOutputsByCallID[call.ResponseItem.CallID]; ok && out.LineNumber > call.LineNumber {
-							outputRecords[i] = out
+				var outputBatch []*model.TypedRecord
+				outputScanIndex := k
+				for outputScanIndex < len(turn.Records) {
+					r := turn.Records[outputScanIndex]
+					if r.Type == "response_item" && r.SubType == "function_call_output" {
+						for outputScanIndex < len(turn.Records) {
+							nextRecord := turn.Records[outputScanIndex]
+							if nextRecord.Type == "response_item" && nextRecord.SubType == "function_call_output" {
+								outputBatch = append(outputBatch, nextRecord)
+								outputScanIndex++
+								continue
+							}
+							break
 						}
+						break
 					}
+					outputScanIndex++
 				}
+				k = outputScanIndex
+				resolution := resolveFunctionCallOutputs(filePath, turn.TurnID, callBatch, outputBatch)
 
 				batch := &model.Batch{
 					CallRecords:   callBatch,
-					OutputRecords: outputRecords,
+					OutputRecords: resolution.OutputRecords,
 					MiddleMessage: middleMessage,
 				}
 				batches = append(batches, batch)
@@ -318,10 +407,8 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 				for _, r := range middleMessage {
 					batchRecordsSet[r.LineNumber] = true
 				}
-				for _, r := range outputRecords {
-					if r != nil {
-						batchRecordsSet[r.LineNumber] = true
-					}
+				for _, r := range outputBatch {
+					batchRecordsSet[r.LineNumber] = true
 				}
 				continue
 			}
@@ -703,7 +790,11 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 						outputNodeIDs = append(outputNodeIDs, outNodeID)
 						yPos := harnessTopY + NodeHeight + BatchNodeGap
 
-						addBranchNode(outNodeID, "action", "action", "Tool Output", "📤", output.ResponseItem.Output, output.ResponseItem.Output, nil, turn.Index, xPos, yPos)
+						outputLabel := "Tool Output"
+						if call.ResponseItem.Name != "" {
+							outputLabel = "Output: " + call.ResponseItem.Name
+						}
+						addBranchNode(outNodeID, "action", "action", outputLabel, "📤", output.ResponseItem.Output, output.ResponseItem.Output, nil, turn.Index, xPos, yPos)
 						RecordToNodeID[output.LineNumber] = outNodeID
 						callIDToNodeID[output.ResponseItem.CallID] = outNodeID
 
