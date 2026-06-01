@@ -259,6 +259,14 @@ func TestCacheFSRepository_SaveAndGetSessionDetail(t *testing.T) {
 		t.Fatalf("failed to get session detail: %v", err)
 	}
 
+	modTime, err := repo.GetSessionDetailModTime(context.Background(), sessionID)
+	if err != nil {
+		t.Fatalf("failed to get session detail mod time: %v", err)
+	}
+	if modTime.IsZero() {
+		t.Fatal("expected non-zero mod time")
+	}
+
 	if got.ID != detail.ID || len(got.Nodes) != len(detail.Nodes) || got.Nodes[0].ID != detail.Nodes[0].ID {
 		t.Errorf("got detail mismatch. Expected %+v, got %+v", detail, got)
 	}
@@ -267,6 +275,11 @@ func TestCacheFSRepository_SaveAndGetSessionDetail(t *testing.T) {
 	_, err = repo.GetSessionDetail(context.Background(), "non-existent")
 	if err == nil {
 		t.Error("expected error for non-existent session detail, got nil")
+	}
+
+	_, err = repo.GetSessionDetailModTime(context.Background(), "non-existent")
+	if err == nil {
+		t.Error("expected error for non-existent session detail mod time, got nil")
 	}
 
 	// 4. Decode JSON error

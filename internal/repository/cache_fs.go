@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"time"
 )
 
 // ErrSessionMetaNotFound はキャッシュ内に sessionMeta ノードが見つからない場合のエラーです。
@@ -94,9 +95,18 @@ func getStringPtr(m map[string]interface{}, key string) *string {
 	return &str
 }
 
+// GetSessionDetailModTime はキャッシュファイルの最終更新日時を返します。
+func (r *CacheFSRepository) GetSessionDetailModTime(ctx context.Context, sessionID string) (time.Time, error) {
+	info, err := os.Stat(r.cachePath(sessionID))
+	if err != nil {
+		return time.Time{}, err
+	}
+	return info.ModTime(), nil
+}
+
 // GetSessionDetail はキャッシュファイルを読み込み、SessionDetailResponse を返します。
 func (r *CacheFSRepository) GetSessionDetail(ctx context.Context, sessionID string) (*dto.SessionDetailResponse, error) {
-	cachePath := filepath.Join(r.cacheDir, sessionID+".json")
+	cachePath := r.cachePath(sessionID)
 
 	data, err := os.ReadFile(cachePath)
 	if err != nil {
@@ -113,7 +123,7 @@ func (r *CacheFSRepository) GetSessionDetail(ctx context.Context, sessionID stri
 
 // SaveSessionDetail は SessionDetailResponse をキャッシュファイルに書き込みます。
 func (r *CacheFSRepository) SaveSessionDetail(ctx context.Context, sessionID string, detail *dto.SessionDetailResponse) error {
-	cachePath := filepath.Join(r.cacheDir, sessionID+".json")
+	cachePath := r.cachePath(sessionID)
 
 	data, err := json.Marshal(detail)
 	if err != nil {
@@ -126,4 +136,8 @@ func (r *CacheFSRepository) SaveSessionDetail(ctx context.Context, sessionID str
 
 	logger.Info("cache write successful", "session_id", sessionID)
 	return nil
+}
+
+func (r *CacheFSRepository) cachePath(sessionID string) string {
+	return filepath.Join(r.cacheDir, sessionID+".json")
 }

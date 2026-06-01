@@ -16,8 +16,12 @@ import (
 
 // mockCacheRepositoryForDetail はテスト用のモックキャッシュリポジトリです。
 type mockCacheRepositoryForDetail struct {
-	cache   map[string]*dto.SessionDetailResponse
-	saveErr error
+	cache      map[string]*dto.SessionDetailResponse
+	modTimes   map[string]time.Time
+	saveErr    error
+	saveCount  int
+	lastSaved  *dto.SessionDetailResponse
+	lastSaveID string
 }
 
 func (m *mockCacheRepositoryForDetail) GetSessionSummary(ctx context.Context, sessionID string) (*dto.SessionSummary, error) {
@@ -34,6 +38,15 @@ func (m *mockCacheRepositoryForDetail) GetSessionDetail(ctx context.Context, ses
 	return nil, errors.New("not found")
 }
 
+func (m *mockCacheRepositoryForDetail) GetSessionDetailModTime(ctx context.Context, sessionID string) (time.Time, error) {
+	if m.modTimes != nil {
+		if modTime, ok := m.modTimes[sessionID]; ok {
+			return modTime, nil
+		}
+	}
+	return time.Time{}, errors.New("not found")
+}
+
 func (m *mockCacheRepositoryForDetail) SaveSessionDetail(ctx context.Context, sessionID string, detail *dto.SessionDetailResponse) error {
 	if m.saveErr != nil {
 		return m.saveErr
@@ -41,6 +54,9 @@ func (m *mockCacheRepositoryForDetail) SaveSessionDetail(ctx context.Context, se
 	if m.cache == nil {
 		m.cache = make(map[string]*dto.SessionDetailResponse)
 	}
+	m.saveCount++
+	m.lastSaveID = sessionID
+	m.lastSaved = detail
 	m.cache[sessionID] = detail
 	return nil
 }
@@ -91,9 +107,11 @@ func (m *mockSessionRepositoryForDetail) GetSessionModTime(ctx context.Context, 
 type mockSessionParser struct {
 	records []*model.TypedRecord
 	err     error
+	calls   int
 }
 
 func (m *mockSessionParser) ParseSessionFile(ctx context.Context, filePath string) ([]*model.TypedRecord, error) {
+	m.calls++
 	if m.err != nil {
 		return nil, m.err
 	}
@@ -287,6 +305,9 @@ func TestGetSessionDetailUseCase_Execute(t *testing.T) {
 					cache: map[string]*dto.SessionDetailResponse{
 						sessionID: cachedResponse,
 					},
+					modTimes: map[string]time.Time{
+						sessionID: time.Date(2026, 5, 31, 1, 0, 1, 0, time.UTC),
+					},
 				}
 				sessionRepo := &mockSessionRepositoryForDetail{
 					modTimes: map[string]time.Time{
@@ -299,6 +320,155 @@ func TestGetSessionDetailUseCase_Execute(t *testing.T) {
 			verify: func(t *testing.T, res *dto.SessionDetailResponse, err error) {
 				if res == nil || res.ID != "cached-session" {
 					t.Errorf("expected cached response, got %+v", res)
+				}
+			},
+		},
+		{
+			name: "fresh cache file is used even when parsed_at is old",
+			setup: func(t *testing.T, tmpDir string) (string, usecase.SessionRepository, usecase.CacheRepository, usecase.SessionParser, func()) {
+				sessionID := "cached-by-file-modtime"
+				cachedResponse := &dto.SessionDetailResponse{
+					ID:       sessionID,
+					ParsedAt: "2026-05-01T00:00:00Z",
+				}
+				cacheRepo := &mockCacheRepositoryForDetail{
+					cache: map[string]*dto.SessionDetailResponse{
+						sessionID: cachedResponse,
+					},
+					modTimes: map[string]time.Time{
+						sessionID: time.Date(2026, 5, 31, 3, 0, 0, 0, time.UTC),
+					},
+				}
+				sessionRepo := &mockSessionRepositoryForDetail{
+					modTimes: map[string]time.Time{
+						sessionID: time.Date(2026, 5, 31, 2, 0, 0, 0, time.UTC),
+					},
+				}
+				parser := &mockSessionParser{
+					records: []*model.TypedRecord{
+						{
+							Type: "session_meta",
+							SessionMeta: &model.SessionMetaPayload{
+								ID:         sessionID,
+								CliVersion: "0.131.0",
+							},
+						},
+					},
+				}
+				return sessionID, sessionRepo, cacheRepo, parser, func() {
+					if parser.calls != 0 {
+						t.Fatalf("expected parser not to be called, got %d", parser.calls)
+					}
+					if cacheRepo.saveCount != 0 {
+						t.Fatalf("expected cache save not to run, got %d", cacheRepo.saveCount)
+					}
+				}
+			},
+			wantErr: false,
+			verify: func(t *testing.T, res *dto.SessionDetailResponse, err error) {
+				if err != nil {
+					t.Fatalf("expected no error, got %v", err)
+				}
+				if res == nil || res.ID != "cached-by-file-modtime" {
+					t.Fatalf("expected cached response, got %+v", res)
+				}
+			},
+		},
+		{
+			name: "stale cache triggers reparse and save",
+			setup: func(t *testing.T, tmpDir string) (string, usecase.SessionRepository, usecase.CacheRepository, usecase.SessionParser, func()) {
+				sessionID := "stale-session"
+				cacheRepo := &mockCacheRepositoryForDetail{
+					cache: map[string]*dto.SessionDetailResponse{
+						sessionID: {
+							ID:       sessionID,
+							ParsedAt: "2026-05-31T01:00:00Z",
+						},
+					},
+					modTimes: map[string]time.Time{
+						sessionID: time.Date(2026, 5, 31, 0, 0, 0, 0, time.UTC),
+					},
+				}
+				sessionRepo := &mockSessionRepositoryForDetail{
+					paths: map[string]string{
+						sessionID: filepath.Join(tmpDir, "rollout-stale.jsonl"),
+					},
+					modTimes: map[string]time.Time{
+						sessionID: time.Date(2026, 5, 31, 2, 0, 0, 0, time.UTC),
+					},
+				}
+				parser := &mockSessionParser{
+					records: []*model.TypedRecord{
+						{
+							Type: "session_meta",
+							SessionMeta: &model.SessionMetaPayload{
+								ID:         sessionID,
+								CliVersion: "0.131.0",
+							},
+						},
+					},
+				}
+				return sessionID, sessionRepo, cacheRepo, parser, func() {
+					if parser.calls != 1 {
+						t.Fatalf("expected parser to be called once, got %d", parser.calls)
+					}
+					if cacheRepo.saveCount != 1 {
+						t.Fatalf("expected cache save once, got %d", cacheRepo.saveCount)
+					}
+					if cacheRepo.lastSaveID != sessionID {
+						t.Fatalf("expected saved session id %s, got %s", sessionID, cacheRepo.lastSaveID)
+					}
+				}
+			},
+			wantErr: false,
+			verify: func(t *testing.T, res *dto.SessionDetailResponse, err error) {
+				if res == nil {
+					t.Fatal("expected response, got nil")
+				}
+				if res.ID != "stale-session" {
+					t.Fatalf("expected reparsed response, got %+v", res)
+				}
+			},
+		},
+		{
+			name: "save cache failure does not fail response",
+			setup: func(t *testing.T, tmpDir string) (string, usecase.SessionRepository, usecase.CacheRepository, usecase.SessionParser, func()) {
+				sessionID := "save-error-session"
+				cacheRepo := &mockCacheRepositoryForDetail{
+					saveErr: errors.New("disk full"),
+				}
+				sessionRepo := &mockSessionRepositoryForDetail{
+					paths: map[string]string{
+						sessionID: filepath.Join(tmpDir, "rollout-save-error.jsonl"),
+					},
+					modTimes: map[string]time.Time{
+						sessionID: time.Date(2026, 5, 31, 2, 0, 0, 0, time.UTC),
+					},
+				}
+				parser := &mockSessionParser{
+					records: []*model.TypedRecord{
+						{
+							Type: "session_meta",
+							SessionMeta: &model.SessionMetaPayload{
+								ID:         sessionID,
+								CliVersion: "0.131.0",
+							},
+						},
+					},
+				}
+				return sessionID, sessionRepo, cacheRepo, parser, func() {
+					if parser.calls != 1 {
+						t.Fatalf("expected parser to be called once, got %d", parser.calls)
+					}
+				}
+			},
+			wantErr: false,
+			verify: func(t *testing.T, res *dto.SessionDetailResponse, err error) {
+				if err != nil {
+					t.Fatalf("expected no error, got %v", err)
+				}
+				if res == nil || res.ID != "save-error-session" {
+					t.Fatalf("expected parsed response, got %+v", res)
 				}
 			},
 		},

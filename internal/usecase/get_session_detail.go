@@ -31,17 +31,18 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 
 	// 1. キャッシュの確認
 	if cached, err := uc.cacheRepo.GetSessionDetail(ctx, sessionID); err == nil && cached != nil {
-		// キャッシュが有効な場合はキャッシュから返す
-		// ただし、元のJSONLファイルの最終更新日時と比較する
-		modTime, statErr := uc.sessionRepo.GetSessionModTime(ctx, sessionID)
-		if statErr == nil {
-			// キャッシュファイルの最終更新日時を確認
-			// 簡易的に、パース時刻（parsed_at）とファイルのModTimeを比較
-			if cachedTime, parseErr := time.Parse(time.RFC3339, cached.ParsedAt); parseErr == nil {
-				if modTime.UTC().Before(cachedTime) {
-					logger.Info("cache hit, returning cached session detail", "session_id", sessionID)
-					return cached, nil
-				}
+		sessionModTime, sessionModErr := uc.sessionRepo.GetSessionModTime(ctx, sessionID)
+		cacheModTime, cacheModErr := uc.cacheRepo.GetSessionDetailModTime(ctx, sessionID)
+		if sessionModErr == nil && cacheModErr == nil && !sessionModTime.After(cacheModTime) {
+			logger.Info("cache hit, returning cached session detail", "session_id", sessionID)
+			return cached, nil
+		}
+
+		// フォールバックとして、既存キャッシュの parsed_at も利用する。
+		if sessionModErr == nil {
+			if cachedTime, parseErr := time.Parse(time.RFC3339, cached.ParsedAt); parseErr == nil && !sessionModTime.After(cachedTime) {
+				logger.Info("cache hit, returning cached session detail", "session_id", sessionID)
+				return cached, nil
 			}
 		}
 	}
