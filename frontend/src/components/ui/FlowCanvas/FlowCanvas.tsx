@@ -17,6 +17,8 @@ interface FlowCanvasProps {
 	nodes: dto.FlowNode[];
 	edges: dto.FlowEdge[];
 	onNodeSelect: (node: dto.FlowNode | null) => void;
+	onTokenBadgeClick?: (node: dto.FlowNode) => void;
+	interactionLocked?: boolean;
 	selectedNodeId?: string;
 	zoomTarget?: { nodeId: string; timestamp: number } | null;
 }
@@ -25,6 +27,8 @@ function FlowCanvasInner({
 	nodes,
 	edges,
 	onNodeSelect,
+	onTokenBadgeClick,
+	interactionLocked,
 	selectedNodeId,
 	zoomTarget,
 }: FlowCanvasProps) {
@@ -34,9 +38,23 @@ function FlowCanvasInner({
 	const flowNodes = useMemo(() => {
 		return nodes.map((node) => ({
 			...node,
+			className: [
+				interactionLocked && node.id !== selectedNodeId
+					? "node-pass-through"
+					: undefined,
+				interactionLocked && node.id === selectedNodeId
+					? "node-selected-interactive"
+					: undefined,
+			]
+				.filter(Boolean)
+				.join(" "),
+			data: {
+				...node.data,
+				onTokenBadgeClick: () => onTokenBadgeClick?.(node),
+			},
 			selected: node.id === selectedNodeId,
 		})) as unknown as Node[];
-	}, [nodes, selectedNodeId]);
+	}, [interactionLocked, nodes, onTokenBadgeClick, selectedNodeId]);
 
 	const onNodeClick = (_event: React.MouseEvent, node: Node) => {
 		const originalNode = nodes.find((n) => n.id === node.id);
@@ -59,7 +77,29 @@ function FlowCanvasInner({
 	}, [zoomTarget, fitView]);
 
 	return (
-		<div className={styles.canvasContainer}>
+		<div
+			className={`${styles.canvasContainer} ${
+				interactionLocked ? styles.interactionLocked : ""
+			}`}
+			onClickCapture={(event) => {
+				if (!interactionLocked) {
+					return;
+				}
+				const target = event.target;
+				if (!(target instanceof HTMLElement)) {
+					return;
+				}
+				if (target.closest(".react-flow__controls")) {
+					return;
+				}
+				if (target.closest(".node-selected-interactive")) {
+					return;
+				}
+				event.preventDefault();
+				event.stopPropagation();
+				onNodeSelect(null);
+			}}
+		>
 			<ReactFlow
 				nodes={flowNodes}
 				edges={edges}
@@ -69,6 +109,10 @@ function FlowCanvasInner({
 				nodesDraggable={false}
 				nodesConnectable={false}
 				elementsSelectable={true}
+				panOnDrag={!interactionLocked}
+				zoomOnScroll={!interactionLocked}
+				zoomOnPinch={!interactionLocked}
+				zoomOnDoubleClick={!interactionLocked}
 				minZoom={0.1}
 				maxZoom={2.0}
 				fitView
