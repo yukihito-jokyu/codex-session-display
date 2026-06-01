@@ -178,6 +178,7 @@ export function SessionDetailPage() {
 								onTokenBadgeClick={handleTokenBadgeClick}
 								interactionLocked={Boolean(selectedNode)}
 								selectedNodeId={selectedNode?.id}
+								selectedNodeType={selectedNode?.type}
 								zoomTarget={zoomTarget}
 							/>
 						)}

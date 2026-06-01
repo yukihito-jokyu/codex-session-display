@@ -80,6 +80,10 @@ func (m *mockCacheRepository) GetSessionDetail(ctx context.Context, sessionID st
 	return nil, errors.New("not implemented")
 }
 
+func (m *mockCacheRepository) GetSessionDetailModTime(ctx context.Context, sessionID string) (time.Time, error) {
+	return time.Time{}, errors.New("not implemented")
+}
+
 func (m *mockCacheRepository) SaveSessionDetail(ctx context.Context, sessionID string, detail *dto.SessionDetailResponse) error {
 	return nil
 }

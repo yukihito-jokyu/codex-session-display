@@ -23,5 +23,6 @@ type SessionRepository interface {
 type CacheRepository interface {
 	GetSessionSummary(ctx context.Context, sessionID string) (*dto.SessionSummary, error)
 	GetSessionDetail(ctx context.Context, sessionID string) (*dto.SessionDetailResponse, error)
+	GetSessionDetailModTime(ctx context.Context, sessionID string) (time.Time, error)
 	SaveSessionDetail(ctx context.Context, sessionID string, detail *dto.SessionDetailResponse) error
 }
