@@ -125,6 +125,17 @@ export async function mockWailsAPI(
 	await page.addInitScript((sessionsArg) => {
 		const dummySessions = sessionsArg as dto.SessionSummary[];
 
+		const clipboard = {
+			writeText: async (text: string) => {
+				(window as any).__copiedTexts = (window as any).__copiedTexts || [];
+				(window as any).__copiedTexts.push(text);
+			},
+		};
+		Object.defineProperty(navigator, "clipboard", {
+			value: clipboard,
+			configurable: true,
+		});
+
 		// グローバルオブジェクト go.main.App.ListSessions を定義
 		const go = (window as any).go || {};
 		go.main = go.main || {};
@@ -785,6 +796,19 @@ export async function mockWailsAPI(
 					},
 				],
 			};
+		};
+
+		go.main.App.OpenLogDirectory = async () => {
+			(window as any).__openLogDirectoryCalls =
+				(window as any).__openLogDirectoryCalls || 0;
+			(window as any).__openLogDirectoryCalls += 1;
+		};
+
+		go.main.App.GetLogFilePath = async () => {
+			(window as any).__getLogFilePathCalls =
+				(window as any).__getLogFilePathCalls || 0;
+			(window as any).__getLogFilePathCalls += 1;
+			return "/Users/test/.codex-display/logs/app.log";
 		};
 
 		(window as any).go = go;
