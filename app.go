@@ -15,6 +15,8 @@ import (
 	"runtime"
 )
 
+var execCommand = exec.Command
+
 // App はアプリケーションの構造体です。
 type App struct {
 	ctx                context.Context
@@ -139,11 +141,11 @@ func (a *App) OpenLogDirectory() error {
 	var cmd *exec.Cmd
 	switch runtime.GOOS {
 	case "darwin":
-		cmd = exec.Command("open", logDir)
+		cmd = execCommand("open", logDir)
 	case "windows":
-		cmd = exec.Command("explorer", logDir)
+		cmd = execCommand("explorer", logDir)
 	default: // linux, etc.
-		cmd = exec.Command("xdg-open", logDir)
+		cmd = execCommand("xdg-open", logDir)
 	}
 
 	if err := cmd.Start(); err != nil {
@@ -157,4 +159,22 @@ func (a *App) OpenLogDirectory() error {
 
 	logger.Info("OpenLogDirectory succeeded")
 	return nil
+}
+
+// GetLogFilePath はアプリケーションログファイルの絶対パスを返します。
+func (a *App) GetLogFilePath() (string, error) {
+	logger.Info("GetLogFilePath called")
+
+	logPath, err := logger.GetLogFilePath()
+	if err != nil {
+		appErr := &dto.AppError{
+			Code:    "INTERNAL_ERROR",
+			Message: "ログファイルパスの取得に失敗しました",
+		}
+		logger.Error("Failed to get log file path", "error", err)
+		return "", appErr
+	}
+
+	logger.Info("GetLogFilePath succeeded", "path", logPath)
+	return logPath, nil
 }
