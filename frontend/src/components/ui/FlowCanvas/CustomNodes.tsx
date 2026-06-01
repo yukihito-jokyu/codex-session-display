@@ -20,6 +20,7 @@ export type CustomNodeProps = NodeProps & {
 			tokenCountIndex: number;
 			boundCount: number;
 		};
+		onTokenBadgeClick?: () => void;
 	};
 };
 
@@ -114,10 +115,18 @@ export const BaseCustomNode = ({ type, data, selected }: CustomNodeProps) => {
 					<span className={styles.nodeLabel}>{displayLabel}</span>
 				</div>
 				{tokenBadge && totalTokensFormatted && (
-					<span className={styles.tokenBadge}>
+					<button
+						type="button"
+						className={styles.tokenBadgeButton}
+						onClick={(event) => {
+							event.stopPropagation();
+							data.onTokenBadgeClick?.();
+						}}
+						aria-label={`${displayLabel || "node"} token badge`}
+					>
 						{totalTokensFormatted}
 						{tokenBadge.boundCount >= 2 ? ` ×${tokenBadge.boundCount}` : ""}
-					</span>
+					</button>
 				)}
 			</div>
 
