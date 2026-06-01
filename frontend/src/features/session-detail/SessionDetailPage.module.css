@@ -365,6 +365,13 @@
 	line-height: 1.5;
 }
 
+.errorActions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	justify-content: center;
+}
+
 .retryBtn {
 	padding: 8px 16px;
 	font-size: 13px;
@@ -380,4 +387,27 @@
 .retryBtn:hover {
 	background: var(--bg-btn-hover);
 	border-color: var(--text-secondary);
+}
+
+.secondaryBtn {
+	padding: 8px 16px;
+	font-size: 13px;
+	font-weight: 500;
+	color: var(--text-secondary);
+	background: transparent;
+	border: 1px solid var(--border-color);
+	border-radius: 6px;
+	cursor: pointer;
+	transition: all 0.2s;
+}
+
+.secondaryBtn:hover {
+	color: var(--text-primary);
+	background: var(--bg-btn-hover);
+	border-color: var(--text-secondary);
+}
+
+.logActionMessage {
+	font-size: 12px;
+	color: var(--text-secondary);
 }

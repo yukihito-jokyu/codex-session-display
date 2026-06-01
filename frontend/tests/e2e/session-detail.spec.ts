@@ -171,6 +171,59 @@ test.describe("セッション詳細画面 E2E テスト", () => {
 		await expect(page.locator("text=Node Detail:")).not.toBeVisible();
 	});
 
+	test("未選択時のキャンバス余白クリック後もノード選択が継続して利用できること", async ({
+		page,
+	}) => {
+		await page.locator("text=sess-001").click();
+
+		await page.locator(".react-flow__pane").click();
+		await expect(page.locator("text=Node Detail:")).not.toBeVisible();
+
+		await page.locator(".react-flow__node-userMessage").click();
+		await expect(page.locator("text=Node Detail: User Message")).toBeVisible();
+	});
+
+	test("非contextDocノード選択中に別ノードをクリックすると一度選択解除され、再クリックで切り替わること", async ({
+		page,
+	}) => {
+		await page.locator("text=sess-001").click();
+
+		await page.locator(".react-flow__node-userMessage").click();
+		await expect(page.locator("text=Node Detail: User Message")).toBeVisible();
+
+		await page.locator(".react-flow__node-agentMessage").click();
+		await expect(page.locator("text=Node Detail:")).not.toBeVisible();
+
+		await page.locator(".react-flow__node-agentMessage").click();
+		await expect(page.locator("text=Node Detail: Agent Message")).toBeVisible();
+	});
+
+	test("ノード選択中に React Flow のコントロール本体や SVG アイコンを押しても選択が維持されること", async ({
+		page,
+	}) => {
+		await page.locator("text=sess-001").click();
+		await page.locator(".react-flow__node-userMessage").click();
+		await expect(page.locator("text=Node Detail: User Message")).toBeVisible();
+
+		await page.evaluate(() => {
+			const button = document.querySelector(".react-flow__controls-button");
+			if (!(button instanceof HTMLButtonElement)) {
+				throw new Error("React Flow control button not found");
+			}
+			button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+		});
+		await expect(page.locator("text=Node Detail: User Message")).toBeVisible();
+
+		await page.evaluate(() => {
+			const icon = document.querySelector(".react-flow__controls-button svg");
+			if (!(icon instanceof SVGElement)) {
+				throw new Error("React Flow control icon not found");
+			}
+			icon.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+		});
+		await expect(page.locator("text=Node Detail: User Message")).toBeVisible();
+	});
+
 	test("詳細画面でのAPIエラー発生時にエラー画面が表示され、一覧に戻れること", async ({
 		page,
 	}) => {
@@ -190,6 +243,34 @@ test.describe("セッション詳細画面 E2E テスト", () => {
 		// 一覧画面にリダイレクトされ、セッション一覧が表示されていることを確認
 		await expect(page).toHaveURL(/.*#\//);
 		await expect(page.locator("text=sess-001")).toBeVisible();
+	});
+
+	test("詳細画面のエラー表示からログフォルダ展開とログパスコピーができること", async ({
+		page,
+	}) => {
+		await page.goto("/#/sessions/trigger-error");
+
+		await expect(
+			page.locator(
+				"text=Failed to fetch session detail: Mocked Detail API Error",
+			),
+		).toBeVisible();
+
+		await page.getByRole("button", { name: "ログフォルダを開く" }).click();
+		const openCalls = await page.evaluate(() => {
+			// biome-ignore lint/suspicious/noExplicitAny: mock field on window
+			return (window as any).__openLogDirectoryCalls || 0;
+		});
+		expect(openCalls).toBe(1);
+
+		await page.getByRole("button", { name: "ログパスをコピー" }).click();
+		const copiedTexts = await page.evaluate(() => {
+			// biome-ignore lint/suspicious/noExplicitAny: mock field on window
+			return (window as any).__copiedTexts || [];
+		});
+		expect(copiedTexts).toContain("/Users/test/.codex-display/logs/app.log");
+
+		await expect(page.locator("text=ログパスをコピーしました")).toBeVisible();
 	});
 
 	test("トークンバッジが適切にフォーマットされてノード上に描画されること", async ({
