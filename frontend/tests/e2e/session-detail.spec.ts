@@ -16,6 +16,44 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.describe("セッション詳細画面 E2E テスト", () => {
+	test("初回表示時にフロントエンド準備完了をバックエンドへ通知すること", async ({
+		page,
+	}) => {
+		const readyCalls = await page.evaluate(() => {
+			return (
+				(window as Window & { __frontendReadyCalls?: number })
+					.__frontendReadyCalls || 0
+			);
+		});
+
+		expect(readyCalls).toBeGreaterThanOrEqual(1);
+	});
+
+	test("open-session-file イベント受信時に対象セッション詳細へ遷移すること", async ({
+		page,
+	}) => {
+		await page.evaluate(() => {
+			(
+				window as Window & { __emitWailsEvent?: (...args: unknown[]) => void }
+			).__emitWailsEvent?.("open-session-file", "/path/to/session-2");
+		});
+
+		await expect(page).toHaveURL(/.*#\/sessions\/sess-002-uuid-long-name/);
+		await expect(page.locator("text=sess-002-uuid-long-name")).toBeVisible();
+
+		const resolveCalls = await page.evaluate(() => {
+			return (
+				(
+					window as Window & {
+						__resolveSessionIDCalls?: Array<{ filePath: string }>;
+					}
+				).__resolveSessionIDCalls || []
+			);
+		});
+
+		expect(resolveCalls).toEqual([{ filePath: "/path/to/session-2" }]);
+	});
+
 	test("セッション詳細画面への遷移と一覧画面への戻り動作が正しく機能すること", async ({
 		page,
 	}) => {
@@ -167,7 +205,9 @@ test.describe("セッション詳細画面 E2E テスト", () => {
 		await expect(page.locator("text=Node Detail:")).toBeVisible();
 
 		// キャンバスの余白（.react-flow__pane）をクリックして閉じることを確認
-		await page.locator(".react-flow__pane").click();
+		await page.locator(".react-flow__pane").click({
+			position: { x: 8, y: 8 },
+		});
 		await expect(page.locator("text=Node Detail:")).not.toBeVisible();
 	});
 
@@ -176,7 +216,9 @@ test.describe("セッション詳細画面 E2E テスト", () => {
 	}) => {
 		await page.locator("text=sess-001").click();
 
-		await page.locator(".react-flow__pane").click();
+		await page.locator(".react-flow__pane").click({
+			position: { x: 8, y: 8 },
+		});
 		await expect(page.locator("text=Node Detail:")).not.toBeVisible();
 
 		await page.locator(".react-flow__node-userMessage").click();

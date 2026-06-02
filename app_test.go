@@ -2,11 +2,14 @@ package main
 
 import (
 	"codex-session-display/internal/domain/dto"
+	"codex-session-display/internal/repository"
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"testing"
+	"time"
 )
 
 func TestApp_OpenLogDirectory(t *testing.T) {
@@ -127,4 +130,169 @@ func TestApp_GetLogFilePath(t *testing.T) {
 	if got != expected {
 		t.Fatalf("expected %q, got %q", expected, got)
 	}
+}
+
+func TestApp_ResolveSessionIDFromPath(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		app         *App
+		path        string
+		wantID      string
+		wantErr     bool
+		wantErrCode string
+	}{
+		{
+			name: "returns session id from repository",
+			app: &App{
+				sessionRepo: &stubSessionRepository{
+					sessionIDByPath: map[string]string{
+						"/tmp/session.jsonl": "session-123",
+					},
+				},
+			},
+			path:   "/tmp/session.jsonl",
+			wantID: "session-123",
+		},
+		{
+			name: "returns session not found app error",
+			app: &App{
+				sessionRepo: &stubSessionRepository{
+					errByPath: map[string]error{
+						"/tmp/missing.jsonl": repository.ErrSessionNotFound,
+					},
+				},
+			},
+			path:        "/tmp/missing.jsonl",
+			wantErr:     true,
+			wantErrCode: "SESSION_NOT_FOUND",
+		},
+		{
+			name: "returns internal error for repository scan failure",
+			app: &App{
+				sessionRepo: &stubSessionRepository{
+					errByPath: map[string]error{
+						"/tmp/broken.jsonl": os.ErrPermission,
+					},
+				},
+			},
+			path:        "/tmp/broken.jsonl",
+			wantErr:     true,
+			wantErrCode: "INTERNAL_ERROR",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.app.ResolveSessionIDFromPath(tt.path)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("expected error=%v, got %v", tt.wantErr, err)
+			}
+			if tt.wantErr {
+				appErr, ok := err.(*dto.AppError)
+				if !ok {
+					t.Fatalf("expected *dto.AppError, got %T", err)
+				}
+				if appErr.Code != tt.wantErrCode {
+					t.Fatalf("expected error code %q, got %q", tt.wantErrCode, appErr.Code)
+				}
+				return
+			}
+			if !tt.wantErr && got != tt.wantID {
+				t.Fatalf("expected %q, got %q", tt.wantID, got)
+			}
+		})
+	}
+}
+
+func TestApp_HandleOpenSessionFile_FlushesAfterFrontendReady(t *testing.T) {
+	t.Parallel()
+
+	originalWindowShow := windowShow
+	originalEventsEmit := eventsEmit
+	defer func() {
+		windowShow = originalWindowShow
+		eventsEmit = originalEventsEmit
+	}()
+
+	var shownCount int
+	var emittedPaths []string
+	windowShow = func(ctx context.Context) {
+		shownCount++
+	}
+	eventsEmit = func(ctx context.Context, eventName string, optionalData ...interface{}) {
+		if eventName != "open-session-file" {
+			t.Fatalf("unexpected event name %q", eventName)
+		}
+		if len(optionalData) != 1 {
+			t.Fatalf("expected one payload, got %d", len(optionalData))
+		}
+		filePath, ok := optionalData[0].(string)
+		if !ok {
+			t.Fatalf("expected string payload, got %T", optionalData[0])
+		}
+		emittedPaths = append(emittedPaths, filePath)
+	}
+
+	app := &App{}
+
+	app.HandleOpenSessionFile("/tmp/before-startup.jsonl")
+	app.startup(context.Background())
+	app.HandleOpenSessionFile("/tmp/before-ready.jsonl")
+
+	if shownCount != 0 {
+		t.Fatalf("expected no window show before frontend ready, got %d", shownCount)
+	}
+	if len(emittedPaths) != 0 {
+		t.Fatalf("expected no emitted paths before frontend ready, got %v", emittedPaths)
+	}
+
+	app.FrontendReady()
+
+	if shownCount != 2 {
+		t.Fatalf("expected 2 window show calls after frontend ready, got %d", shownCount)
+	}
+	expected := []string{"/tmp/before-startup.jsonl", "/tmp/before-ready.jsonl"}
+	for i, want := range expected {
+		if emittedPaths[i] != want {
+			t.Fatalf("expected emitted path %q at index %d, got %q", want, i, emittedPaths[i])
+		}
+	}
+	if len(app.pendingSessionFile) != 0 {
+		t.Fatalf("expected pending queue to be empty, got %v", app.pendingSessionFile)
+	}
+
+	app.HandleOpenSessionFile("/tmp/after-ready.jsonl")
+
+	if shownCount != 3 {
+		t.Fatalf("expected immediate window show after frontend ready, got %d", shownCount)
+	}
+	if len(emittedPaths) != 3 || emittedPaths[2] != "/tmp/after-ready.jsonl" {
+		t.Fatalf("expected immediate emit after frontend ready, got %v", emittedPaths)
+	}
+}
+
+type stubSessionRepository struct {
+	sessionIDByPath map[string]string
+	errByPath       map[string]error
+}
+
+func (s *stubSessionRepository) ListSessions(ctx context.Context, year, month int, query string) ([]dto.SessionSummary, error) {
+	return nil, nil
+}
+
+func (s *stubSessionRepository) GetSessionFilePath(ctx context.Context, sessionID string) (string, error) {
+	return "", nil
+}
+
+func (s *stubSessionRepository) GetSessionIDByFilePath(ctx context.Context, filePath string) (string, error) {
+	if err, ok := s.errByPath[filePath]; ok {
+		return "", err
+	}
+	return s.sessionIDByPath[filePath], nil
+}
+
+func (s *stubSessionRepository) GetSessionModTime(ctx context.Context, sessionID string) (time.Time, error) {
+	return time.Time{}, nil
 }

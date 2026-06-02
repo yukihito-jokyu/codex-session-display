@@ -138,8 +138,41 @@ export async function mockWailsAPI(
 
 		// グローバルオブジェクト go.main.App.ListSessions を定義
 		const go = (window as any).go || {};
+		const runtime = (window as any).runtime || {};
+		const eventListeners = new Map<string, Set<(...args: unknown[]) => void>>();
+
 		go.main = go.main || {};
 		go.main.App = go.main.App || {};
+		runtime.EventsOnMultiple = (
+			eventName: string,
+			callback: (...args: unknown[]) => void,
+			_maxCallbacks: number,
+		) => {
+			const listeners = eventListeners.get(eventName) || new Set();
+			listeners.add(callback);
+			eventListeners.set(eventName, listeners);
+
+			return () => {
+				listeners.delete(callback);
+				if (listeners.size === 0) {
+					eventListeners.delete(eventName);
+				}
+			};
+		};
+
+		(window as any).__emitWailsEvent = (
+			eventName: string,
+			...args: unknown[]
+		) => {
+			const listeners = eventListeners.get(eventName);
+			if (!listeners) {
+				return;
+			}
+			for (const listener of listeners) {
+				listener(...args);
+			}
+		};
+
 		go.main.App.ListSessions = async (
 			query: string,
 			year: number,
@@ -265,6 +298,24 @@ export async function mockWailsAPI(
 			}
 
 			return filtered;
+		};
+
+		go.main.App.ResolveSessionIDFromPath = async (filePath: string) => {
+			(window as any).__resolveSessionIDCalls =
+				(window as any).__resolveSessionIDCalls || [];
+			(window as any).__resolveSessionIDCalls.push({ filePath });
+
+			const session = dummySessions.find((item) => item.file_path === filePath);
+			if (!session) {
+				throw new Error("Session path not found");
+			}
+
+			return session.id;
+		};
+
+		go.main.App.FrontendReady = async () => {
+			(window as any).__frontendReadyCalls =
+				((window as any).__frontendReadyCalls || 0) + 1;
 		};
 
 		go.main.App.GetSessionDetail = async (id: string) => {
@@ -812,5 +863,6 @@ export async function mockWailsAPI(
 		};
 
 		(window as any).go = go;
+		(window as any).runtime = runtime;
 	}, sessions);
 }

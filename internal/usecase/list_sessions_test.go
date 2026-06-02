@@ -57,6 +57,10 @@ func (m *mockSessionRepository) GetSessionFilePath(ctx context.Context, sessionI
 	return "", errors.New("not implemented")
 }
 
+func (m *mockSessionRepository) GetSessionIDByFilePath(ctx context.Context, filePath string) (string, error) {
+	return "", errors.New("not implemented")
+}
+
 func (m *mockSessionRepository) GetSessionModTime(ctx context.Context, sessionID string) (time.Time, error) {
 	return time.Time{}, errors.New("not implemented")
 }

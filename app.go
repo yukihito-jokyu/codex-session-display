@@ -13,15 +13,26 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"sync"
+
+	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
-var execCommand = exec.Command
+var (
+	execCommand = exec.Command
+	windowShow  = wailsruntime.WindowShow
+	eventsEmit  = wailsruntime.EventsEmit
+)
 
 // App はアプリケーションの構造体です。
 type App struct {
+	mu                 sync.Mutex
 	ctx                context.Context
 	listSessionsUC     *usecase.ListSessionsUseCase
 	getSessionDetailUC *usecase.GetSessionDetailUseCase
+	sessionRepo        usecase.SessionRepository
+	frontendReady      bool
+	pendingSessionFile []string
 }
 
 // NewApp は新しい App アプリケーション構造体を作成します。
@@ -50,6 +61,7 @@ func NewApp() (*App, error) {
 	return &App{
 		listSessionsUC:     listSessionsUC,
 		getSessionDetailUC: getSessionDetailUC,
+		sessionRepo:        sessionRepo,
 	}, nil
 }
 
@@ -57,7 +69,9 @@ func NewApp() (*App, error) {
 // コンテキストが保存されます。
 func (a *App) startup(ctx context.Context) {
 	logger.Info("Application startup called")
+	a.mu.Lock()
 	a.ctx = ctx
+	a.mu.Unlock()
 }
 
 // Greet は指定された名前に挨拶を返します。
@@ -177,4 +191,74 @@ func (a *App) GetLogFilePath() (string, error) {
 
 	logger.Info("GetLogFilePath succeeded", "path", logPath)
 	return logPath, nil
+}
+
+// ResolveSessionIDFromPath はセッションファイルパスからセッションIDを解決します。
+func (a *App) ResolveSessionIDFromPath(filePath string) (string, error) {
+	logger.Info("ResolveSessionIDFromPath called", "file_path", filePath)
+
+	sessionID, err := a.sessionRepo.GetSessionIDByFilePath(a.ctx, filePath)
+	if err != nil {
+		appErr := &dto.AppError{
+			Code:    "INTERNAL_ERROR",
+			Message: "セッションファイルの解決に失敗しました",
+		}
+		if errors.Is(err, repository.ErrSessionNotFound) {
+			appErr.Code = "SESSION_NOT_FOUND"
+			appErr.Message = "セッションファイルが見つかりません"
+		}
+		logger.Error("ResolveSessionIDFromPath failed", "file_path", filePath, "error", err, "code", appErr.Code)
+		return "", appErr
+	}
+
+	logger.Info("ResolveSessionIDFromPath succeeded", "file_path", filePath, "session_id", sessionID)
+	return sessionID, nil
+}
+
+// FrontendReady はフロントエンドのイベント購読準備完了を通知します。
+func (a *App) FrontendReady() {
+	a.mu.Lock()
+	a.frontendReady = true
+	a.mu.Unlock()
+	a.flushPendingSessionFiles()
+}
+
+// HandleOpenSessionFile はシングルインスタンス転送で受信したセッションファイルを処理します。
+func (a *App) HandleOpenSessionFile(filePath string) {
+	if filePath == "" {
+		return
+	}
+
+	a.mu.Lock()
+	if a.ctx == nil || !a.frontendReady {
+		a.pendingSessionFile = append(a.pendingSessionFile, filePath)
+		a.mu.Unlock()
+		return
+	}
+	ctx := a.ctx
+	a.mu.Unlock()
+
+	a.emitOpenSessionFile(ctx, filePath)
+}
+
+func (a *App) flushPendingSessionFiles() {
+	a.mu.Lock()
+	pending := append([]string(nil), a.pendingSessionFile...)
+	a.pendingSessionFile = nil
+	ctx := a.ctx
+	ready := a.frontendReady
+	a.mu.Unlock()
+
+	if ctx == nil || !ready {
+		return
+	}
+
+	for _, filePath := range pending {
+		a.emitOpenSessionFile(ctx, filePath)
+	}
+}
+
+func (a *App) emitOpenSessionFile(ctx context.Context, filePath string) {
+	windowShow(ctx)
+	eventsEmit(ctx, "open-session-file", filePath)
 }

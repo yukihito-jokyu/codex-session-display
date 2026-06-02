@@ -3,8 +3,10 @@ package main
 import (
 	"codex-session-display/internal/domain/dto"
 	"codex-session-display/internal/utils/logger"
+	"context"
 	"embed"
 	"errors"
+	"os"
 
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
@@ -23,12 +25,30 @@ func main() {
 
 	logger.Info("Starting application...")
 
+	listener, err := acquireSingleInstanceListener()
+	if err != nil {
+		filePath := extractSessionFileArg(os.Args)
+		if filePath != "" {
+			if forwardErr := forwardSessionFilePath(singleInstanceAddress, filePath); forwardErr != nil {
+				logger.Error("Failed to forward session path to main instance", "error", forwardErr, "file_path", filePath)
+			}
+		}
+		return
+	}
+	defer listener.Close()
+
 	// アプリ構造体のインスタンスを作成
 	app, err := NewApp()
 	if err != nil {
 		logger.Error("Failed to initialize app", "error", err.Error())
 		return
 	}
+
+	serverCtx, cancelServer := context.WithCancel(context.Background())
+	defer cancelServer()
+
+	server := newSingleInstanceServer(listener, app.HandleOpenSessionFile)
+	go server.serve(serverCtx)
 
 	// オプションを指定してアプリケーションを作成
 	err = wails.Run(&options.App{
