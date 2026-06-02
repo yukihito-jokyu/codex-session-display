@@ -6,12 +6,20 @@ export function FrontendReady() {
   return window['go']['main']['App']['FrontendReady']();
 }
 
+export function GetLogFilePath() {
+  return window['go']['main']['App']['GetLogFilePath']();
+}
+
 export function GetSessionDetail(arg1) {
   return window['go']['main']['App']['GetSessionDetail'](arg1);
 }
 
 export function Greet(arg1) {
   return window['go']['main']['App']['Greet'](arg1);
+}
+
+export function HandleOpenSessionFile(arg1) {
+  return window['go']['main']['App']['HandleOpenSessionFile'](arg1);
 }
 
 export function ListSessions(arg1, arg2, arg3) {

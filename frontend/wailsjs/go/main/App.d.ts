@@ -4,9 +4,13 @@ import {dto} from '../models';
 
 export function FrontendReady():Promise<void>;
 
+export function GetLogFilePath():Promise<string>;
+
 export function GetSessionDetail(arg1:string):Promise<dto.SessionDetailResponse>;
 
 export function Greet(arg1:string):Promise<string>;
+
+export function HandleOpenSessionFile(arg1:string):Promise<void>;
 
 export function ListSessions(arg1:string,arg2:number,arg3:number):Promise<Array<dto.SessionSummary>>;
 
