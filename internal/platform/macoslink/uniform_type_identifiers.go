@@ -6,4 +6,3 @@ package macoslink
 #cgo LDFLAGS: -framework UniformTypeIdentifiers
 */
 import "C"
-
