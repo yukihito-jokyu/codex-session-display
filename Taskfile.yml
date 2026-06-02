@@ -18,6 +18,13 @@ tasks:
     cmds:
       - wails build
 
+  install:mac:
+    desc: 既存の /Applications 内アプリを置き換えて再配置します
+    cmds:
+      - rm -rf /Applications/codex-session-display.app
+      - wails build
+      - cp -R build/bin/codex-session-display.app /Applications/
+
   test:
     desc: バックエンドのテストを実行します
     cmds:
