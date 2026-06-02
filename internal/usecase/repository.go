@@ -16,6 +16,7 @@ type SessionParser interface {
 type SessionRepository interface {
 	ListSessions(ctx context.Context, year, month int, query string) ([]dto.SessionSummary, error)
 	GetSessionFilePath(ctx context.Context, sessionID string) (string, error)
+	GetSessionIDByFilePath(ctx context.Context, filePath string) (string, error)
 	GetSessionModTime(ctx context.Context, sessionID string) (time.Time, error)
 }
 

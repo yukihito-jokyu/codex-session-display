@@ -604,6 +604,59 @@ func TestSessionFSRepository_GetSessionFilePath(t *testing.T) {
 	})
 }
 
+func TestSessionFSRepository_GetSessionIDByFilePath(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	sessionID := "019e5514-ed44-78b2-bf88-233d6e4273bf"
+	filename := "rollout-2026-05-23T22-44-55-" + sessionID + ".jsonl"
+	subDir := filepath.Join(tmpDir, "2026", "05", "23")
+	if err := os.MkdirAll(subDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	filePath := filepath.Join(subDir, filename)
+	if err := os.WriteFile(filePath, []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	repo := NewSessionFSRepository(tmpDir, &mockCacheRepository{})
+
+	tests := []struct {
+		name     string
+		filePath string
+		wantID   string
+		wantErr  bool
+	}{
+		{
+			name:     "success with exact path",
+			filePath: filePath,
+			wantID:   sessionID,
+		},
+		{
+			name:     "success with cleaned path",
+			filePath: filepath.Join(subDir, ".", filename),
+			wantID:   sessionID,
+		},
+		{
+			name:     "not found",
+			filePath: filepath.Join(tmpDir, "2026", "05", "23", "missing.jsonl"),
+			wantErr:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotID, err := repo.GetSessionIDByFilePath(context.Background(), tt.filePath)
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("expected error: %v, got %v", tt.wantErr, err)
+			}
+			if !tt.wantErr && gotID != tt.wantID {
+				t.Fatalf("expected session ID %q, got %q", tt.wantID, gotID)
+			}
+		})
+	}
+}
+
 func TestSessionFSRepository_GetSessionModTime(t *testing.T) {
 	tmpDir := t.TempDir()
 

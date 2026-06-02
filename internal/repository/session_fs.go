@@ -218,6 +218,42 @@ func (r *SessionFSRepository) GetSessionFilePath(ctx context.Context, sessionID 
 	return "", fmt.Errorf("%w: ID %s", ErrSessionNotFound, sessionID)
 }
 
+// GetSessionIDByFilePath はセッションファイルパスに対応するセッションIDを返します。
+func (r *SessionFSRepository) GetSessionIDByFilePath(ctx context.Context, filePath string) (string, error) {
+	targetPath := filepath.Clean(filePath)
+	var sessionID string
+
+	err := filepath.WalkDir(r.rootDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+		filename := d.Name()
+		if !strings.HasPrefix(filename, "rollout-") || !strings.HasSuffix(filename, ".jsonl") {
+			return nil
+		}
+		if filepath.Clean(path) != targetPath {
+			return nil
+		}
+
+		id, _, parseErr := parseSessionFilenameFn(filename)
+		if parseErr != nil {
+			return parseErr
+		}
+		sessionID = id
+		return errSessionFound
+	})
+	if errors.Is(err, errSessionFound) {
+		return sessionID, nil
+	}
+	if err != nil {
+		return "", fmt.Errorf("failed to scan for session id: %w", err)
+	}
+	return "", fmt.Errorf("%w: path %s", ErrSessionNotFound, filePath)
+}
+
 // GetSessionModTime はセッションIDに合致するセッションファイルの最終更新日時を返します。
 func (r *SessionFSRepository) GetSessionModTime(ctx context.Context, sessionID string) (time.Time, error) {
 	filePath, err := r.GetSessionFilePath(ctx, sessionID)
