@@ -119,7 +119,7 @@ function FlowCanvasInner({
 				onPaneClick={onPaneClick}
 				nodesDraggable={false}
 				nodesConnectable={false}
-				elementsSelectable={true}
+				elementsSelectable={false}
 				panOnDrag={!interactionLocked}
 				zoomOnScroll={!interactionLocked}
 				zoomOnPinch={!interactionLocked}
