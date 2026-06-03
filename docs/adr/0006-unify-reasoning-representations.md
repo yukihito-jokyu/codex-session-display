@@ -49,7 +49,7 @@ Codex CLIのJSONLでは、同じ推論プロセスが2つのレコード型で�
 - 統合ノードの `summary` には `agent_reasoning.text` の先頭を設定
 - 統合ノードの `fullText` には `agent_reasoning.text` 全文 + `reasoning.summary` 全文を設定
 - スタンドアロンAR（RIなし）: `agent_reasoning` テキストのみ
-- スタンドアロンRI（ARなし・暗号化済み）: 「（暗号化済み・表示不可）」を表示
+- スタンドアロンRI（ARなし・summary空・暗号化済み）: UI 上で連続する表示不能 reasoning を1ノードに集約し、「（暗号化済み・表示不可）×N」を表示する。`token_count` など表示ノードを生成しないレコードは連続性を分断しない
 
 ## 関連決定
 
