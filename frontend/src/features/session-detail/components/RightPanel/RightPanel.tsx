@@ -197,7 +197,7 @@ export function RightPanel({
 						<ResponsiveContainer width="100%" height={180}>
 							<BarChart
 								data={chartData}
-								margin={{ top: 5, right: 5, left: -20, bottom: 5 }}
+								margin={{ top: 5, right: 5, left: 0, bottom: 5 }}
 							>
 								<CartesianGrid
 									strokeDasharray="3 3"
@@ -214,6 +214,7 @@ export function RightPanel({
 									stroke="var(--text-secondary)"
 									fontSize={10}
 									tickLine={false}
+									width={60}
 								/>
 								<Tooltip
 									contentStyle={{
@@ -305,7 +306,7 @@ export function RightPanel({
 						<ResponsiveContainer width="100%" height={180}>
 							<LineChart
 								data={lastTokenChartData}
-								margin={{ top: 5, right: 5, left: -20, bottom: 5 }}
+								margin={{ top: 5, right: 5, left: 0, bottom: 5 }}
 								style={{ cursor: "pointer" }}
 								onClick={(state) => {
 									const idx = state?.activeTooltipIndex;
@@ -335,6 +336,7 @@ export function RightPanel({
 									stroke="var(--text-secondary)"
 									fontSize={10}
 									tickLine={false}
+									width={60}
 								/>
 								<Tooltip
 									contentStyle={{

@@ -824,18 +824,18 @@ export async function mockWailsAPI(
 						turn_index: 1,
 						bound_to_node_id: "node-orphan-event",
 						last_token_usage: {
-							total_tokens: 50000,
-							input_tokens: 40000,
-							output_tokens: 10000,
-							reasoning_output_tokens: 6000,
-							cached_input_tokens: 10000,
-						},
-						total_token_usage: {
 							total_tokens: 100000,
 							input_tokens: 80000,
 							output_tokens: 20000,
 							reasoning_output_tokens: 8000,
 							cached_input_tokens: 20000,
+						},
+						total_token_usage: {
+							total_tokens: 150000,
+							input_tokens: 120000,
+							output_tokens: 30000,
+							reasoning_output_tokens: 10000,
+							cached_input_tokens: 30000,
 						},
 					},
 					{

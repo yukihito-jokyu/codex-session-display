@@ -450,6 +450,44 @@ test.describe("セッション詳細画面 E2E テスト", () => {
 		await expect(page.locator("text=Node Detail: User Message")).toBeVisible();
 	});
 
+	test("LAST TOKEN CONSUMPTION PER INDEX の6桁Y軸ラベルが見切れず表示されること", async ({
+		page,
+	}) => {
+		await page.locator("text=sess-001").click();
+
+		const chart = page.locator("[data-testid='last-token-chart']").first();
+		const sixDigitTick = chart.getByText("100000", { exact: true });
+
+		await expect(sixDigitTick).toBeVisible();
+
+		const chartBox = await chart.getByRole("application").boundingBox();
+		const tickBox = await sixDigitTick.boundingBox();
+
+		expect(chartBox).not.toBeNull();
+		expect(tickBox).not.toBeNull();
+		expect(tickBox?.x).toBeGreaterThanOrEqual(chartBox?.x ?? 0);
+	});
+
+	test("TOKEN CONSUMPTION PER TURN の6桁Y軸ラベルが見切れず表示されること", async ({
+		page,
+	}) => {
+		await page.locator("text=sess-001").click();
+
+		const chart = page
+			.getByRole("heading", { name: "Token Consumption per Turn" })
+			.locator("xpath=following-sibling::div[1]");
+		const sixDigitTick = chart.getByText(/^\d{6,}$/, { exact: true }).first();
+
+		await expect(sixDigitTick).toBeVisible();
+
+		const chartBox = await chart.getByRole("application").boundingBox();
+		const tickBox = await sixDigitTick.boundingBox();
+
+		expect(chartBox).not.toBeNull();
+		expect(tickBox).not.toBeNull();
+		expect(tickBox?.x).toBeGreaterThanOrEqual(chartBox?.x ?? 0);
+	});
+
 	test("TOKEN COUNT LOG の累積/ステップ(Last)表示切り替えが正しく動作すること", async ({
 		page,
 	}) => {
