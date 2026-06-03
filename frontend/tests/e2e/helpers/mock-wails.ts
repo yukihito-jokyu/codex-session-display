@@ -438,6 +438,71 @@ export async function mockWailsAPI(
 				};
 			}
 
+			if (id === "performance-visibility") {
+				return {
+					id: id,
+					cache_schema_version: 1,
+					parsed_at: "2026-05-20T10:00:00Z",
+					nodes: [
+						{
+							id: "node-near",
+							type: "userMessage",
+							position: { x: 0, y: 0 },
+							data: {
+								category: "message",
+								label: "Near Node",
+								icon: "👤",
+								summary: "Zoom target",
+								turnIndex: 0,
+							},
+						},
+						{
+							id: "node-far-away",
+							type: "generic",
+							position: { x: 100000, y: 100000 },
+							data: {
+								category: "event",
+								label: "Far Away Node",
+								icon: "📄",
+								summary: "This node is outside the target viewport",
+								turnIndex: 0,
+							},
+						},
+					],
+					edges: [],
+					statistics: {
+						duration_ms: 1000,
+						total_tokens: 1000,
+						tool_call_count: 0,
+						token_count_count: 1,
+						context_window_size: 100000,
+						turn_count: 1,
+						turns: [],
+					},
+					token_counts: [
+						{
+							index: 0,
+							turn_index: 0,
+							bound_to_node_id: "node-near",
+							last_token_usage: {
+								total_tokens: 1000,
+								input_tokens: 800,
+								output_tokens: 200,
+								reasoning_output_tokens: 0,
+								cached_input_tokens: 0,
+							},
+							total_token_usage: {
+								total_tokens: 1000,
+								input_tokens: 800,
+								output_tokens: 200,
+								reasoning_output_tokens: 0,
+								cached_input_tokens: 0,
+							},
+						},
+					],
+				};
+			}
+
 			return {
 				id: id,
 				cache_schema_version: 1,
@@ -509,7 +574,7 @@ export async function mockWailsAPI(
 					{
 						id: "node-context-doc-empty",
 						type: "contextDoc",
-						position: { x: 1150, y: 0 },
+						position: { x: 400, y: 120 },
 						data: {
 							category: "context",
 							label: "Empty Context",

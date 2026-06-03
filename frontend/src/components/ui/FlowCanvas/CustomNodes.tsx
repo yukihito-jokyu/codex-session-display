@@ -1,5 +1,5 @@
 import { Handle, type NodeProps, Position } from "@xyflow/react";
-import { useState } from "react";
+import { memo, useState } from "react";
 import styles from "./FlowCanvas.module.css";
 
 export type CustomNodeProps = NodeProps & {
@@ -20,7 +20,7 @@ export type CustomNodeProps = NodeProps & {
 			tokenCountIndex: number;
 			boundCount: number;
 		};
-		onTokenBadgeClick?: () => void;
+		onTokenBadgeClick?: (nodeId: string) => void;
 	};
 };
 
@@ -64,7 +64,12 @@ const getCategoryClass = (type: string, data: CustomNodeProps["data"]) => {
 	}
 };
 
-export const BaseCustomNode = ({ type, data, selected }: CustomNodeProps) => {
+const BaseCustomNodeComponent = ({
+	id,
+	type,
+	data,
+	selected,
+}: CustomNodeProps) => {
 	const isOutOfTurn = data.turnIndex === -1;
 	const isWarning = data.icon === "⚠️" || data.label?.includes("Orphan");
 
@@ -120,7 +125,7 @@ export const BaseCustomNode = ({ type, data, selected }: CustomNodeProps) => {
 						className={styles.tokenBadgeButton}
 						onClick={(event) => {
 							event.stopPropagation();
-							data.onTokenBadgeClick?.();
+							data.onTokenBadgeClick?.(id);
 						}}
 						aria-label={`${displayLabel || "node"} token badge`}
 					>
@@ -138,7 +143,7 @@ export const BaseCustomNode = ({ type, data, selected }: CustomNodeProps) => {
 	);
 };
 
-export const ContextDocNode = ({ data, selected }: CustomNodeProps) => {
+const ContextDocNodeComponent = ({ data, selected }: CustomNodeProps) => {
 	const [isExpanded, setIsExpanded] = useState(false);
 
 	const isOutOfTurn = data.turnIndex === -1;
@@ -228,6 +233,9 @@ export const ContextDocNode = ({ data, selected }: CustomNodeProps) => {
 		</div>
 	);
 };
+
+export const BaseCustomNode = memo(BaseCustomNodeComponent);
+export const ContextDocNode = memo(ContextDocNodeComponent);
 
 export const nodeTypes = {
 	sessionMeta: BaseCustomNode,

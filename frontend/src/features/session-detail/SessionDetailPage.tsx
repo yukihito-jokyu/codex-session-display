@@ -1,4 +1,12 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import {
+	lazy,
+	Suspense,
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { OpenLogDirectory } from "wailsjs/go/main/App";
 import type { dto } from "wailsjs/go/models";
@@ -51,27 +59,36 @@ export function SessionDetailPage() {
 		width: number;
 	} | null>(null);
 
-	const handleTokenLogClick = (nodeId: string) => {
-		if (!sessionData?.nodes) return;
-		const node = sessionData.nodes.find((n) => n.id === nodeId);
-		if (node) {
+	const handleTokenLogClick = useCallback(
+		(nodeId: string) => {
+			if (!sessionData?.nodes) return;
+			const node = sessionData.nodes.find((n) => n.id === nodeId);
+			if (node) {
+				handleNodeSelect(node);
+				setBottomPanelMode("token");
+				setZoomTarget({ nodeId, timestamp: Date.now() });
+			}
+		},
+		[handleNodeSelect, sessionData?.nodes],
+	);
+
+	const handleCanvasNodeSelect = useCallback(
+		(node: dto.FlowNode | null) => {
+			handleNodeSelect(node);
+			if (node) {
+				setBottomPanelMode("node");
+			}
+		},
+		[handleNodeSelect],
+	);
+
+	const handleTokenBadgeClick = useCallback(
+		(node: dto.FlowNode) => {
 			handleNodeSelect(node);
 			setBottomPanelMode("token");
-			setZoomTarget({ nodeId, timestamp: Date.now() });
-		}
-	};
-
-	const handleCanvasNodeSelect = (node: dto.FlowNode | null) => {
-		handleNodeSelect(node);
-		if (node) {
-			setBottomPanelMode("node");
-		}
-	};
-
-	const handleTokenBadgeClick = (node: dto.FlowNode) => {
-		handleNodeSelect(node);
-		setBottomPanelMode("token");
-	};
+		},
+		[handleNodeSelect],
+	);
 
 	const handleOpenLogDirectory = async () => {
 		try {

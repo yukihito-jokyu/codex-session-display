@@ -95,6 +95,40 @@ test.describe("セッション詳細画面 E2E テスト", () => {
 		await expect(page.locator("text=Orphan Complete").first()).toBeVisible();
 	});
 
+	test("初期表示時から viewport 外のノードが DOM に描画されないこと", async ({
+		page,
+	}) => {
+		await page.evaluate(() => {
+			const testWindow = window as Window & {
+				__farAwayNodeRendered?: boolean;
+			};
+			testWindow.__farAwayNodeRendered = false;
+
+			const observer = new MutationObserver((mutations) => {
+				for (const mutation of mutations) {
+					for (const addedNode of mutation.addedNodes) {
+						if (addedNode.textContent?.includes("Far Away Node")) {
+							testWindow.__farAwayNodeRendered = true;
+						}
+					}
+				}
+			});
+			observer.observe(document, { childList: true, subtree: true });
+		});
+
+		await page.goto("/#/sessions/performance-visibility");
+
+		await expect(page.locator(".react-flow")).toBeVisible();
+		await page.waitForTimeout(500);
+
+		expect(
+			await page.evaluate(() => {
+				return (window as Window & { __farAwayNodeRendered?: boolean })
+					.__farAwayNodeRendered;
+			}),
+		).toBe(false);
+	});
+
 	test("ターン外ノードが破線ボーダーかつ[System]プレフィックス付きで表示されること", async ({
 		page,
 	}) => {
