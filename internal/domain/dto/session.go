@@ -102,12 +102,16 @@ type TokenCountEntry struct {
 	TotalTokenUsage *model.TokenDetail `json:"total_token_usage"`
 }
 
+// CurrentSessionDetailCacheSchemaVersion は現行のセッション詳細キャッシュ形式を表します。
+const CurrentSessionDetailCacheSchemaVersion = 1
+
 // SessionDetailResponse はフロントエンドに返され、ディスクにキャッシュされるセッション詳細を表します。
 type SessionDetailResponse struct {
-	ID          string            `json:"id"`
-	ParsedAt    string            `json:"parsed_at"`
-	Nodes       []FlowNode        `json:"nodes"`
-	Edges       []FlowEdge        `json:"edges"`
-	Statistics  Statistics        `json:"statistics"`
-	TokenCounts []TokenCountEntry `json:"token_counts"`
+	ID                 string            `json:"id"`
+	CacheSchemaVersion int               `json:"cache_schema_version"`
+	ParsedAt           string            `json:"parsed_at"`
+	Nodes              []FlowNode        `json:"nodes"`
+	Edges              []FlowEdge        `json:"edges"`
+	Statistics         Statistics        `json:"statistics"`
+	TokenCounts        []TokenCountEntry `json:"token_counts"`
 }
