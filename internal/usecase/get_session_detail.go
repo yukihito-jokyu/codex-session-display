@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"sort"
 	"strings"
 	"time"
 )
@@ -24,6 +25,25 @@ type batchOutputResolution struct {
 	NullAssigned  int
 	Discarded     int
 	FallbackUsed  bool
+}
+
+type displayUnitKind string
+
+const (
+	displayUnitReasoning    displayUnitKind = "reasoning"
+	displayUnitBatch        displayUnitKind = "batch"
+	displayUnitWebSearch    displayUnitKind = "webSearch"
+	displayUnitItemComplete displayUnitKind = "itemComplete"
+	displayUnitAgentMessage displayUnitKind = "agentMessage"
+	displayUnitGeneric      displayUnitKind = "generic"
+)
+
+type displayUnit struct {
+	Kind           displayUnitKind
+	StartLine      int
+	Records        []*model.TypedRecord
+	ReasoningPairs []*model.ReasoningPair
+	Batch          *model.Batch
 }
 
 func NewGetSessionDetailUseCase(sessionRepo SessionRepository, cacheRepo CacheRepository, parser SessionParser) *GetSessionDetailUseCase {
@@ -113,18 +133,20 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 
 	// 1. キャッシュの確認
 	if cached, err := uc.cacheRepo.GetSessionDetail(ctx, sessionID); err == nil && cached != nil {
-		sessionModTime, sessionModErr := uc.sessionRepo.GetSessionModTime(ctx, sessionID)
-		cacheModTime, cacheModErr := uc.cacheRepo.GetSessionDetailModTime(ctx, sessionID)
-		if sessionModErr == nil && cacheModErr == nil && !sessionModTime.After(cacheModTime) {
-			logger.Info("cache hit, returning cached session detail", "session_id", sessionID)
-			return cached, nil
-		}
-
-		// フォールバックとして、既存キャッシュの parsed_at も利用する。
-		if sessionModErr == nil {
-			if cachedTime, parseErr := time.Parse(time.RFC3339, cached.ParsedAt); parseErr == nil && !sessionModTime.After(cachedTime) {
+		if cached.CacheSchemaVersion == dto.CurrentSessionDetailCacheSchemaVersion {
+			sessionModTime, sessionModErr := uc.sessionRepo.GetSessionModTime(ctx, sessionID)
+			cacheModTime, cacheModErr := uc.cacheRepo.GetSessionDetailModTime(ctx, sessionID)
+			if sessionModErr == nil && cacheModErr == nil && !sessionModTime.After(cacheModTime) {
 				logger.Info("cache hit, returning cached session detail", "session_id", sessionID)
 				return cached, nil
+			}
+
+			// フォールバックとして、既存キャッシュの parsed_at も利用する。
+			if sessionModErr == nil {
+				if cachedTime, parseErr := time.Parse(time.RFC3339, cached.ParsedAt); parseErr == nil && !sessionModTime.After(cachedTime) {
+					logger.Info("cache hit, returning cached session detail", "session_id", sessionID)
+					return cached, nil
+				}
 			}
 		}
 	}
@@ -715,289 +737,213 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 				RecordToNodeID[turn.UserEventMsg.LineNumber] = userMsgNodeID
 			}
 
-			// 2e. reasoning ノード
-			for _, pair := range turn.AgentReasonings {
-				var rLine int
-				var summary, fullText string
-				if pair.AgentReasoning != nil && pair.AgentReasoning.EventMsg != nil {
-					rLine = pair.AgentReasoning.LineNumber
-					summary = pair.AgentReasoning.EventMsg.Text
-				}
-				if pair.Reasoning != nil && pair.Reasoning.ResponseItem != nil {
-					if rLine == 0 {
-						rLine = pair.Reasoning.LineNumber
-					}
-					var parts []string
-					for _, c := range pair.Reasoning.ResponseItem.Summary {
-						parts = append(parts, c.Text)
-					}
-					fullText = strings.Join(parts, "\n")
-				}
-
-				if pair.AgentReasoning == nil && pair.Reasoning != nil {
-					summary = "（暗号化済み・表示不可）"
-					fullText = "（暗号化済み・表示不可）"
-				}
-
-				reasonNodeID := fmt.Sprintf("node-%d", rLine)
-				pushHarnessNode(reasonNodeID, "reasoning", "turn", "Reasoning", "🧠", summary, fullText, nil, turn.Index, NodeHeightLarge)
-				if pair.AgentReasoning != nil {
-					RecordToNodeID[pair.AgentReasoning.LineNumber] = reasonNodeID
-				}
-				if pair.Reasoning != nil {
-					RecordToNodeID[pair.Reasoning.LineNumber] = reasonNodeID
-				}
-			}
-
-			// 2f. Batches (fork-join)
-			for _, batch := range turn.Batches {
-				harnessTopY := currentY - NodeGap - NodeHeight
-				if lastHarnessNodeIsBatchJoin {
-					harnessTopY = currentY
-				} else if lastHarnessNodeID != "" {
-					// find last harness node Y to align tools
-					for idx := range nodes {
-						if nodes[idx].ID == lastHarnessNodeID {
-							harnessTopY = nodes[idx].Position.Y
-							break
+			// 2e. 動的ノードをレコード出現順に生成
+			var lastWebCallID string
+			for _, unit := range buildDisplayUnits(turn) {
+				switch unit.Kind {
+				case displayUnitReasoning:
+					reasonNodeID := fmt.Sprintf("node-%d", unit.StartLine)
+					if isUnreadableReasoningUnit(&unit) {
+						unreadableText := fmt.Sprintf("（暗号化済み・表示不可）×%d", len(unit.ReasoningPairs))
+						pushHarnessNode(reasonNodeID, "reasoning", "turn", "Reasoning", "🧠", unreadableText, unreadableText, nil, turn.Index, NodeHeightLarge)
+					} else {
+						pair := unit.ReasoningPairs[0]
+						var summary, fullText string
+						if pair.AgentReasoning != nil && pair.AgentReasoning.EventMsg != nil {
+							summary = pair.AgentReasoning.EventMsg.Text
 						}
-					}
-				}
-
-				var callNodeIDs []string
-				var outputNodeIDs []string
-
-				for i, call := range batch.CallRecords {
-					if call.ResponseItem == nil {
-						continue
-					}
-					callNodeID := fmt.Sprintf("node-%d", call.LineNumber)
-					callNodeIDs = append(callNodeIDs, callNodeID)
-					xPos := BranchOffsetX + float64(i)*(NodeWidth+BranchNodeGapX)
-
-					addBranchNode(callNodeID, "action", "action", call.ResponseItem.Name, "🛠️", call.ResponseItem.Arguments, call.ResponseItem.Arguments, nil, turn.Index, xPos, harnessTopY)
-					RecordToNodeID[call.LineNumber] = callNodeID
-					callIDToNodeID[call.ResponseItem.CallID] = callNodeID
-
-					if lastHarnessNodeID != "" {
-						edges = append(edges, dto.FlowEdge{
-							ID:       fmt.Sprintf("edge-%s-%s", lastHarnessNodeID, callNodeID),
-							Source:   lastHarnessNodeID,
-							Target:   callNodeID,
-							Type:     "step",
-							Animated: false,
-						})
-					}
-
-					// Corresponding Output
-					output := batch.OutputRecords[i]
-					if output != nil && output.ResponseItem != nil {
-						outNodeID := fmt.Sprintf("node-%d", output.LineNumber)
-						outputNodeIDs = append(outputNodeIDs, outNodeID)
-						yPos := harnessTopY + NodeHeight + BatchNodeGap
-
-						outputLabel := "Tool Output"
-						if call.ResponseItem.Name != "" {
-							outputLabel = "Output: " + call.ResponseItem.Name
+						if pair.Reasoning != nil && pair.Reasoning.ResponseItem != nil {
+							var parts []string
+							for _, content := range pair.Reasoning.ResponseItem.Summary {
+								parts = append(parts, content.Text)
+							}
+							fullText = strings.Join(parts, "\n")
 						}
-						addBranchNode(outNodeID, "action", "action", outputLabel, "📤", output.ResponseItem.Output, output.ResponseItem.Output, nil, turn.Index, xPos, yPos)
-						RecordToNodeID[output.LineNumber] = outNodeID
-						callIDToNodeID[output.ResponseItem.CallID] = outNodeID
-
-						edges = append(edges, dto.FlowEdge{
-							ID:       fmt.Sprintf("edge-%s-%s", callNodeID, outNodeID),
-							Source:   callNodeID,
-							Target:   outNodeID,
-							Type:     "default",
-							Animated: false,
-						})
+						if pair.AgentReasoning == nil && fullText != "" {
+							summary = fullText
+						}
+						pushHarnessNode(reasonNodeID, "reasoning", "turn", "Reasoning", "🧠", summary, fullText, nil, turn.Index, NodeHeightLarge)
 					}
-				}
+					for _, record := range unit.Records {
+						RecordToNodeID[record.LineNumber] = reasonNodeID
+					}
 
-				// Middle Message
-				if len(batch.MiddleMessage) > 0 {
-					var texts []string
-					for _, m := range batch.MiddleMessage {
-						if m.Type == "event_msg" && m.EventMsg != nil && m.EventMsg.Message != "" {
-							texts = append(texts, m.EventMsg.Message)
-						} else if m.Type == "response_item" && m.ResponseItem != nil {
-							for _, c := range m.ResponseItem.Content {
-								texts = append(texts, c.Text)
+				case displayUnitBatch:
+					batch := unit.Batch
+					harnessTopY := currentY - NodeGap - NodeHeight
+					if lastHarnessNodeIsBatchJoin {
+						harnessTopY = currentY
+					} else if lastHarnessNodeID != "" {
+						for idx := range nodes {
+							if nodes[idx].ID == lastHarnessNodeID {
+								harnessTopY = nodes[idx].Position.Y
+								break
 							}
 						}
 					}
-					middleSummary := strings.Join(texts, "\n")
-					middleNodeID := fmt.Sprintf("node-%d", batch.MiddleMessage[0].LineNumber)
 
-					middleNodeY := harnessTopY + NodeHeight + BatchNodeGap + NodeHeight + BatchMiddleGap
-					middleNode := dto.FlowNode{
-						ID: middleNodeID,
-						Position: dto.Position{
-							X: HarnessX,
-							Y: middleNodeY,
-						},
-						Type: "agentMessage",
-						Data: dto.NodeData{
-							Category:  "turn",
-							Label:     "Agent Message",
-							Icon:      "🤖",
-							Summary:   middleSummary,
-							FullText:  middleSummary,
-							TurnIndex: turn.Index,
-						},
-					}
-					nodes = append(nodes, middleNode)
+					var callNodeIDs []string
+					var outputNodeIDs []string
+					for i, call := range batch.CallRecords {
+						if call.ResponseItem == nil {
+							continue
+						}
+						callNodeID := fmt.Sprintf("node-%d", call.LineNumber)
+						callNodeIDs = append(callNodeIDs, callNodeID)
+						xPos := BranchOffsetX + float64(i)*(NodeWidth+BranchNodeGapX)
+						addBranchNode(callNodeID, "action", "action", call.ResponseItem.Name, "🛠️", call.ResponseItem.Arguments, call.ResponseItem.Arguments, nil, turn.Index, xPos, harnessTopY)
+						RecordToNodeID[call.LineNumber] = callNodeID
+						callIDToNodeID[call.ResponseItem.CallID] = callNodeID
 
-					for _, m := range batch.MiddleMessage {
-						RecordToNodeID[m.LineNumber] = middleNodeID
-					}
-
-					// Connect outputs to MiddleMessage
-					if len(outputNodeIDs) > 0 {
-						for _, outID := range outputNodeIDs {
+						if lastHarnessNodeID != "" {
 							edges = append(edges, dto.FlowEdge{
-								ID:       fmt.Sprintf("edge-%s-%s", outID, middleNodeID),
-								Source:   outID,
+								ID:       fmt.Sprintf("edge-%s-%s", lastHarnessNodeID, callNodeID),
+								Source:   lastHarnessNodeID,
+								Target:   callNodeID,
+								Type:     "step",
+								Animated: false,
+							})
+						}
+
+						output := batch.OutputRecords[i]
+						if output != nil && output.ResponseItem != nil {
+							outNodeID := fmt.Sprintf("node-%d", output.LineNumber)
+							outputNodeIDs = append(outputNodeIDs, outNodeID)
+							yPos := harnessTopY + NodeHeight + BatchNodeGap
+							outputLabel := "Tool Output"
+							if call.ResponseItem.Name != "" {
+								outputLabel = "Output: " + call.ResponseItem.Name
+							}
+							addBranchNode(outNodeID, "action", "action", outputLabel, "📤", output.ResponseItem.Output, output.ResponseItem.Output, nil, turn.Index, xPos, yPos)
+							RecordToNodeID[output.LineNumber] = outNodeID
+							callIDToNodeID[output.ResponseItem.CallID] = outNodeID
+							edges = append(edges, dto.FlowEdge{
+								ID:       fmt.Sprintf("edge-%s-%s", callNodeID, outNodeID),
+								Source:   callNodeID,
+								Target:   outNodeID,
+								Type:     "default",
+								Animated: false,
+							})
+						}
+					}
+
+					if len(batch.MiddleMessage) > 0 {
+						var texts []string
+						for _, message := range batch.MiddleMessage {
+							texts = append(texts, agentMessageTexts(message)...)
+						}
+						middleSummary := strings.Join(texts, "\n")
+						middleNodeID := fmt.Sprintf("node-%d", batch.MiddleMessage[0].LineNumber)
+						middleNodeY := harnessTopY + NodeHeight + BatchNodeGap + NodeHeight + BatchMiddleGap
+						nodes = append(nodes, dto.FlowNode{
+							ID:       middleNodeID,
+							Position: dto.Position{X: HarnessX, Y: middleNodeY},
+							Type:     "agentMessage",
+							Data: dto.NodeData{
+								Category:  "turn",
+								Label:     "Agent Message",
+								Icon:      "🤖",
+								Summary:   middleSummary,
+								FullText:  middleSummary,
+								TurnIndex: turn.Index,
+							},
+						})
+						for _, message := range batch.MiddleMessage {
+							RecordToNodeID[message.LineNumber] = middleNodeID
+						}
+						if len(outputNodeIDs) > 0 {
+							for _, outputNodeID := range outputNodeIDs {
+								edges = append(edges, dto.FlowEdge{
+									ID:       fmt.Sprintf("edge-%s-%s", outputNodeID, middleNodeID),
+									Source:   outputNodeID,
+									Target:   middleNodeID,
+									Type:     "default",
+									Animated: false,
+								})
+							}
+						} else if lastHarnessNodeID != "" {
+							edges = append(edges, dto.FlowEdge{
+								ID:       fmt.Sprintf("edge-%s-%s", lastHarnessNodeID, middleNodeID),
+								Source:   lastHarnessNodeID,
 								Target:   middleNodeID,
 								Type:     "default",
 								Animated: false,
 							})
 						}
-					} else if lastHarnessNodeID != "" {
-						// Fallback: connect from harnessTop to middle message directly
-						edges = append(edges, dto.FlowEdge{
-							ID:       fmt.Sprintf("edge-%s-%s", lastHarnessNodeID, middleNodeID),
-							Source:   lastHarnessNodeID,
-							Target:   middleNodeID,
-							Type:     "default",
-							Animated: false,
-						})
-					}
-
-					lastHarnessNodeID = middleNodeID
-					lastHarnessNodeIsBatchJoin = false
-					currentY = middleNodeY + NodeHeight + NodeGap
-				} else {
-					joinNodeID := ""
-					if len(outputNodeIDs) > 0 {
-						joinNodeID = outputNodeIDs[len(outputNodeIDs)-1]
-						currentY = harnessTopY + NodeHeight + BatchNodeGap + NodeHeight + NodeGap
-					} else if len(callNodeIDs) > 0 {
-						joinNodeID = callNodeIDs[len(callNodeIDs)-1]
-						currentY = harnessTopY + NodeHeight + NodeGap
-					}
-					if joinNodeID != "" {
-						lastHarnessNodeID = joinNodeID
-						lastHarnessNodeIsBatchJoin = true
-					}
-				}
-			}
-
-			// 2f'. web_search_call / web_search_end
-			var lastWebCallID string
-			for _, r := range turn.WebSearchRecords {
-				if r.Type == "response_item" && r.SubType == "web_search_call" {
-					var q string
-					if r.ResponseItem != nil && r.ResponseItem.Action != nil {
-						q = r.ResponseItem.Action.Query
-						if q == "" && len(r.ResponseItem.Action.Queries) > 0 {
-							q = r.ResponseItem.Action.Queries[0]
+						lastHarnessNodeID = middleNodeID
+						lastHarnessNodeIsBatchJoin = false
+						currentY = middleNodeY + NodeHeight + NodeGap
+					} else {
+						joinNodeID := ""
+						if len(outputNodeIDs) > 0 {
+							joinNodeID = outputNodeIDs[len(outputNodeIDs)-1]
+							currentY = harnessTopY + NodeHeight + BatchNodeGap + NodeHeight + NodeGap
+						} else if len(callNodeIDs) > 0 {
+							joinNodeID = callNodeIDs[len(callNodeIDs)-1]
+							currentY = harnessTopY + NodeHeight + NodeGap
 						}
-					}
-					nodeID := fmt.Sprintf("node-%d", r.LineNumber)
-					pushHarnessNode(nodeID, "webSearchAction", "action", "Web Search", "🔍", "Query: "+q, "", nil, turn.Index, NodeHeight)
-					RecordToNodeID[r.LineNumber] = nodeID
-					lastWebCallID = nodeID
-				} else if r.Type == "event_msg" && r.SubType == "web_search_end" {
-					nodeID := fmt.Sprintf("node-%d", r.LineNumber)
-					pushHarnessNode(nodeID, "webSearchAction", "action", "Web Search Completed", "🔍", "Search finished", "", nil, turn.Index, NodeHeight)
-					RecordToNodeID[r.LineNumber] = nodeID
-					if lastWebCallID != "" {
-						edges = append(edges, dto.FlowEdge{
-							ID:       fmt.Sprintf("edge-%s-%s", lastWebCallID, nodeID),
-							Source:   lastWebCallID,
-							Target:   nodeID,
-							Type:     "default",
-							Animated: false,
-						})
-					}
-				}
-			}
-
-			// 2g. item_completed
-			for _, r := range turn.ItemCompleted {
-				if r.EventMsg == nil || r.EventMsg.Item == nil {
-					continue
-				}
-				nodeID := fmt.Sprintf("node-%d", r.LineNumber)
-				pushHarnessNode(nodeID, "itemCompleted", "event", "Item Completed", "✅", r.EventMsg.Item.Text, "", nil, turn.Index, NodeHeight)
-				RecordToNodeID[r.LineNumber] = nodeID
-			}
-
-			// 2g'. Non-batch agent_messages
-			batchRecordsSet := make(map[int]bool)
-			for _, batch := range turn.Batches {
-				for _, r := range batch.CallRecords {
-					batchRecordsSet[r.LineNumber] = true
-				}
-				for _, r := range batch.OutputRecords {
-					if r != nil {
-						batchRecordsSet[r.LineNumber] = true
-					}
-				}
-				for _, r := range batch.MiddleMessage {
-					batchRecordsSet[r.LineNumber] = true
-				}
-			}
-
-			for idx := 0; idx < len(turn.Records); {
-				r := turn.Records[idx]
-				isAgentMsg := (r.Type == "event_msg" && r.SubType == "agent_message") ||
-					(r.Type == "response_item" && r.SubType == "message" && r.ResponseItem != nil && r.ResponseItem.Role == "assistant")
-
-				if isAgentMsg && !batchRecordsSet[r.LineNumber] {
-					// Check if consecutive agent messages can be merged
-					var texts []string
-					if r.Type == "event_msg" && r.EventMsg != nil && r.EventMsg.Message != "" {
-						texts = append(texts, r.EventMsg.Message)
-					} else if r.Type == "response_item" && r.ResponseItem != nil {
-						for _, c := range r.ResponseItem.Content {
-							texts = append(texts, c.Text)
+						if joinNodeID != "" {
+							lastHarnessNodeID = joinNodeID
+							lastHarnessNodeIsBatchJoin = true
 						}
 					}
 
-					nodeID := fmt.Sprintf("node-%d", r.LineNumber)
-					RecordToNodeID[r.LineNumber] = nodeID
-
-					// Look ahead
-					if idx+1 < len(turn.Records) {
-						nextR := turn.Records[idx+1]
-						isNextAgentMsg := (nextR.Type == "event_msg" && nextR.SubType == "agent_message") ||
-							(nextR.Type == "response_item" && nextR.SubType == "message" && nextR.ResponseItem != nil && nextR.ResponseItem.Role == "assistant")
-						if isNextAgentMsg && !batchRecordsSet[nextR.LineNumber] {
-							if nextR.Type == "event_msg" && nextR.EventMsg != nil && nextR.EventMsg.Message != "" {
-								texts = append(texts, nextR.EventMsg.Message)
-							} else if nextR.Type == "response_item" && nextR.ResponseItem != nil {
-								for _, c := range nextR.ResponseItem.Content {
-									texts = append(texts, c.Text)
-								}
+				case displayUnitWebSearch:
+					record := unit.Records[0]
+					if record.Type == "response_item" && record.SubType == "web_search_call" {
+						var query string
+						if record.ResponseItem != nil && record.ResponseItem.Action != nil {
+							query = record.ResponseItem.Action.Query
+							if query == "" && len(record.ResponseItem.Action.Queries) > 0 {
+								query = record.ResponseItem.Action.Queries[0]
 							}
-							RecordToNodeID[nextR.LineNumber] = nodeID
-							idx++
+						}
+						nodeID := fmt.Sprintf("node-%d", record.LineNumber)
+						pushHarnessNode(nodeID, "webSearchAction", "action", "Web Search", "🔍", "Query: "+query, "", nil, turn.Index, NodeHeight)
+						RecordToNodeID[record.LineNumber] = nodeID
+						lastWebCallID = nodeID
+					} else if record.Type == "event_msg" && record.SubType == "web_search_end" {
+						nodeID := fmt.Sprintf("node-%d", record.LineNumber)
+						pushHarnessNode(nodeID, "webSearchAction", "action", "Web Search Completed", "🔍", "Search finished", "", nil, turn.Index, NodeHeight)
+						RecordToNodeID[record.LineNumber] = nodeID
+						if lastWebCallID != "" {
+							edges = append(edges, dto.FlowEdge{
+								ID:       fmt.Sprintf("edge-%s-%s", lastWebCallID, nodeID),
+								Source:   lastWebCallID,
+								Target:   nodeID,
+								Type:     "default",
+								Animated: false,
+							})
 						}
 					}
 
-					pushHarnessNode(nodeID, "agentMessage", "turn", "Agent Message", "🤖", strings.Join(texts, "\n"), strings.Join(texts, "\n"), nil, turn.Index, NodeHeight)
-				}
-				idx++
-			}
+				case displayUnitItemComplete:
+					record := unit.Records[0]
+					if record.EventMsg == nil || record.EventMsg.Item == nil {
+						continue
+					}
+					nodeID := fmt.Sprintf("node-%d", record.LineNumber)
+					pushHarnessNode(nodeID, "itemCompleted", "event", "Item Completed", "✅", record.EventMsg.Item.Text, "", nil, turn.Index, NodeHeight)
+					RecordToNodeID[record.LineNumber] = nodeID
 
-			// 2h. Generic records (non-batch, non-event boundary, non-token counts, etc.)
-			// Filter out already handled categories
-			for _, r := range turn.GenericRecords {
-				nodeID := fmt.Sprintf("node-%d", r.LineNumber)
-				pushHarnessNode(nodeID, "generic", "generic", "System Event", "⚙️", "Type: "+r.Type+" / Subtype: "+r.SubType, "", nil, turn.Index, NodeHeight)
-				RecordToNodeID[r.LineNumber] = nodeID
+				case displayUnitAgentMessage:
+					var texts []string
+					for _, record := range unit.Records {
+						texts = append(texts, agentMessageTexts(record)...)
+					}
+					nodeID := fmt.Sprintf("node-%d", unit.StartLine)
+					summary := strings.Join(texts, "\n")
+					pushHarnessNode(nodeID, "agentMessage", "turn", "Agent Message", "🤖", summary, summary, nil, turn.Index, NodeHeight)
+					for _, record := range unit.Records {
+						RecordToNodeID[record.LineNumber] = nodeID
+					}
+
+				case displayUnitGeneric:
+					record := unit.Records[0]
+					nodeID := fmt.Sprintf("node-%d", record.LineNumber)
+					pushHarnessNode(nodeID, "generic", "generic", "System Event", "⚙️", "Type: "+record.Type+" / Subtype: "+record.SubType, "", nil, turn.Index, NodeHeight)
+					RecordToNodeID[record.LineNumber] = nodeID
+				}
 			}
 
 			// 2i. task_complete
@@ -1268,12 +1214,13 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 	}
 
 	res := &dto.SessionDetailResponse{
-		ID:          sessionID,
-		ParsedAt:    time.Now().UTC().Format(time.RFC3339),
-		Nodes:       nodes,
-		Edges:       edges,
-		Statistics:  stats,
-		TokenCounts: tokenCountsList,
+		ID:                 sessionID,
+		CacheSchemaVersion: dto.CurrentSessionDetailCacheSchemaVersion,
+		ParsedAt:           time.Now().UTC().Format(time.RFC3339),
+		Nodes:              nodes,
+		Edges:              edges,
+		Statistics:         stats,
+		TokenCounts:        tokenCountsList,
 	}
 
 	// 9. キャッシュへの保存
@@ -1282,6 +1229,178 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 	}
 
 	return res, nil
+}
+
+func isUnreadableReasoningPair(pair *model.ReasoningPair) bool {
+	if pair == nil || pair.AgentReasoning != nil || pair.Reasoning == nil || pair.Reasoning.ResponseItem == nil {
+		return false
+	}
+	for _, content := range pair.Reasoning.ResponseItem.Summary {
+		if strings.TrimSpace(content.Text) != "" {
+			return false
+		}
+	}
+	return true
+}
+
+func buildDisplayUnits(turn *model.Turn) []displayUnit {
+	var units []displayUnit
+	consumedLines := make(map[int]bool)
+
+	for _, pair := range turn.AgentReasonings {
+		startLine := reasoningPairStartLine(pair)
+		if startLine == 0 {
+			continue
+		}
+		unit := displayUnit{
+			Kind:           displayUnitReasoning,
+			StartLine:      startLine,
+			ReasoningPairs: []*model.ReasoningPair{pair},
+		}
+		if pair.AgentReasoning != nil {
+			unit.Records = append(unit.Records, pair.AgentReasoning)
+			consumedLines[pair.AgentReasoning.LineNumber] = true
+		}
+		if pair.Reasoning != nil {
+			unit.Records = append(unit.Records, pair.Reasoning)
+			consumedLines[pair.Reasoning.LineNumber] = true
+		}
+		units = append(units, unit)
+	}
+
+	for _, batch := range turn.Batches {
+		if len(batch.CallRecords) == 0 {
+			continue
+		}
+		unit := displayUnit{
+			Kind:      displayUnitBatch,
+			StartLine: batch.CallRecords[0].LineNumber,
+			Batch:     batch,
+		}
+		unit.Records = append(unit.Records, batch.CallRecords...)
+		unit.Records = append(unit.Records, batch.OutputRecords...)
+		unit.Records = append(unit.Records, batch.MiddleMessage...)
+		for _, record := range unit.Records {
+			if record != nil {
+				consumedLines[record.LineNumber] = true
+			}
+		}
+		units = append(units, unit)
+	}
+
+	for recordIndex := 0; recordIndex < len(turn.Records); recordIndex++ {
+		record := turn.Records[recordIndex]
+		if consumedLines[record.LineNumber] {
+			continue
+		}
+
+		switch {
+		case isAgentMessageRecord(record):
+			unit := displayUnit{
+				Kind:      displayUnitAgentMessage,
+				StartLine: record.LineNumber,
+				Records:   []*model.TypedRecord{record},
+			}
+			consumedLines[record.LineNumber] = true
+			if recordIndex+1 < len(turn.Records) {
+				nextRecord := turn.Records[recordIndex+1]
+				if !consumedLines[nextRecord.LineNumber] && isAgentMessageRecord(nextRecord) {
+					unit.Records = append(unit.Records, nextRecord)
+					consumedLines[nextRecord.LineNumber] = true
+					recordIndex++
+				}
+			}
+			units = append(units, unit)
+		case containsRecord(turn.WebSearchRecords, record.LineNumber):
+			units = append(units, displayUnit{Kind: displayUnitWebSearch, StartLine: record.LineNumber, Records: []*model.TypedRecord{record}})
+			consumedLines[record.LineNumber] = true
+		case containsRecord(turn.ItemCompleted, record.LineNumber):
+			units = append(units, displayUnit{Kind: displayUnitItemComplete, StartLine: record.LineNumber, Records: []*model.TypedRecord{record}})
+			consumedLines[record.LineNumber] = true
+		case containsRecord(turn.GenericRecords, record.LineNumber):
+			units = append(units, displayUnit{Kind: displayUnitGeneric, StartLine: record.LineNumber, Records: []*model.TypedRecord{record}})
+			consumedLines[record.LineNumber] = true
+		}
+	}
+
+	sort.SliceStable(units, func(i, j int) bool {
+		return units[i].StartLine < units[j].StartLine
+	})
+
+	merged := make([]displayUnit, 0, len(units))
+	for _, unit := range units {
+		if len(merged) > 0 &&
+			isUnreadableReasoningUnit(&merged[len(merged)-1]) &&
+			isUnreadableReasoningUnit(&unit) {
+			merged[len(merged)-1].Records = append(merged[len(merged)-1].Records, unit.Records...)
+			merged[len(merged)-1].ReasoningPairs = append(merged[len(merged)-1].ReasoningPairs, unit.ReasoningPairs...)
+			continue
+		}
+		merged = append(merged, unit)
+	}
+	return merged
+}
+
+func reasoningPairStartLine(pair *model.ReasoningPair) int {
+	if pair == nil {
+		return 0
+	}
+	if pair.AgentReasoning != nil && pair.Reasoning != nil {
+		return min(pair.AgentReasoning.LineNumber, pair.Reasoning.LineNumber)
+	}
+	if pair.AgentReasoning != nil {
+		return pair.AgentReasoning.LineNumber
+	}
+	if pair.Reasoning != nil {
+		return pair.Reasoning.LineNumber
+	}
+	return 0
+}
+
+func isUnreadableReasoningUnit(unit *displayUnit) bool {
+	if unit == nil || unit.Kind != displayUnitReasoning || len(unit.ReasoningPairs) == 0 {
+		return false
+	}
+	for _, pair := range unit.ReasoningPairs {
+		if !isUnreadableReasoningPair(pair) {
+			return false
+		}
+	}
+	return true
+}
+
+func isAgentMessageRecord(record *model.TypedRecord) bool {
+	if record == nil {
+		return false
+	}
+	return (record.Type == "event_msg" && record.SubType == "agent_message") ||
+		(record.Type == "response_item" && record.SubType == "message" && record.ResponseItem != nil && record.ResponseItem.Role == "assistant")
+}
+
+func agentMessageTexts(record *model.TypedRecord) []string {
+	if record == nil {
+		return nil
+	}
+	if record.Type == "event_msg" && record.EventMsg != nil && record.EventMsg.Message != "" {
+		return []string{record.EventMsg.Message}
+	}
+	if record.Type == "response_item" && record.ResponseItem != nil {
+		texts := make([]string, 0, len(record.ResponseItem.Content))
+		for _, content := range record.ResponseItem.Content {
+			texts = append(texts, content.Text)
+		}
+		return texts
+	}
+	return nil
+}
+
+func containsRecord(records []*model.TypedRecord, lineNumber int) bool {
+	for _, record := range records {
+		if record != nil && record.LineNumber == lineNumber {
+			return true
+		}
+	}
+	return false
 }
 
 func isUnsupportedVersion(versionStr string) bool {
