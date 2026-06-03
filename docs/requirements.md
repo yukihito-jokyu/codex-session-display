@@ -104,7 +104,7 @@ JSONLは各レコードのトップレベル `type` フィールドで4種類に
 | `event_msg`         | `task_complete`        | `payload.last_agent_message`                             | タスク完了イベント                                                |
 | `event_msg`         | `token_count`          | —                                                        | トークン使用量                                                    |
 | `response_item`     | `message`              | `payload.content[].text`（`content` はオブジェクト配列） | LLM APIメッセージ（`role` で developer/user/assistant に分岐）    |
-| `response_item`     | `reasoning`            | `payload.summary[].text`                                 | 推論サマリー（`content`/`encrypted_content` は常に `null`）       |
+| `response_item`     | `reasoning`            | `payload.summary[].text`                                 | 推論サマリー。本文を表示できない場合は `summary=[]`, `content=null`, `encrypted_content` のみとなる |
 | `response_item`     | `function_call`        | `payload.arguments`（JSON文字列）                        | ツール呼び出し（`call_id` で `function_call_output` と1:1紐付け） |
 | `response_item`     | `function_call_output` | `payload.output`（文字列）                               | ツール呼び出し結果（`call_id` で対応）                            |
 
@@ -365,9 +365,13 @@ JSONLは各レコードのトップレベル `type` フィールドで4種類に
 | ソース                           | 型                | 内容                                                             | 用途                         |
 | -------------------------------- | ----------------- | ---------------------------------------------------------------- | ---------------------------- |
 | `event_msg.type=agent_reasoning` | `text` フィールド | 推論のテキスト全文                                               | **ハーネス上のノード表示用** |
-| `response_item.type=reasoning`   | `summary` 配列    | 推論のサマリー（`content` と `encrypted_content` は常に `null`） | **クリック時の詳細展開用**   |
+| `response_item.type=reasoning`   | `summary` 配列    | 推論のサマリー。本文を表示できない場合は暗号化内容のみを持つ     | **クリック時の詳細展開用**   |
 
 両方を統合して1つのノードとして扱い、ハーネス上に配置する。ノードには `agent_reasoning` のテキストを表示し、クリック展開時には `reasoning` のサマリーも併せて表示する。
+
+`agent_reasoning` がなく、`response_item(type=reasoning)` の `summary` も空で本文を表示できない場合は、ノード本文を `（暗号化済み・表示不可）×N` とする。表示不能な reasoning が UI 上で連続する場合は1ノードに集約する。`token_count` など表示ノードを生成しないレコードは連続性を分断せず、Agent Message や Tool Batch など表示ノードを生成するレコードがある場合は別グループとして扱う。`agent_reasoning` または非空の `summary` を持つ reasoning は集約しない。
+
+ターン内の動的ノードは、JSONL レコードの出現順を維持してハーネス上へ配置する。
 
 #### 2.3.6 ノードの詳細表示
 
@@ -680,7 +684,7 @@ GoバックエンドはWailsのバインディング生成を通じてReactフ�
 
 #### GetSessionDetail(id)
 
-指定セッションの解析結果（React Flow形式）を取得する。キャッシュが存在しない、またはJSONLが新しければ再解析する。
+指定セッションの解析結果（React Flow形式）を取得する。キャッシュが存在しない、JSONLが新しい、またはキャッシュスキーマバージョンが現行と異なる場合は再解析する。
 
 **引数:** `id` — セッションID（UUID）
 
@@ -783,7 +787,4 @@ GoバックエンドはWailsのバインディング生成を通じてReactフ�
 - 本アプリケーションは、自動・手動問わずインターネットを介したアップデートチェック機能（GitHub API等への問い合わせを含む）や自動アップデート機能は一切搭載しない。
 - アプリケーションが動作中に発生させるすべてのネットワークリクエストはローカル環境（`localhost` 等）のみに制限され、外部への通信は完全に排除される。
 - アップデートは、新しい実行バイナリ/パッケージを手動で再取得し、再インストールする運用とする。
-
-
-
 
