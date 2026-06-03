@@ -283,6 +283,265 @@ func TestGetSessionDetailUseCase_Execute(t *testing.T) {
 			},
 		},
 		{
+			name: "consecutive unreadable reasoning records are aggregated",
+			setup: func(t *testing.T, tmpDir string) (string, usecase.SessionRepository, usecase.CacheRepository, usecase.SessionParser, func()) {
+				filePath := filepath.Join(tmpDir, "rollout-unreadable-reasoning.jsonl")
+				sessionRepo := &mockSessionRepositoryForDetail{
+					paths: map[string]string{"session-unreadable-reasoning": filePath},
+				}
+				cacheRepo := &mockCacheRepositoryForDetail{}
+				parser := &mockSessionParser{
+					records: []*model.TypedRecord{
+						{
+							LineNumber:  1,
+							Type:        "session_meta",
+							SessionMeta: &model.SessionMetaPayload{ID: "session-unreadable-reasoning", CliVersion: "v0.131.0"},
+						},
+						{
+							LineNumber: 2,
+							Type:       "event_msg",
+							SubType:    "task_started",
+							EventMsg:   &model.EventMsgPayload{TurnID: "turn-1"},
+						},
+						{
+							LineNumber:   3,
+							Type:         "response_item",
+							SubType:      "reasoning",
+							ResponseItem: &model.ResponseItemPayload{EncryptedContent: "encrypted-1"},
+						},
+						{
+							LineNumber:   4,
+							Type:         "response_item",
+							SubType:      "reasoning",
+							ResponseItem: &model.ResponseItemPayload{EncryptedContent: "encrypted-2"},
+						},
+						{
+							LineNumber:   5,
+							Type:         "response_item",
+							SubType:      "reasoning",
+							ResponseItem: &model.ResponseItemPayload{EncryptedContent: "encrypted-3"},
+						},
+						{
+							LineNumber: 6,
+							Type:       "event_msg",
+							SubType:    "token_count",
+							EventMsg: &model.EventMsgPayload{
+								Info: &model.TokenInfo{
+									TotalTokenUsage: &model.TokenDetail{TotalTokens: 100},
+									LastTokenUsage:  &model.TokenDetail{TotalTokens: 100},
+								},
+							},
+						},
+						{
+							LineNumber: 7,
+							Type:       "event_msg",
+							SubType:    "task_complete",
+							EventMsg:   &model.EventMsgPayload{TurnID: "turn-1"},
+						},
+					},
+				}
+				return "session-unreadable-reasoning", sessionRepo, cacheRepo, parser, nil
+			},
+			wantErr: false,
+			verify: func(t *testing.T, res *dto.SessionDetailResponse, err error) {
+				var reasoningNodes []dto.FlowNode
+				for _, node := range res.Nodes {
+					if node.Type == "reasoning" {
+						reasoningNodes = append(reasoningNodes, node)
+					}
+				}
+
+				if len(reasoningNodes) != 1 {
+					t.Fatalf("expected 1 reasoning node, got %d", len(reasoningNodes))
+				}
+				if reasoningNodes[0].Data.Summary != "（暗号化済み・表示不可）×3" {
+					t.Errorf("unexpected reasoning summary: %q", reasoningNodes[0].Data.Summary)
+				}
+				if reasoningNodes[0].Data.FullText != "（暗号化済み・表示不可）×3" {
+					t.Errorf("unexpected reasoning full text: %q", reasoningNodes[0].Data.FullText)
+				}
+				if len(res.TokenCounts) != 1 {
+					t.Fatalf("expected 1 token count entry, got %d", len(res.TokenCounts))
+				}
+				if res.TokenCounts[0].BoundToNodeID != reasoningNodes[0].ID {
+					t.Errorf("token count bound to %q, want %q", res.TokenCounts[0].BoundToNodeID, reasoningNodes[0].ID)
+				}
+			},
+		},
+		{
+			name: "unreadable reasoning records separated by another record form separate groups",
+			setup: func(t *testing.T, tmpDir string) (string, usecase.SessionRepository, usecase.CacheRepository, usecase.SessionParser, func()) {
+				filePath := filepath.Join(tmpDir, "rollout-separated-unreadable-reasoning.jsonl")
+				logs := []string{
+					`{"type":"session_meta","timestamp":1717084800,"payload":{"id":"session-separated-unreadable-reasoning","cli_version":"v0.131.0"}}`,
+					`{"type":"event_msg","timestamp":1717084810,"payload":{"type":"task_started","turn_id":"turn-1"}}`,
+					`{"type":"response_item","timestamp":1717084811,"payload":{"type":"reasoning","summary":[],"encrypted_content":"encrypted-1"}}`,
+					`{"type":"response_item","timestamp":1717084812,"payload":{"type":"reasoning","summary":[],"encrypted_content":"encrypted-2"}}`,
+					`{"type":"event_msg","timestamp":1717084813,"payload":{"type":"agent_message","message":"Between reasoning groups"}}`,
+					`{"type":"response_item","timestamp":1717084814,"payload":{"type":"reasoning","summary":[],"encrypted_content":"encrypted-3"}}`,
+					`{"type":"event_msg","timestamp":1717084815,"payload":{"type":"task_complete","turn_id":"turn-1"}}`,
+				}
+				if err := os.WriteFile(filePath, []byte(strings.Join(logs, "\n")), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				sessionRepo := &mockSessionRepositoryForDetail{
+					paths: map[string]string{"session-separated-unreadable-reasoning": filePath},
+				}
+				cacheRepo := &mockCacheRepositoryForDetail{}
+				return "session-separated-unreadable-reasoning", sessionRepo, cacheRepo, nil, nil
+			},
+			wantErr: false,
+			verify: func(t *testing.T, res *dto.SessionDetailResponse, err error) {
+				var summaries []string
+				var dynamicNodeTypes []string
+				for _, node := range res.Nodes {
+					if node.Type == "reasoning" {
+						summaries = append(summaries, node.Data.Summary)
+					}
+					if node.Type == "reasoning" || node.Type == "agentMessage" {
+						dynamicNodeTypes = append(dynamicNodeTypes, node.Type)
+					}
+				}
+
+				want := []string{"（暗号化済み・表示不可）×2", "（暗号化済み・表示不可）×1"}
+				if len(summaries) != len(want) {
+					t.Fatalf("expected %d reasoning nodes, got %d: %v", len(want), len(summaries), summaries)
+				}
+				for i := range want {
+					if summaries[i] != want[i] {
+						t.Errorf("reasoning node %d summary = %q, want %q", i, summaries[i], want[i])
+					}
+				}
+				wantNodeTypes := []string{"reasoning", "agentMessage", "reasoning"}
+				for i := range wantNodeTypes {
+					if dynamicNodeTypes[i] != wantNodeTypes[i] {
+						t.Errorf("dynamic node %d type = %q, want %q", i, dynamicNodeTypes[i], wantNodeTypes[i])
+					}
+				}
+			},
+		},
+		{
+			name: "unreadable reasoning records separated only by token counts are aggregated",
+			setup: func(t *testing.T, tmpDir string) (string, usecase.SessionRepository, usecase.CacheRepository, usecase.SessionParser, func()) {
+				filePath := filepath.Join(tmpDir, "rollout-token-count-between-unreadable-reasoning.jsonl")
+				logs := []string{
+					`{"type":"session_meta","timestamp":1717084800,"payload":{"id":"session-token-count-between-unreadable-reasoning","cli_version":"v0.131.0"}}`,
+					`{"type":"event_msg","timestamp":1717084810,"payload":{"type":"task_started","turn_id":"turn-1"}}`,
+					`{"type":"response_item","timestamp":1717084811,"payload":{"type":"reasoning","summary":[],"encrypted_content":"encrypted-1"}}`,
+					`{"type":"event_msg","timestamp":1717084812,"payload":{"type":"token_count","info":{"total_token_usage":{"total_tokens":100},"last_token_usage":{"total_tokens":100}}}}`,
+					`{"type":"response_item","timestamp":1717084813,"payload":{"type":"reasoning","summary":[],"encrypted_content":"encrypted-2"}}`,
+					`{"type":"event_msg","timestamp":1717084814,"payload":{"type":"task_complete","turn_id":"turn-1"}}`,
+				}
+				if err := os.WriteFile(filePath, []byte(strings.Join(logs, "\n")), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				sessionRepo := &mockSessionRepositoryForDetail{
+					paths: map[string]string{"session-token-count-between-unreadable-reasoning": filePath},
+				}
+				cacheRepo := &mockCacheRepositoryForDetail{}
+				return "session-token-count-between-unreadable-reasoning", sessionRepo, cacheRepo, nil, nil
+			},
+			wantErr: false,
+			verify: func(t *testing.T, res *dto.SessionDetailResponse, err error) {
+				var reasoningNodes []dto.FlowNode
+				for _, node := range res.Nodes {
+					if node.Type == "reasoning" {
+						reasoningNodes = append(reasoningNodes, node)
+					}
+				}
+
+				if len(reasoningNodes) != 1 {
+					t.Fatalf("expected 1 reasoning node, got %d", len(reasoningNodes))
+				}
+				if reasoningNodes[0].Data.Summary != "（暗号化済み・表示不可）×2" {
+					t.Errorf("unexpected reasoning summary: %q", reasoningNodes[0].Data.Summary)
+				}
+			},
+		},
+		{
+			name: "tool batch remains between unreadable reasoning nodes",
+			setup: func(t *testing.T, tmpDir string) (string, usecase.SessionRepository, usecase.CacheRepository, usecase.SessionParser, func()) {
+				filePath := filepath.Join(tmpDir, "rollout-tool-batch-between-unreadable-reasoning.jsonl")
+				logs := []string{
+					`{"type":"session_meta","timestamp":1717084800,"payload":{"id":"session-tool-batch-between-unreadable-reasoning","cli_version":"v0.131.0"}}`,
+					`{"type":"event_msg","timestamp":1717084810,"payload":{"type":"task_started","turn_id":"turn-1"}}`,
+					`{"type":"response_item","timestamp":1717084811,"payload":{"type":"reasoning","summary":[],"encrypted_content":"encrypted-1"}}`,
+					`{"type":"response_item","timestamp":1717084812,"payload":{"type":"function_call","name":"exec_command","arguments":"{}","call_id":"call-1"}}`,
+					`{"type":"response_item","timestamp":1717084813,"payload":{"type":"function_call_output","output":"done","call_id":"call-1"}}`,
+					`{"type":"event_msg","timestamp":1717084814,"payload":{"type":"token_count"}}`,
+					`{"type":"response_item","timestamp":1717084815,"payload":{"type":"reasoning","summary":[],"encrypted_content":"encrypted-2"}}`,
+					`{"type":"event_msg","timestamp":1717084816,"payload":{"type":"task_complete","turn_id":"turn-1"}}`,
+				}
+				if err := os.WriteFile(filePath, []byte(strings.Join(logs, "\n")), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				sessionRepo := &mockSessionRepositoryForDetail{
+					paths: map[string]string{"session-tool-batch-between-unreadable-reasoning": filePath},
+				}
+				cacheRepo := &mockCacheRepositoryForDetail{}
+				return "session-tool-batch-between-unreadable-reasoning", sessionRepo, cacheRepo, nil, nil
+			},
+			wantErr: false,
+			verify: func(t *testing.T, res *dto.SessionDetailResponse, err error) {
+				wantEdges := map[string]string{
+					"node-3": "node-4",
+					"node-5": "node-7",
+				}
+				for source, target := range wantEdges {
+					found := false
+					for _, edge := range res.Edges {
+						if edge.Source == source && edge.Target == target {
+							found = true
+							break
+						}
+					}
+					if !found {
+						t.Errorf("expected edge %s -> %s", source, target)
+					}
+				}
+			},
+		},
+		{
+			name: "readable reasoning summaries remain separate nodes",
+			setup: func(t *testing.T, tmpDir string) (string, usecase.SessionRepository, usecase.CacheRepository, usecase.SessionParser, func()) {
+				filePath := filepath.Join(tmpDir, "rollout-readable-reasoning.jsonl")
+				logs := []string{
+					`{"type":"session_meta","timestamp":1717084800,"payload":{"id":"session-readable-reasoning","cli_version":"v0.131.0"}}`,
+					`{"type":"event_msg","timestamp":1717084810,"payload":{"type":"task_started","turn_id":"turn-1"}}`,
+					`{"type":"response_item","timestamp":1717084811,"payload":{"type":"reasoning","summary":[{"type":"summary_text","text":"Readable summary 1"}]}}`,
+					`{"type":"response_item","timestamp":1717084812,"payload":{"type":"reasoning","summary":[{"type":"summary_text","text":"Readable summary 2"}]}}`,
+					`{"type":"event_msg","timestamp":1717084813,"payload":{"type":"task_complete","turn_id":"turn-1"}}`,
+				}
+				if err := os.WriteFile(filePath, []byte(strings.Join(logs, "\n")), 0o644); err != nil {
+					t.Fatal(err)
+				}
+				sessionRepo := &mockSessionRepositoryForDetail{
+					paths: map[string]string{"session-readable-reasoning": filePath},
+				}
+				cacheRepo := &mockCacheRepositoryForDetail{}
+				return "session-readable-reasoning", sessionRepo, cacheRepo, nil, nil
+			},
+			wantErr: false,
+			verify: func(t *testing.T, res *dto.SessionDetailResponse, err error) {
+				var summaries []string
+				for _, node := range res.Nodes {
+					if node.Type == "reasoning" {
+						summaries = append(summaries, node.Data.Summary)
+					}
+				}
+
+				want := []string{"Readable summary 1", "Readable summary 2"}
+				if len(summaries) != len(want) {
+					t.Fatalf("expected %d reasoning nodes, got %d: %v", len(want), len(summaries), summaries)
+				}
+				for i := range want {
+					if summaries[i] != want[i] {
+						t.Errorf("reasoning node %d summary = %q, want %q", i, summaries[i], want[i])
+					}
+				}
+			},
+		},
+		{
 			name: "real data",
 			setup: func(t *testing.T, tmpDir string) (string, usecase.SessionRepository, usecase.CacheRepository, usecase.SessionParser, func()) {
 				filePath := filepath.Join("testdata", "rollout-2026-05-27T20-40-12-019e693c-2e17-7353-949f-d1d33ccbf6ff.jsonl")
@@ -315,8 +574,9 @@ func TestGetSessionDetailUseCase_Execute(t *testing.T) {
 			setup: func(t *testing.T, tmpDir string) (string, usecase.SessionRepository, usecase.CacheRepository, usecase.SessionParser, func()) {
 				sessionID := "cached-session"
 				cachedResponse := &dto.SessionDetailResponse{
-					ID:       sessionID,
-					ParsedAt: "2026-05-31T01:00:00Z",
+					ID:                 sessionID,
+					CacheSchemaVersion: dto.CurrentSessionDetailCacheSchemaVersion,
+					ParsedAt:           "2026-05-31T01:00:00Z",
 				}
 				cacheRepo := &mockCacheRepositoryForDetail{
 					cache: map[string]*dto.SessionDetailResponse{
@@ -345,8 +605,9 @@ func TestGetSessionDetailUseCase_Execute(t *testing.T) {
 			setup: func(t *testing.T, tmpDir string) (string, usecase.SessionRepository, usecase.CacheRepository, usecase.SessionParser, func()) {
 				sessionID := "cached-by-file-modtime"
 				cachedResponse := &dto.SessionDetailResponse{
-					ID:       sessionID,
-					ParsedAt: "2026-05-01T00:00:00Z",
+					ID:                 sessionID,
+					CacheSchemaVersion: dto.CurrentSessionDetailCacheSchemaVersion,
+					ParsedAt:           "2026-05-01T00:00:00Z",
 				}
 				cacheRepo := &mockCacheRepositoryForDetail{
 					cache: map[string]*dto.SessionDetailResponse{
@@ -392,14 +653,68 @@ func TestGetSessionDetailUseCase_Execute(t *testing.T) {
 			},
 		},
 		{
+			name: "legacy cache triggers reparse even when cache file is fresh",
+			setup: func(t *testing.T, tmpDir string) (string, usecase.SessionRepository, usecase.CacheRepository, usecase.SessionParser, func()) {
+				sessionID := "legacy-cache-session"
+				cacheRepo := &mockCacheRepositoryForDetail{
+					cache: map[string]*dto.SessionDetailResponse{
+						sessionID: {
+							ID:       sessionID,
+							ParsedAt: "2026-05-31T01:00:00Z",
+						},
+					},
+					modTimes: map[string]time.Time{
+						sessionID: time.Date(2026, 5, 31, 3, 0, 0, 0, time.UTC),
+					},
+				}
+				sessionRepo := &mockSessionRepositoryForDetail{
+					paths: map[string]string{
+						sessionID: filepath.Join(tmpDir, "rollout-legacy-cache.jsonl"),
+					},
+					modTimes: map[string]time.Time{
+						sessionID: time.Date(2026, 5, 31, 2, 0, 0, 0, time.UTC),
+					},
+				}
+				parser := &mockSessionParser{
+					records: []*model.TypedRecord{
+						{
+							Type: "session_meta",
+							SessionMeta: &model.SessionMetaPayload{
+								ID:         sessionID,
+								CliVersion: "0.131.0",
+							},
+						},
+					},
+				}
+				return sessionID, sessionRepo, cacheRepo, parser, func() {
+					if parser.calls != 1 {
+						t.Fatalf("expected parser to be called once, got %d", parser.calls)
+					}
+					if cacheRepo.saveCount != 1 {
+						t.Fatalf("expected cache save once, got %d", cacheRepo.saveCount)
+					}
+				}
+			},
+			wantErr: false,
+			verify: func(t *testing.T, res *dto.SessionDetailResponse, err error) {
+				if err != nil {
+					t.Fatalf("expected no error, got %v", err)
+				}
+				if res == nil || res.ID != "legacy-cache-session" {
+					t.Fatalf("expected reparsed response, got %+v", res)
+				}
+			},
+		},
+		{
 			name: "stale cache triggers reparse and save",
 			setup: func(t *testing.T, tmpDir string) (string, usecase.SessionRepository, usecase.CacheRepository, usecase.SessionParser, func()) {
 				sessionID := "stale-session"
 				cacheRepo := &mockCacheRepositoryForDetail{
 					cache: map[string]*dto.SessionDetailResponse{
 						sessionID: {
-							ID:       sessionID,
-							ParsedAt: "2026-05-31T01:00:00Z",
+							ID:                 sessionID,
+							CacheSchemaVersion: dto.CurrentSessionDetailCacheSchemaVersion,
+							ParsedAt:           "2026-05-31T01:00:00Z",
 						},
 					},
 					modTimes: map[string]time.Time{
