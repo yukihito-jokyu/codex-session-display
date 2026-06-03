@@ -15,6 +15,9 @@ import (
 // ErrSessionMetaNotFound はキャッシュ内に sessionMeta ノードが見つからない場合のエラーです。
 var ErrSessionMetaNotFound = errors.New("sessionMeta node not found in cache")
 
+// ErrCacheSchemaMismatch はキャッシュ形式が現行バージョンと異なる場合のエラーです。
+var ErrCacheSchemaMismatch = errors.New("cache schema version mismatch")
+
 // CacheFSRepository は usecase.CacheRepository を実装します。
 type CacheFSRepository struct {
 	cacheDir string
@@ -39,6 +42,9 @@ func (r *CacheFSRepository) GetSessionSummary(ctx context.Context, sessionID str
 	var detail dto.SessionDetailResponse
 	if err := json.Unmarshal(data, &detail); err != nil {
 		return nil, fmt.Errorf("failed to decode cache JSON: %w", err)
+	}
+	if detail.CacheSchemaVersion != dto.CurrentSessionDetailCacheSchemaVersion {
+		return nil, ErrCacheSchemaMismatch
 	}
 
 	// sessionMeta ノードを探す
