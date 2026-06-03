@@ -480,6 +480,7 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 	var edges []dto.FlowEdge
 	RecordToNodeID := make(map[int]string)
 	var lastHarnessNodeID string
+	var lastHarnessNodeIsBatchJoin bool
 	var currentY float64
 
 	const (
@@ -526,6 +527,7 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 		}
 
 		lastHarnessNodeID = id
+		lastHarnessNodeIsBatchJoin = false
 		currentY += height + NodeGap
 	}
 
@@ -750,7 +752,9 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 			// 2f. Batches (fork-join)
 			for _, batch := range turn.Batches {
 				harnessTopY := currentY - NodeGap - NodeHeight
-				if lastHarnessNodeID != "" {
+				if lastHarnessNodeIsBatchJoin {
+					harnessTopY = currentY
+				} else if lastHarnessNodeID != "" {
 					// find last harness node Y to align tools
 					for idx := range nodes {
 						if nodes[idx].ID == lastHarnessNodeID {
@@ -760,6 +764,7 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 					}
 				}
 
+				var callNodeIDs []string
 				var outputNodeIDs []string
 
 				for i, call := range batch.CallRecords {
@@ -767,6 +772,7 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 						continue
 					}
 					callNodeID := fmt.Sprintf("node-%d", call.LineNumber)
+					callNodeIDs = append(callNodeIDs, callNodeID)
 					xPos := BranchOffsetX + float64(i)*(NodeWidth+BranchNodeGapX)
 
 					addBranchNode(callNodeID, "action", "action", call.ResponseItem.Name, "🛠️", call.ResponseItem.Arguments, call.ResponseItem.Arguments, nil, turn.Index, xPos, harnessTopY)
@@ -869,10 +875,21 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 					}
 
 					lastHarnessNodeID = middleNodeID
+					lastHarnessNodeIsBatchJoin = false
 					currentY = middleNodeY + NodeHeight + NodeGap
 				} else {
-					// No MiddleMessage, next harness starts at:
-					currentY = harnessTopY + NodeHeight + BatchNodeGap + NodeHeight + NodeGap
+					joinNodeID := ""
+					if len(outputNodeIDs) > 0 {
+						joinNodeID = outputNodeIDs[len(outputNodeIDs)-1]
+						currentY = harnessTopY + NodeHeight + BatchNodeGap + NodeHeight + NodeGap
+					} else if len(callNodeIDs) > 0 {
+						joinNodeID = callNodeIDs[len(callNodeIDs)-1]
+						currentY = harnessTopY + NodeHeight + NodeGap
+					}
+					if joinNodeID != "" {
+						lastHarnessNodeID = joinNodeID
+						lastHarnessNodeIsBatchJoin = true
+					}
 				}
 			}
 
