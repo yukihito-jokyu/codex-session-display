@@ -1625,6 +1625,163 @@ func TestGetSessionDetailUseCase_Execute(t *testing.T) {
 			},
 		},
 		{
+			name: "consecutive batches without middle messages join back to later harness flow",
+			setup: func(t *testing.T, tmpDir string) (string, usecase.SessionRepository, usecase.CacheRepository, usecase.SessionParser, func()) {
+				sessionID := "session-no-middle-batches"
+				filePath := filepath.Join(tmpDir, "rollout-no-middle-batches.jsonl")
+				sessionRepo := &mockSessionRepositoryForDetail{
+					paths: map[string]string{sessionID: filePath},
+				}
+
+				records := []*model.TypedRecord{
+					{
+						LineNumber: 1,
+						Type:       "session_meta",
+						SessionMeta: &model.SessionMetaPayload{
+							ID:         sessionID,
+							CliVersion: "v0.135.0",
+						},
+					},
+					{
+						LineNumber: 2,
+						Type:       "event_msg",
+						SubType:    "task_started",
+						EventMsg: &model.EventMsgPayload{
+							TurnID: "turn-no-middle-batches",
+						},
+					},
+					{
+						LineNumber: 3,
+						Type:       "response_item",
+						SubType:    "function_call",
+						ResponseItem: &model.ResponseItemPayload{
+							CallID:    "call-1",
+							Name:      "read_file",
+							Arguments: "{\"path\":\"a.txt\"}",
+						},
+					},
+					{
+						LineNumber: 4,
+						Type:       "response_item",
+						SubType:    "function_call",
+						ResponseItem: &model.ResponseItemPayload{
+							CallID:    "call-2",
+							Name:      "write_file",
+							Arguments: "{\"path\":\"b.txt\"}",
+						},
+					},
+					{
+						LineNumber: 5,
+						Type:       "response_item",
+						SubType:    "function_call_output",
+						ResponseItem: &model.ResponseItemPayload{
+							CallID: "call-1",
+							Output: "read done",
+						},
+					},
+					{
+						LineNumber: 6,
+						Type:       "response_item",
+						SubType:    "function_call_output",
+						ResponseItem: &model.ResponseItemPayload{
+							CallID: "call-2",
+							Output: "write done",
+						},
+					},
+					{
+						LineNumber: 7,
+						Type:       "response_item",
+						SubType:    "function_call",
+						ResponseItem: &model.ResponseItemPayload{
+							CallID:    "call-3",
+							Name:      "list_files",
+							Arguments: "{\"path\":\".\"}",
+						},
+					},
+					{
+						LineNumber: 8,
+						Type:       "response_item",
+						SubType:    "function_call_output",
+						ResponseItem: &model.ResponseItemPayload{
+							CallID: "call-3",
+							Output: "listed",
+						},
+					},
+					{
+						LineNumber: 9,
+						Type:       "event_msg",
+						SubType:    "agent_message",
+						EventMsg: &model.EventMsgPayload{
+							Message: "Done after tools",
+						},
+					},
+					{
+						LineNumber: 10,
+						Type:       "event_msg",
+						SubType:    "task_complete",
+						EventMsg: &model.EventMsgPayload{
+							TurnID: "turn-no-middle-batches",
+						},
+					},
+				}
+
+				parser := &mockSessionParser{records: records}
+				cacheRepo := &mockCacheRepositoryForDetail{}
+				return sessionID, sessionRepo, cacheRepo, parser, nil
+			},
+			wantErr: false,
+			verify: func(t *testing.T, res *dto.SessionDetailResponse, err error) {
+				if err != nil {
+					t.Fatalf("expected no error, got %v", err)
+				}
+
+				nodesByID := map[string]dto.FlowNode{}
+				for _, node := range res.Nodes {
+					nodesByID[node.ID] = node
+				}
+
+				firstOutput, ok := nodesByID["node-5"]
+				if !ok {
+					t.Fatal("expected first batch output node-5 to exist")
+				}
+				secondOutput, ok := nodesByID["node-8"]
+				if !ok {
+					t.Fatal("expected second batch output node-8 to exist")
+				}
+				followingMessage, ok := nodesByID["node-9"]
+				if !ok {
+					t.Fatal("expected following agent message node-9 to exist")
+				}
+
+				if firstOutput.Position.Y == secondOutput.Position.Y {
+					t.Fatalf("expected consecutive batch outputs to have distinct Y positions, got %v", firstOutput.Position.Y)
+				}
+				if secondOutput.Position.Y <= firstOutput.Position.Y {
+					t.Fatalf("expected second batch output to be below first batch output, got first=%v second=%v", firstOutput.Position.Y, secondOutput.Position.Y)
+				}
+
+				hasEdge := func(source, target string) bool {
+					t.Helper()
+					for _, edge := range res.Edges {
+						if edge.Source == source && edge.Target == target {
+							return true
+						}
+					}
+					return false
+				}
+
+				if !hasEdge("node-5", "node-7") && !hasEdge("node-6", "node-7") {
+					t.Fatalf("expected first middle-less batch output to join to the next batch call, edges=%+v", res.Edges)
+				}
+				if !hasEdge("node-8", "node-9") {
+					t.Fatalf("expected second middle-less batch output to join to following harness node, edges=%+v", res.Edges)
+				}
+				if followingMessage.Position.Y <= secondOutput.Position.Y {
+					t.Fatalf("expected following harness node to be below second batch output, got output=%v message=%v", secondOutput.Position.Y, followingMessage.Position.Y)
+				}
+			},
+		},
+		{
 			name: "consumed tokens difference calculation",
 			setup: func(t *testing.T, tmpDir string) (string, usecase.SessionRepository, usecase.CacheRepository, usecase.SessionParser, func()) {
 				sessionRepo := &mockSessionRepositoryForDetail{
