@@ -40,8 +40,8 @@ JSONLパース結果を `~/.codex-display` にキャッシュ保存する必要�
 ## 結果
 
 - キャッシュファイル: `~/.codex-display/{sessionID}.json`
-- キャッシュ内容: SessionDetailResponse（nodes, edges, statistics, token_counts）
-- 再パース判定: JSONLファイルの最終更新日時 > キャッシュファイルの最終更新日時
+- キャッシュ内容: SessionDetailResponse（cache_schema_version, nodes, edges, statistics, token_counts）
+- 再パース判定: キャッシュスキーマバージョンが現行と異なる、または JSONLファイルの最終更新日時 > キャッシュファイルの最終更新日時
 
 ## 関連決定
 

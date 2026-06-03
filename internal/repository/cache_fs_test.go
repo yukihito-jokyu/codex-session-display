@@ -49,8 +49,9 @@ func TestCacheFSRepository_GetSessionSummary(t *testing.T) {
 
 	// 1. 成功ケースの詳細情報
 	detailSuccess := dto.SessionDetailResponse{
-		ID:       sessionID,
-		ParsedAt: "2026-05-30T07:14:40Z",
+		ID:                 sessionID,
+		CacheSchemaVersion: dto.CurrentSessionDetailCacheSchemaVersion,
+		ParsedAt:           "2026-05-30T07:14:40Z",
 		Nodes: []dto.FlowNode{
 			{
 				ID:   "meta-node-1",
@@ -79,15 +80,17 @@ func TestCacheFSRepository_GetSessionSummary(t *testing.T) {
 
 	// 3. sessionMeta ノードが存在しないケース
 	detailNoMeta := dto.SessionDetailResponse{
-		ID:    sessionID,
-		Nodes: []dto.FlowNode{{ID: "n1", Type: "other"}},
+		ID:                 sessionID,
+		CacheSchemaVersion: dto.CurrentSessionDetailCacheSchemaVersion,
+		Nodes:              []dto.FlowNode{{ID: "n1", Type: "other"}},
 	}
 	dataNoMeta, _ := json.Marshal(detailNoMeta)
 	writeFile(sessionID+"_no_meta.json", dataNoMeta)
 
 	// 4. Meta マップが nil のケース
 	detailNilMeta := dto.SessionDetailResponse{
-		ID: sessionID,
+		ID:                 sessionID,
+		CacheSchemaVersion: dto.CurrentSessionDetailCacheSchemaVersion,
 		Nodes: []dto.FlowNode{
 			{
 				Type: "sessionMeta",
@@ -102,7 +105,8 @@ func TestCacheFSRepository_GetSessionSummary(t *testing.T) {
 
 	// 5. Meta 内の値が nil、欠損、または文字列ではないケース
 	detailMixedMeta := dto.SessionDetailResponse{
-		ID: sessionID,
+		ID:                 sessionID,
+		CacheSchemaVersion: dto.CurrentSessionDetailCacheSchemaVersion,
 		Nodes: []dto.FlowNode{
 			{
 				Type: "sessionMeta",
@@ -119,6 +123,10 @@ func TestCacheFSRepository_GetSessionSummary(t *testing.T) {
 	}
 	dataMixedMeta, _ := json.Marshal(detailMixedMeta)
 	writeFile(sessionID+"_mixed_meta.json", dataMixedMeta)
+
+	// 6. 旧キャッシュスキーマ
+	dataLegacy, _ := json.Marshal(dto.SessionDetailResponse{ID: sessionID})
+	writeFile(sessionID+"_legacy.json", dataLegacy)
 
 	tests := []struct {
 		name      string
@@ -139,6 +147,11 @@ func TestCacheFSRepository_GetSessionSummary(t *testing.T) {
 		{
 			name:      "missing sessionMeta node",
 			sessionID: sessionID + "_no_meta",
+			wantErr:   true,
+		},
+		{
+			name:      "legacy cache schema",
+			sessionID: sessionID + "_legacy",
 			wantErr:   true,
 		},
 		{

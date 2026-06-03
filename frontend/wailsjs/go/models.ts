@@ -280,6 +280,7 @@ export namespace dto {
 	}
 	export class SessionDetailResponse {
 	    id: string;
+	    cache_schema_version: number;
 	    parsed_at: string;
 	    nodes: FlowNode[];
 	    edges: FlowEdge[];
@@ -293,6 +294,7 @@ export namespace dto {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
+	        this.cache_schema_version = source["cache_schema_version"];
 	        this.parsed_at = source["parsed_at"];
 	        this.nodes = this.convertValues(source["nodes"], FlowNode);
 	        this.edges = this.convertValues(source["edges"], FlowEdge);

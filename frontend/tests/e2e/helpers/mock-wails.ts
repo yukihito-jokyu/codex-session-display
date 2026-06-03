@@ -334,6 +334,7 @@ export async function mockWailsAPI(
 			if (id === "sess-002-uuid-long-name") {
 				return {
 					id: id,
+					cache_schema_version: 1,
 					parsed_at: "2026-05-20T12:00:00Z",
 					nodes: undefined,
 					edges: undefined,
@@ -361,6 +362,7 @@ export async function mockWailsAPI(
 			if (id === "sess-003-uuid-long-name") {
 				return {
 					id: id,
+					cache_schema_version: 1,
 					parsed_at: "2026-04-10T09:00:00Z",
 					nodes: [
 						{
@@ -406,6 +408,7 @@ export async function mockWailsAPI(
 			if (id === "sess-no-turns") {
 				return {
 					id: id,
+					cache_schema_version: 1,
 					parsed_at: "2026-05-20T09:00:00Z",
 					nodes: [
 						{
@@ -437,6 +440,7 @@ export async function mockWailsAPI(
 
 			return {
 				id: id,
+				cache_schema_version: 1,
 				parsed_at: "2026-05-20T10:00:00Z",
 				nodes: [
 					{

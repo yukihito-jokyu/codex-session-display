@@ -225,7 +225,7 @@ event_msg はサブタイプによって含まれるフィールドが異なる�
 | Content          | message                                                                        | メッセージの内容配列。各要素は `type` と `text` を持つ。`type` はロールに応じて決まる: developer / user → `input_text`、assistant → `output_text` |
 | Summary          | reasoning                                                                      | 推論サマリーの配列。各要素は `type`（summary_text）と `text` を持つ                                                                               |
 | Content          | reasoning                                                                      | 推論の本文（現在は常にnull）                                                                                                                      |
-| EncryptedContent | reasoning                                                                      | 暗号化された推論内容（現在は常にnull）                                                                                                            |
+| EncryptedContent | reasoning                                                                      | 暗号化された推論内容。`summary` が空で本文を表示できない場合に格納されることがある                                                                 |
 | Name             | function_call, custom_tool_call                                                | 呼び出す関数名                                                                                                                                    |
 | Arguments        | function_call                                                                  | 関数の引数（JSON文字列）                                                                                                                          |
 | Input            | custom_tool_call                                                               | カスタムツールの入力（パッチ内容等）                                                                                                              |
@@ -308,6 +308,8 @@ JSONLレコードはトップレベルの `type`、およびその配下の `pay
   │   ※ v0.121.0以降では両方存在する場合常に1:1が成立する。
   │   ※ 一部バージョンでは agent_reasoning が出力されず、
   │     response_item(reasoning) のみ（暗号化済み・summary空）となる場合がある。
+  │     この表示不能な reasoning が UI 上で連続する場合は、ノード生成時に1グループとして扱う。
+  │     token_count など表示ノードを生成しないレコードは連続性を分断しない。
   │
   ├─ Step 6: バッチ検出
   │   連続する function_call 群と function_call_output 群をバッチとして検出する。
@@ -365,7 +367,7 @@ JSONLレコードはトップレベルの `type`、およびその配下の `pay
 | OutputRecords  | 対応する function_call_output または custom_tool_call_output の配列（null を含む場合がある）                                                                                       |
 | MiddleMessage  | バッチ中間メッセージ。agent_message + response_item(assistant) または response_item(assistant) のみ |
   ├─ 2. 各 Turn を処理：
-  │     ├─ 2-1. 通常のターンの場合 (turn.TaskStarted != null)（2a〜2d はステップ順、2e以降はレコードの出現順に処理）:
+  │     ├─ 2-1. 通常のターンの場合 (turn.TaskStarted != null)（2a〜2d はステップ順、2e以降は DisplayUnit の出現順に処理）:
   │     │     ├─ 2a. task_started ノード生成 → ハーネススタックに push
   │     │     │
   │     │     ├─ 2b. DeveloperMessages + UserMessages を分岐ノードとして生成
@@ -382,14 +384,15 @@ JSONLレコードはトップレベルの `type`、およびその配下の `pay
   │     │     │
   │     │     ├─ 2d. user_message ノード生成 → ハーネススタックに push
   │     │     │
-  │     │     ├─ 2e. reasoning ノード生成 → ハーネススタックに push
+  │     │     ├─ 2e. 動的ノードを DisplayUnit の代表行番号順に生成 → ハーネススタックに push
   │     │     │   ペアリング済みの場合:
   │     │     │     agent_reasoning のテキストを summary に設定
   │     │     │     reasoning の summary を fullText の一部に設定
   │     │     │   スタンドアロンAR（ARのみ）の場合:
   │     │     │     ARテキストを summary および fullText に設定
-  │     │     │   スタンドアロンRI（RIのみ・暗号化済み）の場合:
-  │     │     │     「（暗号化済み・表示不可）」を summary および fullText に設定
+  │     │     │   スタンドアロンRI（RIのみ・summary空・暗号化済み）の場合:
+  │     │     │     UI 上で連続する表示不能 reasoning を1ノードに集約し、
+  │     │     │     「（暗号化済み・表示不可）×N」を summary および fullText に設定
   │     │     │
   │     │     ├─ 2f. 各 Batch を処理（fork-join パターン）:
   │     │     │   ├─ call[i] ノードを分岐ノードとして生成
@@ -545,7 +548,7 @@ Build(session)
   │       X = ContextOffsetX
   │       データソース: session_meta.base_instructions.text
   │
-  ├─ 2. 各 Turn を処理（2a〜2d はステップ順、2e以降はレコードの出現順に処理）:
+  ├─ 2. 各 Turn を処理（2a〜2d はステップ順、2e以降は DisplayUnit の出現順に処理）:
   │     ├─ 2a. task_started ノード生成 → ハーネススタックに push
   │     │
   │     ├─ 2b. DeveloperMessages + UserMessages を分岐ノードとして生成
@@ -562,14 +565,15 @@ Build(session)
   │     │
   │     ├─ 2d. user_message ノード生成 → ハーネススタックに push
   │     │
-  │     ├─ 2e. reasoning ノード生成 → ハーネススタックに push
+  │     ├─ 2e. 動的ノードを DisplayUnit の代表行番号順に生成 → ハーネススタックに push
   │     │   ペアリング済みの場合:
   │     │     agent_reasoning のテキストを summary に設定
   │     │     reasoning の summary を fullText の一部に設定
   │     │   スタンドアロンAR（ARのみ）の場合:
   │     │     ARテキストを summary および fullText に設定
-  │     │   スタンドアロンRI（RIのみ・暗号化済み）の場合:
-  │     │     「（暗号化済み・表示不可）」を summary および fullText に設定
+  │     │   スタンドアロンRI（RIのみ・summary空・暗号化済み）の場合:
+  │     │     UI 上で連続する表示不能 reasoning を1ノードに集約し、
+  │     │     「（暗号化済み・表示不可）×N」を summary および fullText に設定
   │     │
   │     ├─ 2f. 各 Batch を処理（fork-join パターン）:
   │     │   ├─ call[i] ノードを分岐ノードとして生成
@@ -750,8 +754,9 @@ UUIDは常に末尾36文字（固定長）のため、文字列操作で抽出�
 再パースが必要な条件は以下の通り:
 
 1. キャッシュファイルが存在しない
-2. JSONLファイルの最終更新日時 > キャッシュファイルの最終更新日時
-3. キャッシュファイルの読み込み（JSONデコード）に失敗（破損ファイル）
+2. キャッシュの `cache_schema_version` が現行バージョンと異なる
+3. JSONLファイルの最終更新日時 > キャッシュファイルの最終更新日時
+4. キャッシュファイルの読み込み（JSONデコード）に失敗（破損ファイル）
 
 上記以外の場合はキャッシュを使用する。詳細は §7.2 を参照。
 
@@ -920,7 +925,7 @@ Wailsの起動・ビルドプロセス（`wails dev` または `wails build`）�
 | TurnStatistics        | index, collaboration_mode_kind, duration_ms, time_to_first_token_ms, token_count_count, consumed_tokens（TokenBreakdown）                          |
 | Statistics            | duration_ms, total_tokens, tool_call_count, token_count_count, context_window_size, turn_count, turns（TurnStatisticsの配列）                      |
 | TokenCountEntry       | index, turn_index, bound_to_node_id, last_token_usage（TokenDetail）, total_token_usage（TokenDetail）                                             |
-| SessionDetailResponse | id, parsed_at, nodes（FlowNodeの配列）, edges（FlowEdgeの配列）, statistics（Statistics）, token_counts（TokenCountEntryの配列）                   |
+| SessionDetailResponse | id, cache_schema_version, parsed_at, nodes（FlowNodeの配列）, edges（FlowEdgeの配列）, statistics（Statistics）, token_counts（TokenCountEntryの配列）                   |
 
 #### 3.4.2 React Flow関連の型
 
@@ -1182,7 +1187,7 @@ body.light-theme {
 - fullText: agent_reasoning.text の全文 + reasoning.summary の全文
 - クリック → BottomPanel に推論テキスト全文 + サマリーを表示
 - スタンドアロンAR（RIなし）: summary/fullText にARテキストのみ設定
-- スタンドアロンRI（ARなし・暗号化済み）: summary/fullText に「（暗号化済み・表示不可）」を設定
+- スタンドアロンRI（ARなし・summary空・暗号化済み）: UI 上で連続する表示不能 reasoning を1ノードに集約し、summary/fullText に「（暗号化済み・表示不可）×N」を設定
 
 **ContextDocNode**（タイプ: contextDoc）— 分岐ノード
 
@@ -1495,6 +1500,7 @@ type AppError struct {
 ```json
 {
   "id": "019e5514-ed44-78b2-bf88-233d6e4273bf",
+  "cache_schema_version": 1,
   "parsed_at": "2026-05-23T15:00:00.000Z",
   "nodes": [ ... ],
   "edges": [ ... ],
@@ -1759,9 +1765,12 @@ IPCエラーは `AppError` 構造体（§4.1参照）で返す。
 ### 7.2 再パース判定ロジック
 
 1. キャッシュファイルが存在しない → 再パースが必要
-2. JSONLファイルの最終更新日時 > キャッシュファイルの最終更新日時 → 再パースが必要
-3. キャッシュファイルの読み込み（JSONデコード）に失敗 → キャッシュを破棄して再パースが必要
-4. 上記以外 → キャッシュを使用
+2. キャッシュの `cache_schema_version` が現行バージョンと異なる → 再パースが必要
+3. JSONLファイルの最終更新日時 > キャッシュファイルの最終更新日時 → 再パースが必要
+4. キャッシュファイルの読み込み（JSONデコード）に失敗 → キャッシュを破棄して再パースが必要
+5. 上記以外 → キャッシュを使用
+
+セッション一覧用の `GetSessionSummary` でも `cache_schema_version` を検証し、不一致の場合は未解析セッションとして扱う。
 
 ### 7.3 キャッシュ書き込み失敗時の挙動
 
@@ -2087,5 +2096,3 @@ Go標準ライブラリの `log/slog` を使用し、以下の基準でログレ
 #### 11.2.2 パニックハンドリング（クラッシュ時）
 *   Goバックエンドでの実行時エラーによる `panic` については、独自のリカバリー処理を伴うログダンプ等は実装しない。
 *   実装のシンプルさを維持し、OSの標準エラー出力（stderr）に書き出されるスタックトレース等のランタイム標準の出力に任せる。
-
-
