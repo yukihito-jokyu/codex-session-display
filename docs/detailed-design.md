@@ -1899,6 +1899,17 @@ go tool cover -html=coverage.out -o coverage.html
 
 ### 9.4 Playwright E2Eテスト設計
 
+#### 9.4.0 テスト実行時の Reporter
+
+- 全体 E2E テストは `task test:e2e` または `npx playwright test` で実行し、Playwright 公式 Reporter API を実装したカスタム Reporter を既定で使用する。
+- 正常終了時は各テストの成功ログを表示せず、成功、flaky、skip、失敗の件数と実行時間を1行で表示する。
+- リトライ途中で失敗して最終的に成功した flaky テストは、途中のエラーや標準出力を表示しない。
+- 最終的に失敗したテストだけ、テスト名、エラーとスタックトレース、標準出力、標準エラーを表示する。ブラウザ console と page error はテスト単位で保持し、最終失敗時だけ標準出力・標準エラーへ追加する。
+- screenshot、trace、video などの attachment は内容を展開せず、名前、Content-Type、保存先パスだけを表示する。
+- テスト読込エラー、Web サーバー起動失敗、global timeout などの実行基盤異常は、Reporter の `onError` および最終 run status を通じて表示する。
+- 詳細調査時は `task test:e2e:detail -- <対象ファイル> --grep "<テスト名>"` を使用する。直接実行する場合は `--reporter=line` を指定して Playwright 標準の詳細表示へ切り替える。
+- カスタム Reporter の振る舞いは、専用 fixture suite を子 Playwright プロセスで実行し、成功、flaky、skip、最終失敗、ブラウザログ、実行基盤異常の出力内容と終了コードを自動テストする。
+
 #### 9.4.1 Wailsバインディングのモックの仕組み
 Wailsアプリは実行時に `window.go.main.App` 等のグローバルオブジェクトを介してGoのAPIを呼び出す。E2Eテストでは、Playwrightの `page.addInitScript` を使用して、ページ読み込み前にグローバルスコープにモックオブジェクトを注入する。
 
