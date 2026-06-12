@@ -5,13 +5,6 @@ test.beforeEach(async ({ page }) => {
 	// Wails APIのモックを注入
 	await mockWailsAPI(page);
 
-	page.on("console", (msg) => {
-		console.log(`[BROWSER CONSOLE]: ${msg.type()}: ${msg.text()}`);
-	});
-	page.on("pageerror", (err) => {
-		console.error(`[BROWSER ERROR]: ${err.message}`);
-	});
-
 	await page.goto("/");
 });
 
