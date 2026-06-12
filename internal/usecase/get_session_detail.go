@@ -1091,20 +1091,20 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 				}
 
 				if nodeIdx >= 0 {
-					var totalTokens int64
-					if totalUsage != nil {
-						totalTokens = totalUsage.TotalTokens
+					var consumedTokens int64
+					if lastUsage != nil {
+						consumedTokens = lastUsage.TotalTokens
 					}
 
 					if nodes[nodeIdx].Data.TokenBadge == nil {
 						nodes[nodeIdx].Data.TokenBadge = &dto.TokenBadgeData{
-							TotalTokens:     totalTokens,
+							ConsumedTokens:  consumedTokens,
 							TokenCountIndex: entry.Index,
 							BoundCount:      1,
 						}
 					} else {
 						// 複数ある場合は集約
-						nodes[nodeIdx].Data.TokenBadge.TotalTokens = totalTokens
+						nodes[nodeIdx].Data.TokenBadge.ConsumedTokens += consumedTokens
 						nodes[nodeIdx].Data.TokenBadge.BoundCount++
 					}
 				}
