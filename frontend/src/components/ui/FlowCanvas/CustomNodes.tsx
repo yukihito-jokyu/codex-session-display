@@ -16,7 +16,7 @@ export type CustomNodeProps = NodeProps & {
 		textLength?: number;
 		turnIndex?: number;
 		tokenBadge?: {
-			totalTokens: number;
+			consumedTokens: number;
 			tokenCountIndex: number;
 			boundCount: number;
 		};
@@ -103,8 +103,8 @@ const BaseCustomNodeComponent = ({
 		}
 		return tokens.toString();
 	};
-	const totalTokensFormatted = tokenBadge
-		? formatTokens(tokenBadge.totalTokens)
+	const consumedTokensFormatted = tokenBadge
+		? formatTokens(tokenBadge.consumedTokens)
 		: null;
 
 	return (
@@ -119,7 +119,7 @@ const BaseCustomNodeComponent = ({
 					</span>
 					<span className={styles.nodeLabel}>{displayLabel}</span>
 				</div>
-				{tokenBadge && totalTokensFormatted && (
+				{tokenBadge && consumedTokensFormatted && (
 					<button
 						type="button"
 						className={styles.tokenBadgeButton}
@@ -129,7 +129,7 @@ const BaseCustomNodeComponent = ({
 						}}
 						aria-label={`${displayLabel || "node"} token badge`}
 					>
-						{totalTokensFormatted}
+						{consumedTokensFormatted}
 						{tokenBadge.boundCount >= 2 ? ` ×${tokenBadge.boundCount}` : ""}
 					</button>
 				)}
