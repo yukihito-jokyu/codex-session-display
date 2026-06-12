@@ -21,7 +21,7 @@ export namespace dto {
 	    }
 	}
 	export class TokenBadgeData {
-	    totalTokens: number;
+	    consumedTokens: number;
 	    tokenCountIndex: number;
 	    boundCount: number;
 	
@@ -31,7 +31,7 @@ export namespace dto {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.totalTokens = source["totalTokens"];
+	        this.consumedTokens = source["consumedTokens"];
 	        this.tokenCountIndex = source["tokenCountIndex"];
 	        this.boundCount = source["boundCount"];
 	    }
