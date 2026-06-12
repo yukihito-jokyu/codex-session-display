@@ -96,6 +96,10 @@
 	box-shadow: 0 2px 8px var(--panel-shadow);
 }
 
+.interactiveChartPoint {
+	cursor: pointer;
+}
+
 .turnsContainer {
 	display: flex;
 	flex-direction: column;
