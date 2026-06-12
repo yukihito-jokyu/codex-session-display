@@ -502,7 +502,7 @@ JSONLレコードはトップレベルの `type`、およびその配下の `pay
 
 | フィールド      | 型   | 説明                                                                                        |
 | --------------- | ---- | ------------------------------------------------------------------------------------------- |
-| TotalTokens     | 整数 | 紐付く最新の token_count の総トークン数                                                     |
+| ConsumedTokens  | 整数 | 紐付く全 token_count の last_token_usage.total_tokens の合計。欠落値は加算しない            |
 | TokenCountIndex | 整数 | 紐付く最初の token_count の token_counts 配列インデックス                                   |
 | BoundCount      | 整数 | 紐付く token_count の件数。1の場合は通常表示、2以上の場合は件数をバッジに併記（例: 「×2」） |
 
@@ -627,9 +627,10 @@ Build(session)
   │     │      BoundToNodeID（文字列）を設定
   │     └─ c. 紐付け先ノードごとに TokenBadgeData を集約:
   │            同一ノードに複数の token_count が紐付く場合:
-  │            ├─ TotalTokens: 最後の token_count の totalTokens
+  │            ├─ ConsumedTokens: 各 last_token_usage.total_tokens の合計
+  │            │                  last_token_usage 欠落時は加算しない
   │            ├─ TokenCountIndex: 最初の token_count のインデックス
-  │            └─ BoundCount: 紐付く token_count の件数
+  │            └─ BoundCount: 欠落値を含む紐付く token_count の件数
   │
   └─ 5. 全ノード・エッジを FlowGraph として返す
 ```
@@ -911,7 +912,7 @@ Wailsの起動・ビルドプロセス（`wails dev` または `wails build`）�
 | 対象                | 規則       | 例                                         |
 | ------------------- | ---------- | ------------------------------------------ |
 | API ドメイン型      | snake_case | `file_path`, `duration_ms`, `total_tokens` |
-| React Flow 可視化型 | camelCase  | `batchIndex`, `textLength`, `totalTokens`  |
+| React Flow 可視化型 | camelCase  | `batchIndex`, `textLength`, `consumedTokens`  |
 
 - **変換レイヤーなし**: API レスポンスの JSON をそのままフロントエンドの型として使用する。snake_case と camelCase の混在を許容する
 - **Go 側の JSON タグで制御**: バックエンドの Go 構造体は JSON タグで snake_case（API ドメイン型）または camelCase（React Flow 可視化型）を出力する
@@ -934,7 +935,7 @@ Wailsの起動・ビルドプロセス（`wails dev` または `wails build`）�
 | 型名           | フィールド概要                                                                                                           |
 | -------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | NodeData       | category, label, icon, summary, fullText, meta, batchIndex, batchSize, tokenBadge, collapsed, textLength, turnIndex      |
-| TokenBadgeData | totalTokens（紐付く最新の総トークン数）, tokenCountIndex（最初のtoken_counts配列インデックス）, boundCount（紐付く件数） |
+| TokenBadgeData | consumedTokens（紐付く全last_token_usage.total_tokensの合計）, tokenCountIndex（最初のtoken_counts配列インデックス）, boundCount（欠落値を含む紐付く件数） |
 | FlowNode       | React FlowのNode型。dataにNodeDataを持つ                                                                                 |
 | FlowEdge       | React FlowのEdge型                                                                                                       |
 
@@ -953,7 +954,7 @@ Wailsの起動・ビルドプロセス（`wails dev` または `wails build`）�
 └─────────────────────────────┘
 ```
 
-- **node-header**: アイコン + ラベル + トークンバッジ（存在する場合）。boundCount ≥ 2 の場合は件数を併記（例: 「12.3K ×2」）
+- **node-header**: アイコン + ラベル + ノード消費トークンバッジ（存在する場合）。`consumedTokens` を短縮表示し、boundCount ≥ 2 の場合は件数を併記（例: 「12.3K ×2」）
 - **node-body**: summary テキスト。クリックで BottomPanel に詳細を表示
 - **通常状態**: 多数ノード表示時の paint/composite コストを抑えるため、常時ドロップシャドウは使用しない
 - **ホバー**: 各ノードカテゴリのテーマ色に応じたボーダー色への変化 ＋ ドロップシャドウ

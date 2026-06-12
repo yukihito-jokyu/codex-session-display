@@ -334,7 +334,7 @@ export async function mockWailsAPI(
 			if (id === "sess-002-uuid-long-name") {
 				return {
 					id: id,
-					cache_schema_version: 1,
+					cache_schema_version: 2,
 					parsed_at: "2026-05-20T12:00:00Z",
 					nodes: undefined,
 					edges: undefined,
@@ -362,7 +362,7 @@ export async function mockWailsAPI(
 			if (id === "sess-003-uuid-long-name") {
 				return {
 					id: id,
-					cache_schema_version: 1,
+					cache_schema_version: 2,
 					parsed_at: "2026-04-10T09:00:00Z",
 					nodes: [
 						{
@@ -408,7 +408,7 @@ export async function mockWailsAPI(
 			if (id === "sess-no-turns") {
 				return {
 					id: id,
-					cache_schema_version: 1,
+					cache_schema_version: 2,
 					parsed_at: "2026-05-20T09:00:00Z",
 					nodes: [
 						{
@@ -441,7 +441,7 @@ export async function mockWailsAPI(
 			if (id === "performance-visibility") {
 				return {
 					id: id,
-					cache_schema_version: 1,
+					cache_schema_version: 2,
 					parsed_at: "2026-05-20T10:00:00Z",
 					nodes: [
 						{
@@ -505,7 +505,7 @@ export async function mockWailsAPI(
 
 			return {
 				id: id,
-				cache_schema_version: 1,
+				cache_schema_version: 2,
 				parsed_at: "2026-05-20T10:00:00Z",
 				nodes: [
 					{
@@ -520,7 +520,7 @@ export async function mockWailsAPI(
 							fullText: "Full session meta details here",
 							turnIndex: -1,
 							tokenBadge: {
-								totalTokens: 2500000, // 2.5M
+								consumedTokens: 2500000, // 2.5M
 								tokenCountIndex: 0,
 								boundCount: 1,
 							},
@@ -596,7 +596,7 @@ export async function mockWailsAPI(
 							fullText: "Hello, agent, please help me.",
 							turnIndex: 0,
 							tokenBadge: {
-								totalTokens: 1000000, // 1M
+								consumedTokens: 50000, // 50K
 								tokenCountIndex: 0,
 								boundCount: 2,
 							},
@@ -614,7 +614,7 @@ export async function mockWailsAPI(
 							fullText: undefined, // fullTextを空にして「No additional details...」を検証
 							turnIndex: -1,
 							tokenBadge: {
-								totalTokens: 1500, // 1.5K
+								consumedTokens: 1500, // 1.5K
 								tokenCountIndex: 0,
 								boundCount: 1,
 							},
@@ -632,7 +632,7 @@ export async function mockWailsAPI(
 							fullText: "Here is how to solve...",
 							turnIndex: 1,
 							tokenBadge: {
-								totalTokens: 500, // 500
+								consumedTokens: 500, // 500
 								tokenCountIndex: 1,
 								boundCount: 1,
 							},
@@ -673,7 +673,7 @@ export async function mockWailsAPI(
 							summary: "API Call message",
 							turnIndex: 0,
 							tokenBadge: {
-								totalTokens: 1000,
+								consumedTokens: 0,
 								tokenCountIndex: 2,
 								boundCount: 1,
 							},
@@ -910,7 +910,7 @@ export async function mockWailsAPI(
 					{
 						index: 3,
 						turn_index: 1,
-						bound_to_node_id: undefined, // 未定義フィールド検証用
+						bound_to_node_id: "node-user-api-msg",
 						last_token_usage: undefined,
 						total_token_usage: undefined,
 					},

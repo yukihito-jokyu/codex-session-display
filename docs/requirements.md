@@ -407,7 +407,10 @@ JSONLは各レコードのトップレベル `type` フィールドで4種類に
 
 - `token_count` は `turn_id` フィールドを持たない。出現位置から属するターンを判定する（`task_started` 〜 `task_complete` の間に出現する `token_count` はそのターンに属する）
 - 直前のイベントノード（通常は `function_call` または `agent_message`）の右側にトークンバッジを表示する
-- バッジには `info.total_token_usage.total_tokens`（セッション累計値）を表示する
+- バッジには、当該ノードに紐付く全 `info.last_token_usage.total_tokens` の合計をノード消費トークン数として表示する
+- 同一ノードに複数件が紐付く場合は `×N` による件数表示を維持する
+- `last_token_usage` が欠落したレコードは合計へ加算しないが、件数には含める
+- バッジ用APIは `tokenBadge.consumedTokens` とし、セッション累計を表す `statistics.total_tokens` と区別する
 - バッジをクリックすると下部パネルに内訳（input/output/cached/reasoning）を展開する
 
 ### 2.4 トークン使用量
@@ -787,4 +790,3 @@ GoバックエンドはWailsのバインディング生成を通じてReactフ�
 - 本アプリケーションは、自動・手動問わずインターネットを介したアップデートチェック機能（GitHub API等への問い合わせを含む）や自動アップデート機能は一切搭載しない。
 - アプリケーションが動作中に発生させるすべてのネットワークリクエストはローカル環境（`localhost` 等）のみに制限され、外部への通信は完全に排除される。
 - アップデートは、新しい実行バイナリ/パッケージを手動で再取得し、再インストールする運用とする。
-

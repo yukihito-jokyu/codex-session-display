@@ -1355,20 +1355,30 @@ func TestGetSessionDetailUseCase_Execute(t *testing.T) {
 						EventMsg: &model.EventMsgPayload{
 							Info: &model.TokenInfo{
 								TotalTokenUsage: &model.TokenDetail{TotalTokens: 5200},
-								LastTokenUsage:  &model.TokenDetail{TotalTokens: 200, InputTokens: 150, OutputTokens: 50},
+							},
+						},
+					},
+					{
+						LineNumber: 32,
+						Type:       "event_msg",
+						SubType:    "token_count",
+						EventMsg: &model.EventMsgPayload{
+							Info: &model.TokenInfo{
+								TotalTokenUsage: &model.TokenDetail{TotalTokens: 5500},
+								LastTokenUsage:  &model.TokenDetail{TotalTokens: 300, InputTokens: 200, OutputTokens: 100},
 							},
 						},
 					},
 					// function call with nil ResponseItem
 					{
-						LineNumber:   36,
+						LineNumber:   33,
 						Type:         "response_item",
 						SubType:      "function_call",
 						ResponseItem: nil,
 					},
 					// task complete terminates turn-1
 					{
-						LineNumber: 32,
+						LineNumber: 34,
 						Type:       "event_msg",
 						SubType:    "task_complete",
 						EventMsg: &model.EventMsgPayload{
@@ -1378,7 +1388,7 @@ func TestGetSessionDetailUseCase_Execute(t *testing.T) {
 					},
 					// orphan complete/abort messages (processed where turn index is -1)
 					{
-						LineNumber: 33,
+						LineNumber: 35,
 						Type:       "event_msg",
 						SubType:    "task_complete",
 						EventMsg: &model.EventMsgPayload{
@@ -1386,7 +1396,7 @@ func TestGetSessionDetailUseCase_Execute(t *testing.T) {
 						},
 					},
 					{
-						LineNumber: 34,
+						LineNumber: 36,
 						Type:       "event_msg",
 						SubType:    "turn_aborted",
 						EventMsg: &model.EventMsgPayload{
@@ -1395,7 +1405,7 @@ func TestGetSessionDetailUseCase_Execute(t *testing.T) {
 					},
 					// leftover record (triggers pseudo-turn index -1)
 					{
-						LineNumber: 35,
+						LineNumber: 37,
 						Type:       "event_msg",
 						SubType:    "generic_leftover",
 					},
@@ -1414,7 +1424,7 @@ func TestGetSessionDetailUseCase_Execute(t *testing.T) {
 				}
 
 				// Verify nodes were created
-				var orphanCompleteNode, orphanAbortNode, leftoverNode, customToolNode, middleOnlyNode, mergedAgentNode *dto.FlowNode
+				var orphanCompleteNode, orphanAbortNode, leftoverNode, customToolNode, customToolOutputNode, middleOnlyNode, mergedAgentNode *dto.FlowNode
 				for i := range res.Nodes {
 					n := &res.Nodes[i]
 					switch n.Type {
@@ -1430,8 +1440,11 @@ func TestGetSessionDetailUseCase_Execute(t *testing.T) {
 							leftoverNode = n
 						}
 					case "action":
-						if n.Data.Label == "custom_tool" {
+						switch n.Data.Label {
+						case "custom_tool":
 							customToolNode = n
+						case "Output: custom_tool":
+							customToolOutputNode = n
 						}
 					case "agentMessage":
 						if strings.Contains(n.Data.Summary, "Middle assistant message") {
@@ -1453,6 +1466,18 @@ func TestGetSessionDetailUseCase_Execute(t *testing.T) {
 				}
 				if customToolNode == nil {
 					t.Error("expected custom tool node, got nil")
+				}
+				if customToolOutputNode == nil {
+					t.Fatal("expected custom tool output node, got nil")
+				}
+				if customToolOutputNode.Data.TokenBadge == nil {
+					t.Fatal("expected custom tool output node to receive token badge")
+				}
+				if customToolOutputNode.Data.TokenBadge.ConsumedTokens != 500 {
+					t.Fatalf("expected missing last token usage to be excluded from the sum, got %+v", customToolOutputNode.Data.TokenBadge)
+				}
+				if customToolOutputNode.Data.TokenBadge.BoundCount != 3 {
+					t.Fatalf("expected bound count to include all 3 records, got %+v", customToolOutputNode.Data.TokenBadge)
 				}
 				if middleOnlyNode == nil {
 					t.Error("expected middle only node, got nil")
@@ -1606,10 +1631,10 @@ func TestGetSessionDetailUseCase_Execute(t *testing.T) {
 				if customOutputNode == nil {
 					t.Fatal("expected custom_tool_call_output node to exist")
 				}
-				if outputNode.Data.TokenBadge == nil || outputNode.Data.TokenBadge.TotalTokens != 1200 {
+				if outputNode.Data.TokenBadge == nil || outputNode.Data.TokenBadge.ConsumedTokens != 200 {
 					t.Fatalf("expected output node badge to be set, got %+v", outputNode.Data.TokenBadge)
 				}
-				if customOutputNode.Data.TokenBadge == nil || customOutputNode.Data.TokenBadge.TotalTokens != 1400 {
+				if customOutputNode.Data.TokenBadge == nil || customOutputNode.Data.TokenBadge.ConsumedTokens != 200 {
 					t.Fatalf("expected custom output node badge to be set, got %+v", customOutputNode.Data.TokenBadge)
 				}
 			},
@@ -1704,8 +1729,8 @@ func TestGetSessionDetailUseCase_Execute(t *testing.T) {
 				if fallbackNode.Data.TokenBadge == nil {
 					t.Fatal("expected fallback node to receive token badge")
 				}
-				if fallbackNode.Data.TokenBadge.TotalTokens != 900 {
-					t.Fatalf("expected fallback badge total tokens to be 900, got %+v", fallbackNode.Data.TokenBadge)
+				if fallbackNode.Data.TokenBadge.ConsumedTokens != 100 {
+					t.Fatalf("expected fallback badge consumed tokens to be 100, got %+v", fallbackNode.Data.TokenBadge)
 				}
 			},
 		},

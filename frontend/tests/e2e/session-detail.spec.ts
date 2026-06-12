@@ -347,8 +347,8 @@ test.describe("セッション詳細画面 E2E テスト", () => {
 	}) => {
 		await page.locator("text=sess-001").click();
 
-		// User Message ノード内のトークンバッジ（1,000,000 -> 1M, boundCount=2 -> ×2）を確認
-		const badge = page.locator(".react-flow__node-userMessage >> text=1M ×2");
+		// User Message ノードに紐付く2件の消費量合計（20K + 30K）を確認
+		const badge = page.locator(".react-flow__node-userMessage >> text=50K ×2");
 		await expect(badge).toBeVisible();
 	});
 
@@ -685,16 +685,14 @@ test.describe("セッション詳細画面 E2E テスト", () => {
 		);
 		await expect(metaBadge).toBeVisible();
 
-		// 1M *2 (node-user-msg, 1000000 tokens, boundCount=2)
+		// 50K *2 (node-user-msg, consumedTokens=50000, boundCount=2)
 		const userBadge = page.locator(
-			".react-flow__node-userMessage >> text=1M ×2",
+			".react-flow__node-userMessage >> text=50K ×2",
 		);
 		await expect(userBadge).toBeVisible();
 
-		// 1K (node-user-api-msg, 1000 tokens)
-		const apiBadge = page.locator(
-			".react-flow__node-userApiMessage >> text=1K",
-		);
+		// last_token_usage 欠落時は0として表示し、件数には含める
+		const apiBadge = page.locator(".react-flow__node-userApiMessage >> text=0");
 		await expect(apiBadge).toBeVisible();
 
 		// 1.5K (node-orphan-event, 1500 tokens)
@@ -708,6 +706,11 @@ test.describe("セッション詳細画面 E2E テスト", () => {
 			".react-flow__node-agentMessage >> text=500",
 		);
 		await expect(agentBadge).toBeVisible();
+
+		// 右パネルのセッション累計は従来どおり statistics.total_tokens を表示する
+		await expect(
+			page.getByText("150,000", { exact: true }).first(),
+		).toBeVisible();
 	});
 
 	test("詳細フェッチ文字列エラー発生時の表示検証", async ({ page }) => {

@@ -20,7 +20,7 @@ type SessionSummary struct {
 
 // TokenBadgeData は React Flow のノード上に表示するトークンバッジのデータを表します。
 type TokenBadgeData struct {
-	TotalTokens     int64 `json:"totalTokens"`
+	ConsumedTokens  int64 `json:"consumedTokens"`
 	TokenCountIndex int   `json:"tokenCountIndex"`
 	BoundCount      int   `json:"boundCount"`
 }
@@ -103,7 +103,7 @@ type TokenCountEntry struct {
 }
 
 // CurrentSessionDetailCacheSchemaVersion は現行のセッション詳細キャッシュ形式を表します。
-const CurrentSessionDetailCacheSchemaVersion = 1
+const CurrentSessionDetailCacheSchemaVersion = 2
 
 // SessionDetailResponse はフロントエンドに返され、ディスクにキャッシュされるセッション詳細を表します。
 type SessionDetailResponse struct {
