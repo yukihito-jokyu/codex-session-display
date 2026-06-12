@@ -447,6 +447,11 @@ test.describe("セッション詳細画面 E2E テスト", () => {
 		// 最初は詳細パネルが表示されていないことを確認
 		await expect(page.locator("text=Node Detail:")).not.toBeVisible();
 
+		const viewport = page.locator(".react-flow__viewport");
+		await page.getByRole("button", { name: "zoom out" }).click();
+		await page.waitForTimeout(300);
+		const beforeTransform = await viewport.getAttribute("style");
+
 		// Token Count Log テーブルの最初の行（classにtokenRowを含む行）をクリック
 		await page.locator("tr[class*='tokenRow']").first().click();
 
@@ -455,6 +460,33 @@ test.describe("セッション詳細画面 E2E テスト", () => {
 
 		// 選択されたノード「User Message」の詳細が表示されていることを確認
 		await expect(page.locator("text=Node Detail: User Message")).toBeVisible();
+		await expect(page.getByTestId("bottom-panel-token-detail")).toBeVisible();
+		await expect
+			.poll(async () => viewport.getAttribute("style"))
+			.not.toBe(beforeTransform);
+	});
+
+	test("TOKEN COUNT LOG の同じ行を連続してクリックしても対象ノードへ再度ズームすること", async ({
+		page,
+	}) => {
+		await page.locator("text=sess-001").click();
+
+		const viewport = page.locator(".react-flow__viewport");
+		const tokenRow = page.locator("tr[class*='tokenRow']").first();
+
+		await tokenRow.click();
+		await expect(page.getByTestId("bottom-panel-token-detail")).toBeVisible();
+		await page.waitForTimeout(900);
+
+		await page.getByRole("button", { name: "zoom out" }).click();
+		await page.waitForTimeout(300);
+		const movedTransform = await viewport.getAttribute("style");
+
+		await tokenRow.click();
+
+		await expect
+			.poll(async () => viewport.getAttribute("style"))
+			.not.toBe(movedTransform);
 	});
 
 	test("LAST TOKEN CONSUMPTION PER INDEX チャートをクリックした際に、対応するノードが選択されて詳細パネルが表示されること", async ({
@@ -465,16 +497,39 @@ test.describe("セッション詳細画面 E2E テスト", () => {
 		// 最初は詳細パネルが表示されていないことを確認
 		await expect(page.locator("text=Node Detail:")).not.toBeVisible();
 
-		// チャートをクリック (ホバーしてからクリック)
-		const chart = page
-			.locator("[data-testid='last-token-chart'] .recharts-wrapper")
-			.first();
-		await chart.hover({ position: { x: 150, y: 100 }, force: true });
-		await chart.click({ position: { x: 150, y: 100 }, force: true });
+		const viewport = page.locator(".react-flow__viewport");
+		await page.getByRole("button", { name: "zoom out" }).click();
+		await page.waitForTimeout(300);
+		const beforeTransform = await viewport.getAttribute("style");
+
+		await page.locator("[data-testid='last-token-point-0']").click();
 
 		// 詳細パネルが表示され、対応するノード（node-user-msg -> User Message）の情報が表示されることを確認
 		await expect(page.locator("text=Node Detail:")).toBeVisible();
 		await expect(page.locator("text=Node Detail: User Message")).toBeVisible();
+		await expect(page.getByTestId("bottom-panel-token-detail")).toBeVisible();
+		await expect
+			.poll(async () => viewport.getAttribute("style"))
+			.not.toBe(beforeTransform);
+	});
+
+	test("LAST TOKEN CONSUMPTION PER INDEX の各系列をクリックした際に、対応するノードへ移動すること", async ({
+		page,
+	}) => {
+		await page.locator("text=sess-001").click();
+
+		const viewport = page.locator(".react-flow__viewport");
+		await page.getByRole("button", { name: "zoom out" }).click();
+		await page.waitForTimeout(300);
+		const beforeTransform = await viewport.getAttribute("style");
+
+		await page.getByTestId("last-token-point-input-0").click();
+
+		await expect(page.locator("text=Node Detail: User Message")).toBeVisible();
+		await expect(page.getByTestId("bottom-panel-token-detail")).toBeVisible();
+		await expect
+			.poll(async () => viewport.getAttribute("style"))
+			.not.toBe(beforeTransform);
 	});
 
 	test("LAST TOKEN CONSUMPTION PER INDEX の6桁Y軸ラベルが見切れず表示されること", async ({
@@ -620,6 +675,40 @@ test.describe("セッション詳細画面 E2E テスト", () => {
 		await tokenRow.focus();
 		await page.keyboard.press("Space");
 		await expect(page.locator("text=Node Detail: User Message")).toBeVisible();
+	});
+
+	test("紐付け先がないトークン項目は表とチャートで操作対象にならないこと", async ({
+		page,
+	}) => {
+		await page.locator("text=sess-001").click();
+
+		const missingNodeRow = page.locator("tbody tr").filter({
+			has: page.locator("td:first-child", { hasText: /^4$/ }),
+		});
+		const unboundRow = page.locator("tbody tr").filter({
+			has: page.locator("td:first-child", { hasText: /^5$/ }),
+		});
+
+		await expect(missingNodeRow).not.toHaveAttribute("role", "button");
+		await expect(missingNodeRow).not.toHaveAttribute("tabindex", "0");
+		await expect(unboundRow).not.toHaveAttribute("role", "button");
+		await expect(unboundRow).not.toHaveAttribute("tabindex", "0");
+
+		await missingNodeRow.click();
+		await unboundRow.click();
+		await expect(page.locator("text=Node Detail:")).not.toBeVisible();
+
+		const validChartPoint = page.locator("[data-testid='last-token-point-0']");
+		const missingNodeChartPoint = page.locator(
+			"[data-testid='last-token-point-4']",
+		);
+		const unboundChartPoint = page.locator(
+			"[data-testid='last-token-point-5']",
+		);
+
+		await expect(validChartPoint).toHaveAttribute("role", "button");
+		await expect(missingNodeChartPoint).not.toHaveAttribute("role", "button");
+		await expect(unboundChartPoint).not.toHaveAttribute("role", "button");
 	});
 
 	test("詳細画面でのリトライボタンクリック時に再読み込みが機能すること", async ({
@@ -843,8 +932,10 @@ test.describe("セッション詳細画面 E2E テスト", () => {
 		// nodesがundefinedの sess-002 に遷移
 		await page.locator("text=sess-002").click();
 
-		// Token Count Log テーブルの行をクリック
-		await page.locator("tr[class*='tokenRow']").first().click();
+		const tokenRow = page.locator("tbody tr").first();
+		await expect(tokenRow).not.toHaveAttribute("role", "button");
+		await expect(tokenRow).not.toHaveAttribute("tabindex", "0");
+		await tokenRow.click();
 
 		// nodesが無いため、詳細パネル（Node Detail:）が表示されない（ガード処理が成功）ことを確認
 		await expect(page.locator("text=Node Detail:")).not.toBeVisible();
