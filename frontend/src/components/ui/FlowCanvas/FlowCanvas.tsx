@@ -68,7 +68,7 @@ function FlowCanvasInner({
 	selectedNodeType,
 	zoomTarget,
 }: FlowCanvasProps) {
-	const { fitView } = useReactFlow();
+	const { getInternalNode, setCenter } = useReactFlow();
 
 	const handleTokenBadgeClick = useCallback(
 		(nodeId: string) => {
@@ -134,14 +134,26 @@ function FlowCanvasInner({
 
 	// zoomTargetが更新されたら、該当ノードへズームインする
 	useEffect(() => {
-		if (zoomTarget) {
-			fitView({
-				nodes: [{ id: zoomTarget.nodeId }],
-				duration: 800,
-				maxZoom: 1.2, // 適度なズーム倍率に制限
-			});
+		if (!zoomTarget) {
+			return;
 		}
-	}, [zoomTarget, fitView]);
+
+		const animationFrame = requestAnimationFrame(() => {
+			const targetNode = getInternalNode(zoomTarget.nodeId);
+			if (!targetNode) {
+				return;
+			}
+			const width = targetNode.measured.width ?? CUSTOM_NODE_INITIAL_WIDTH;
+			const height = targetNode.measured.height ?? CUSTOM_NODE_INITIAL_HEIGHT;
+			void setCenter(
+				targetNode.internals.positionAbsolute.x + width / 2,
+				targetNode.internals.positionAbsolute.y + height / 2,
+				{ duration: 800, zoom: 1.2 },
+			);
+		});
+
+		return () => cancelAnimationFrame(animationFrame);
+	}, [getInternalNode, setCenter, zoomTarget]);
 
 	return (
 		<div
