@@ -1400,6 +1400,12 @@ SessionListPage
    - ホバー時に詳細なトークン内訳をツールチップで表示する。
 2. **ターンごとのツール呼び出し回数グラフ**:
    - 横軸をターン番号、縦軸をツール呼び出し回数（`function_call` の件数）とした棒グラフまたは折れ線グラフを表示する。
+3. **token_count ごとの直近消費量グラフ**:
+   - `Last Token Consumption per Index` として LastTokenUsage の推移を表示する。
+   - Total / Input / Output / Reasoning / Cached の全系列について、
+     BoundToNodeID が現在の nodes に存在するデータ点だけを操作可能な点として表示する。
+   - 操作時は対応ノードを選択して BottomPanel をトークン詳細モードで開き、
+     React Flow の対象ノード中央へ800ms・ズーム1.2で移動する。
 
 **StatisticsPanel（6 stat-card）:**
 
@@ -1433,6 +1439,13 @@ SessionListPage
 - LastTokenUsage: 表示しない
 - ターン境界セパレータ: TurnIndex が変わるタイミングで挿入
 - スクロール: 可能
+- BoundToNodeID が現在の nodes に存在する行だけ、クリックおよび Enter / Space で
+  操作可能な行として表示する
+- 操作時は対応ノードを選択して BottomPanel をトークン詳細モードで開き、
+  React Flow の対象ノード中央へ800ms・ズーム1.2で移動する
+- 同じ行を連続して操作した場合も、クリックごとに移動を再実行する
+- BoundToNodeID がない、または参照先ノードが存在しない行は操作属性と操作スタイルを
+  付与せず、エラー通知も行わない
 
 **BottomPanel 仕様:**
 

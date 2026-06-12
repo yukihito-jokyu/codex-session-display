@@ -914,6 +914,44 @@ export async function mockWailsAPI(
 						last_token_usage: undefined,
 						total_token_usage: undefined,
 					},
+					{
+						index: 4,
+						turn_index: 2,
+						bound_to_node_id: "node-missing",
+						last_token_usage: {
+							total_tokens: 1200,
+							input_tokens: 900,
+							output_tokens: 300,
+							reasoning_output_tokens: 100,
+							cached_input_tokens: 200,
+						},
+						total_token_usage: {
+							total_tokens: 151200,
+							input_tokens: 120900,
+							output_tokens: 30300,
+							reasoning_output_tokens: 10100,
+							cached_input_tokens: 30200,
+						},
+					},
+					{
+						index: 5,
+						turn_index: 2,
+						bound_to_node_id: undefined,
+						last_token_usage: {
+							total_tokens: 800,
+							input_tokens: 600,
+							output_tokens: 200,
+							reasoning_output_tokens: 50,
+							cached_input_tokens: 100,
+						},
+						total_token_usage: {
+							total_tokens: 152000,
+							input_tokens: 121500,
+							output_tokens: 30500,
+							reasoning_output_tokens: 10150,
+							cached_input_tokens: 30300,
+						},
+					},
 				],
 			};
 		};
