@@ -66,3 +66,4 @@
   - 開発作業中は `task.md` を常に更新し、現在の進捗状況を追跡可能な状態に維持してください。作業完了後は `walkthrough.md` で結果を報告してください。
 - **品質の担保:**
   - 変更を加えた後は必ずリンター（Go: `golangci-lint`, Frontend: `Biome`）およびテスト（Go unit tests, Playwright E2E）を実行し、エラーのない状態を確認してからコミットを提案してください。
+  - Playwright E2E の全体確認には、成功ログを抑制する `task test:e2e` を使用してください。失敗原因を調査する場合は、`task test:e2e:detail -- <対象ファイル> --grep "<テスト名>"` で対象を絞り、標準の詳細ログを表示してください。

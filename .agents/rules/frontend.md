@@ -90,5 +90,6 @@
 1. **リンターの実行**
    - `frontend` ディレクトリ配下で `npm run lint`（Biome による静的解析とフォーマットチェック。または `task lint`）を実行し、問題がないか確認します。自動修正を行う場合は `npm run lint:write` を実行します。
 2. **テストの実行**
-   - `npx playwright test`（または `task test:e2e`）を実行し、すべてのE2Eテストがパスすることを確認します。
-
+   - 全体確認では `task test:e2e`（または `npx playwright test`）を実行します。既定のカスタム Reporter は成功した各テストのログを抑制し、結果を1行で要約します。
+   - 失敗原因の詳細調査では、`task test:e2e:detail -- <対象ファイル> --grep "<テスト名>"` を使用して対象を絞り、Playwright 標準の `line` Reporter でエラー、標準出力、標準エラーを確認します。
+   - Taskfile を介さず標準の詳細表示へ戻す場合は、`npx playwright test <対象> --grep "<テスト名>" --reporter=line` を使用します。
