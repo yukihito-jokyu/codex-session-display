@@ -32,9 +32,14 @@ tasks:
       - go test -tags production ./...
 
   test:e2e:
-    desc: フロントエンドのE2Eテストを実行します
+    desc: 成功ログを抑制してフロントエンドの全E2Eテストを実行します
     cmds:
       - cd frontend && npx playwright test
+
+  test:e2e:detail:
+    desc: 対象を絞り、Playwright標準の詳細ログでE2Eテストを実行します
+    cmds:
+      - cd frontend && npx playwright test --reporter=line {{.CLI_ARGS}}
 
   test:e2e:ui:
     desc: フロントエンドのE2EテストをUIモードで実行します
