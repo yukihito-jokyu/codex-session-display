@@ -125,7 +125,10 @@ func TestCacheFSRepository_GetSessionSummary(t *testing.T) {
 	writeFile(sessionID+"_mixed_meta.json", dataMixedMeta)
 
 	// 6. 旧キャッシュスキーマ
-	dataLegacy, _ := json.Marshal(dto.SessionDetailResponse{ID: sessionID})
+	dataLegacy, _ := json.Marshal(dto.SessionDetailResponse{
+		ID:                 sessionID,
+		CacheSchemaVersion: 1,
+	})
 	writeFile(sessionID+"_legacy.json", dataLegacy)
 
 	tests := []struct {
