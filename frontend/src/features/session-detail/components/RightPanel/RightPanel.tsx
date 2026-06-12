@@ -21,6 +21,94 @@ interface RightPanelProps {
 	onTokenLogClick?: (nodeId: string) => void;
 }
 
+interface LastTokenChartData {
+	name: string;
+	index: number;
+	nodeId?: string;
+	total: number;
+	input: number;
+	output: number;
+	reasoning: number;
+	cached: number;
+}
+
+interface TokenChartDotProps {
+	cx?: number;
+	cy?: number;
+	stroke?: string;
+	payload?: LastTokenChartData;
+	series: "input" | "output" | "reasoning" | "cached" | "total";
+	radius: number;
+	onSelect?: (nodeId: string) => void;
+}
+
+function TokenChartDot({
+	cx,
+	cy,
+	stroke,
+	payload,
+	series,
+	radius,
+	onSelect,
+}: TokenChartDotProps) {
+	if (cx === undefined || cy === undefined || !payload) {
+		return null;
+	}
+
+	const interactive = Boolean(payload.nodeId && onSelect);
+	const selectNode = () => {
+		if (payload.nodeId && onSelect) {
+			onSelect(payload.nodeId);
+		}
+	};
+
+	if (!interactive) {
+		return (
+			<circle
+				cx={cx}
+				cy={cy}
+				r={radius}
+				fill={stroke}
+				stroke={stroke}
+				data-testid={
+					series === "total"
+						? `last-token-point-${payload.index}`
+						: `last-token-point-${series}-${payload.index}`
+				}
+			/>
+		);
+	}
+
+	return (
+		<circle
+			cx={cx}
+			cy={cy}
+			r={radius}
+			fill={stroke}
+			stroke={stroke}
+			className={styles.interactiveChartPoint}
+			data-testid={
+				series === "total"
+					? `last-token-point-${payload.index}`
+					: `last-token-point-${series}-${payload.index}`
+			}
+			role="button"
+			tabIndex={0}
+			aria-label={`Select node for token index ${payload.index}`}
+			onClick={(event) => {
+				event.stopPropagation();
+				selectNode();
+			}}
+			onKeyDown={(event) => {
+				if (event.key === "Enter" || event.key === " ") {
+					event.preventDefault();
+					selectNode();
+				}
+			}}
+		/>
+	);
+}
+
 export function RightPanel({
 	statistics,
 	tokenCounts,
@@ -47,6 +135,8 @@ export function RightPanel({
 		return counts;
 	}, [nodes, statistics.turn_count]);
 
+	const nodeIds = useMemo(() => new Set(nodes.map((node) => node.id)), [nodes]);
+
 	// グラフ用データの整形
 	const chartData = useMemo(() => {
 		return (statistics.turns || []).map((turn) => {
@@ -69,6 +159,11 @@ export function RightPanel({
 			const usage = entry.last_token_usage;
 			return {
 				name: `#${entry.index}`,
+				index: entry.index,
+				nodeId:
+					entry.bound_to_node_id && nodeIds.has(entry.bound_to_node_id)
+						? entry.bound_to_node_id
+						: undefined,
 				total: usage ? Number(usage.total_tokens) : 0,
 				input: usage ? Number(usage.input_tokens) : 0,
 				output: usage ? Number(usage.output_tokens) : 0,
@@ -76,7 +171,7 @@ export function RightPanel({
 				cached: usage ? Number(usage.cached_input_tokens) : 0,
 			};
 		});
-	}, [tokenCounts]);
+	}, [nodeIds, tokenCounts]);
 
 	const handleRowKeyDown = (event: React.KeyboardEvent, nodeId?: string) => {
 		if (
@@ -307,19 +402,6 @@ export function RightPanel({
 							<LineChart
 								data={lastTokenChartData}
 								margin={{ top: 5, right: 5, left: 0, bottom: 5 }}
-								style={{ cursor: "pointer" }}
-								onClick={(state) => {
-									const idx = state?.activeTooltipIndex;
-									if (idx !== undefined && idx !== null && idx !== "") {
-										const numericIdx = Number(idx);
-										if (!Number.isNaN(numericIdx)) {
-											const entry = tokenCounts[numericIdx];
-											if (entry?.bound_to_node_id && onTokenLogClick) {
-												onTokenLogClick(entry.bound_to_node_id);
-											}
-										}
-									}
-								}}
 							>
 								<CartesianGrid
 									strokeDasharray="3 3"
@@ -350,23 +432,20 @@ export function RightPanel({
 								<Legend wrapperStyle={{ fontSize: 10 }} />
 								<Line
 									type="monotone"
-									dataKey="total"
-									name="Total"
-									stroke="var(--color-accent)"
-									style={{ stroke: "var(--color-accent)" }}
-									strokeWidth={2}
-									dot={{ r: 2 }}
-									activeDot={{ r: 4 }}
-								/>
-								<Line
-									type="monotone"
 									dataKey="input"
 									name="Input"
 									stroke="var(--node-input-text)"
 									style={{ stroke: "var(--node-input-text)" }}
 									strokeWidth={1.5}
-									dot={{ r: 2 }}
-									activeDot={{ r: 4 }}
+									dot={(props) => (
+										<TokenChartDot
+											{...props}
+											series="input"
+											radius={2}
+											onSelect={onTokenLogClick}
+										/>
+									)}
+									activeDot={false}
 								/>
 								<Line
 									type="monotone"
@@ -375,8 +454,15 @@ export function RightPanel({
 									stroke="var(--node-output-text)"
 									style={{ stroke: "var(--node-output-text)" }}
 									strokeWidth={1.5}
-									dot={{ r: 2 }}
-									activeDot={{ r: 4 }}
+									dot={(props) => (
+										<TokenChartDot
+											{...props}
+											series="output"
+											radius={2}
+											onSelect={onTokenLogClick}
+										/>
+									)}
+									activeDot={false}
 								/>
 								<Line
 									type="monotone"
@@ -385,8 +471,15 @@ export function RightPanel({
 									stroke="var(--node-think-text)"
 									style={{ stroke: "var(--node-think-text)" }}
 									strokeWidth={1.5}
-									dot={{ r: 2 }}
-									activeDot={{ r: 4 }}
+									dot={(props) => (
+										<TokenChartDot
+											{...props}
+											series="reasoning"
+											radius={2}
+											onSelect={onTokenLogClick}
+										/>
+									)}
+									activeDot={false}
 								/>
 								<Line
 									type="monotone"
@@ -395,8 +488,32 @@ export function RightPanel({
 									stroke="var(--node-action-text)"
 									style={{ stroke: "var(--node-action-text)" }}
 									strokeWidth={1.5}
-									dot={{ r: 2 }}
-									activeDot={{ r: 4 }}
+									dot={(props) => (
+										<TokenChartDot
+											{...props}
+											series="cached"
+											radius={2}
+											onSelect={onTokenLogClick}
+										/>
+									)}
+									activeDot={false}
+								/>
+								<Line
+									type="monotone"
+									dataKey="total"
+									name="Total"
+									stroke="var(--color-accent)"
+									style={{ stroke: "var(--color-accent)" }}
+									strokeWidth={2}
+									dot={(props) => (
+										<TokenChartDot
+											{...props}
+											series="total"
+											radius={3}
+											onSelect={onTokenLogClick}
+										/>
+									)}
+									activeDot={false}
 								/>
 							</LineChart>
 						</ResponsiveContainer>
@@ -516,6 +633,11 @@ export function RightPanel({
 									const showSeparator =
 										idx > 0 &&
 										tokenCounts[idx - 1].turn_index !== entry.turn_index;
+									const targetNodeId =
+										entry.bound_to_node_id &&
+										nodeIds.has(entry.bound_to_node_id)
+											? entry.bound_to_node_id
+											: undefined;
 									const usage =
 										tokenLogMode === "cumulative"
 											? entry.total_token_usage
@@ -531,19 +653,15 @@ export function RightPanel({
 												</tr>
 											)}
 											<tr
-												className={
-													entry.bound_to_node_id ? styles.tokenRow : ""
-												}
+												className={targetNodeId ? styles.tokenRow : ""}
 												onClick={() => {
-													if (entry.bound_to_node_id && onTokenLogClick) {
-														onTokenLogClick(entry.bound_to_node_id);
+													if (targetNodeId && onTokenLogClick) {
+														onTokenLogClick(targetNodeId);
 													}
 												}}
-												onKeyDown={(e) =>
-													handleRowKeyDown(e, entry.bound_to_node_id)
-												}
-												tabIndex={entry.bound_to_node_id ? 0 : undefined}
-												role={entry.bound_to_node_id ? "button" : undefined}
+												onKeyDown={(e) => handleRowKeyDown(e, targetNodeId)}
+												tabIndex={targetNodeId ? 0 : undefined}
+												role={targetNodeId ? "button" : undefined}
 											>
 												<td>{entry.index}</td>
 												<td>
