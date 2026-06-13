@@ -114,6 +114,173 @@ test.describe("セッション詳細画面 E2E テスト", () => {
 		await expect(page.locator("text=Session Analytics")).toBeVisible();
 	});
 
+	test("左タイムラインが初期幅30%で表示され、幅変更用separatorを持つこと", async ({
+		page,
+	}) => {
+		await page.locator("text=sess-001").click();
+
+		const viewportWidth = page.viewportSize()?.width;
+		expect(viewportWidth).toBeDefined();
+
+		const timeline = page.getByTestId("conversation-timeline");
+		const timelineBox = await timeline.boundingBox();
+		expect(timelineBox).not.toBeNull();
+		expect(timelineBox?.width).toBeCloseTo((viewportWidth ?? 0) * 0.3, 0);
+
+		const resizer = page.getByTestId("timeline-resizer");
+		await expect(resizer).toHaveAttribute("role", "separator");
+		await expect(resizer).toHaveAttribute("aria-orientation", "vertical");
+		await expect(resizer).toHaveAttribute(
+			"aria-label",
+			"タイムラインの幅を変更",
+		);
+		await expect(resizer).toHaveAttribute("aria-valuemin", "320");
+		await expect(resizer).toHaveAttribute(
+			"aria-valuemax",
+			String(Math.floor((viewportWidth ?? 0) * 0.5)),
+		);
+		await expect(resizer).toHaveAttribute(
+			"aria-valuenow",
+			String(Math.floor((viewportWidth ?? 0) * 0.3)),
+		);
+		await expect(resizer).toHaveAttribute("tabindex", "0");
+	});
+
+	test("左タイムラインの幅を矢印キーで変更し、上下限に収められること", async ({
+		page,
+	}) => {
+		await page.locator("text=sess-001").click();
+
+		const viewportWidth = page.viewportSize()?.width ?? 0;
+		const timeline = page.getByTestId("conversation-timeline");
+		const resizer = page.getByTestId("timeline-resizer");
+		await resizer.focus();
+
+		const initialWidth = (await timeline.boundingBox())?.width ?? 0;
+		await resizer.press("ArrowRight");
+		expect((await timeline.boundingBox())?.width).toBe(initialWidth + 16);
+		await expect(resizer).toHaveAttribute(
+			"aria-valuenow",
+			String(initialWidth + 16),
+		);
+
+		for (let index = 0; index < 100; index += 1) {
+			await resizer.press("ArrowLeft");
+		}
+		expect((await timeline.boundingBox())?.width).toBe(320);
+		await expect(resizer).toHaveAttribute("aria-valuenow", "320");
+
+		for (let index = 0; index < 100; index += 1) {
+			await resizer.press("ArrowRight");
+		}
+		const maxWidth = Math.floor(viewportWidth * 0.5);
+		expect((await timeline.boundingBox())?.width).toBe(maxWidth);
+		await expect(resizer).toHaveAttribute("aria-valuenow", String(maxWidth));
+	});
+
+	test("左タイムラインの境界をドラッグして幅を変更し、上下限に収められること", async ({
+		page,
+	}) => {
+		await page.locator("text=sess-001").click();
+
+		const viewportWidth = page.viewportSize()?.width ?? 0;
+		const timeline = page.getByTestId("conversation-timeline");
+		const resizer = page.getByTestId("timeline-resizer");
+		const resizerBox = await resizer.boundingBox();
+		expect(resizerBox).not.toBeNull();
+
+		const startX = (resizerBox?.x ?? 0) + (resizerBox?.width ?? 0) / 2;
+		const startY = (resizerBox?.y ?? 0) + (resizerBox?.height ?? 0) / 2;
+		const initialWidth = (await timeline.boundingBox())?.width ?? 0;
+
+		await page.mouse.move(startX, startY);
+		await page.mouse.down();
+		await page.mouse.move(startX + 80, startY);
+		await page.mouse.up();
+		expect((await timeline.boundingBox())?.width).toBe(initialWidth + 80);
+
+		await page.mouse.move(startX + 80, startY);
+		await page.mouse.down();
+		await page.mouse.move(0, startY);
+		await page.mouse.up();
+		expect((await timeline.boundingBox())?.width).toBe(320);
+
+		const minResizerBox = await resizer.boundingBox();
+		const minStartX = (minResizerBox?.x ?? 0) + (minResizerBox?.width ?? 0) / 2;
+		await page.mouse.move(minStartX, startY);
+		await page.mouse.down();
+		await page.mouse.move(viewportWidth, startY);
+		await page.mouse.up();
+		expect((await timeline.boundingBox())?.width).toBe(
+			Math.floor(viewportWidth * 0.5),
+		);
+	});
+
+	test("変更した左タイムライン幅が別セッションと再読み込み後に復元されること", async ({
+		page,
+	}) => {
+		await page.locator("text=sess-001").click();
+
+		const timeline = page.getByTestId("conversation-timeline");
+		const resizer = page.getByTestId("timeline-resizer");
+		await resizer.focus();
+		await resizer.press("ArrowRight");
+		await resizer.press("ArrowRight");
+		const savedWidth = (await timeline.boundingBox())?.width ?? 0;
+
+		await expect
+			.poll(() =>
+				page.evaluate(() =>
+					localStorage.getItem("session-detail.timeline-width"),
+				),
+			)
+			.toBe(String(savedWidth));
+
+		await page.goto("/#/sessions/sess-002-uuid-long-name");
+		await expect(page.getByTestId("conversation-timeline")).toHaveCSS(
+			"width",
+			`${savedWidth}px`,
+		);
+
+		await page.reload();
+		await expect(page.getByTestId("conversation-timeline")).toHaveCSS(
+			"width",
+			`${savedWidth}px`,
+		);
+	});
+
+	test("viewport縮小時に左タイムライン幅を再調整し、既存パネルを操作できること", async ({
+		page,
+	}) => {
+		await page.setViewportSize({ width: 1600, height: 900 });
+		await page.locator("text=sess-001").click();
+
+		const timeline = page.getByTestId("conversation-timeline");
+		const resizer = page.getByTestId("timeline-resizer");
+		expect((await timeline.boundingBox())?.width).toBe(480);
+
+		await page.setViewportSize({ width: 1400, height: 900 });
+		expect((await timeline.boundingBox())?.width).toBe(480);
+		await expect(resizer).toHaveAttribute("aria-valuemax", "700");
+
+		await page.setViewportSize({ width: 1600, height: 900 });
+		await resizer.focus();
+		for (let index = 0; index < 100; index += 1) {
+			await resizer.press("ArrowRight");
+		}
+		expect((await timeline.boundingBox())?.width).toBe(800);
+
+		await page.setViewportSize({ width: 1400, height: 900 });
+		expect((await timeline.boundingBox())?.width).toBe(700);
+		await expect(resizer).toHaveAttribute("aria-valuemax", "700");
+		await expect(resizer).toHaveAttribute("aria-valuenow", "700");
+
+		await expect(page.locator(".react-flow")).toBeVisible();
+		await expect(page.getByText("Session Analytics")).toBeVisible();
+		await page.locator(".react-flow__node-userMessage").click();
+		await expect(page.getByTestId("bottom-panel")).toBeVisible();
+	});
+
 	test("推論は初期状態で折りたたまれ、展開すると本文と要約を確認できること", async ({
 		page,
 	}) => {
