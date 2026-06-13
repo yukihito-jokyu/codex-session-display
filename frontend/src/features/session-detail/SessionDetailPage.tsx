@@ -25,6 +25,7 @@ export function SessionDetailPage() {
 		handleTokenLogClick,
 		handleCanvasNodeSelect,
 		handleTokenBadgeClick,
+		handleTimelineFullText,
 		handleOpenLogDirectory,
 		handleCopyLogPath,
 		startResize,
@@ -81,6 +82,7 @@ export function SessionDetailPage() {
 				onTokenLogClick={handleTokenLogClick}
 				onCanvasNodeSelect={handleCanvasNodeSelect}
 				onTokenBadgeClick={handleTokenBadgeClick}
+				onTimelineFullText={handleTimelineFullText}
 				onStartResize={startResize}
 				onResizerKeyDown={handleResizerKeyDown}
 			/>

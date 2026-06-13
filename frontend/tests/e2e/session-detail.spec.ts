@@ -381,7 +381,9 @@ test.describe("セッション詳細画面 E2E テスト", () => {
 		expect((await timeline.boundingBox())?.width).toBe(800);
 
 		await page.setViewportSize({ width: 1400, height: 900 });
-		expect((await timeline.boundingBox())?.width).toBe(700);
+		await expect
+			.poll(async () => (await timeline.boundingBox())?.width)
+			.toBe(700);
 		await expect(resizer).toHaveAttribute("aria-valuemax", "700");
 		await expect(resizer).toHaveAttribute("aria-valuenow", "700");
 
@@ -410,6 +412,75 @@ test.describe("セッション詳細画面 E2E テスト", () => {
 			timeline.getByText("Inspect the relevant implementation."),
 		).toBeVisible();
 		await expect(timeline.getByText("Implementation inspection")).toBeVisible();
+	});
+
+	test("長いイベント内容を省略し、全文を下部詳細パネルで表示できること", async ({
+		page,
+	}) => {
+		await page.locator("text=sess-001").click();
+
+		const timeline = page.getByTestId("conversation-timeline");
+		await timeline.getByRole("button", { name: /コマンド実行/ }).click();
+
+		await expect(timeline.getByText("LONG_COMMAND_OUTPUT_END")).toHaveCount(0);
+		await timeline.getByRole("button", { name: "全文を表示" }).click();
+
+		const detail = page.getByTestId("bottom-panel-node-detail");
+		await expect(page.getByText("Node Detail: コマンド実行")).toBeVisible();
+		await expect(detail.getByText("LONG_COMMAND_OUTPUT_END")).toBeVisible();
+	});
+
+	test("短いイベント内容は省略せず、全文表示操作を出さないこと", async ({
+		page,
+	}) => {
+		await page.locator("text=sess-001").click();
+
+		const timeline = page.getByTestId("conversation-timeline");
+		const reference = timeline
+			.locator("article")
+			.filter({ hasText: "参照ファイル" });
+		await reference.getByRole("button", { name: /参照ファイル/ }).click();
+
+		await expect(
+			reference.getByText("Read the project requirements."),
+		).toBeVisible();
+		await expect(
+			reference.getByRole("button", { name: "全文を表示" }),
+		).toHaveCount(0);
+	});
+
+	test("下部詳細パネルで全文を検索し、一致箇所を確認できること", async ({
+		page,
+	}) => {
+		await page.locator("text=sess-001").click();
+
+		const timeline = page.getByTestId("conversation-timeline");
+		await timeline.getByRole("button", { name: /コマンド実行/ }).click();
+		await timeline.getByRole("button", { name: "全文を表示" }).click();
+
+		const detail = page.getByTestId("bottom-panel-node-detail");
+		const search = detail.getByLabel("全文を検索");
+		await search.fill("search_needle");
+		await expect(detail.locator("mark")).toHaveCount(3);
+		await expect(detail.getByText("3件", { exact: true })).toBeVisible();
+
+		await search.fill("not_found_in_full_text");
+		await expect(detail.locator("mark")).toHaveCount(0);
+		await expect(detail.getByText("0件", { exact: true })).toBeVisible();
+	});
+
+	test("タイムライン全文表示後にキャンバスノードの詳細へ切り替えられること", async ({
+		page,
+	}) => {
+		await page.locator("text=sess-001").click();
+
+		const timeline = page.getByTestId("conversation-timeline");
+		await timeline.getByRole("button", { name: /コマンド実行/ }).click();
+		await timeline.getByRole("button", { name: "全文を表示" }).click();
+		await expect(page.getByText("Node Detail: コマンド実行")).toBeVisible();
+
+		await page.locator(".react-flow__node-userMessage").click();
+		await expect(page.getByText("Node Detail: User Message")).toBeVisible();
 	});
 
 	test("初期表示時から viewport 外のノードが DOM に描画されないこと", async ({

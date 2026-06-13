@@ -34,7 +34,42 @@
 .fullTextLabel {
 	font-weight: 600;
 	color: var(--text-secondary);
-	margin-bottom: 4px;
+}
+
+.fullTextHeader {
+	display: flex;
+	align-items: end;
+	flex-wrap: wrap;
+	gap: 10px;
+	margin-bottom: 6px;
+}
+
+.searchField {
+	display: grid;
+	flex: 1 1 220px;
+	gap: 2px;
+	margin-left: auto;
+	min-width: 0;
+	color: var(--text-secondary);
+	font-size: 11px;
+}
+
+.searchField input {
+	width: 100%;
+	min-width: 0;
+	padding: 5px 8px;
+	border: 1px solid var(--border-color);
+	border-radius: 4px;
+	background: var(--mono-bg);
+	color: var(--text-primary);
+	font: inherit;
+}
+
+.matchCount {
+	min-width: 2.5em;
+	color: var(--text-secondary);
+	font-size: 12px;
+	text-align: right;
 }
 
 .fullTextContent {
@@ -46,4 +81,9 @@
 	border: 1px solid var(--border-color);
 	color: var(--text-primary);
 	overflow-x: auto;
+}
+
+.fullTextContent mark {
+	background: var(--accent-value-bg);
+	color: var(--text-primary);
 }

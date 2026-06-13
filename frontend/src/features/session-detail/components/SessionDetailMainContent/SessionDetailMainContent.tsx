@@ -34,6 +34,7 @@ type SessionDetailMainContentProps = {
 	onTokenLogClick: (nodeId: string) => void;
 	onCanvasNodeSelect: (node: dto.FlowNode | null) => void;
 	onTokenBadgeClick: (node: dto.FlowNode) => void;
+	onTimelineFullText: (item: dto.ConversationTimelineItem) => void;
 	onStartResize: PointerEventHandler<HTMLDivElement>;
 	onResizerKeyDown: KeyboardEventHandler<HTMLDivElement>;
 };
@@ -55,15 +56,21 @@ export function SessionDetailMainContent({
 	onTokenLogClick,
 	onCanvasNodeSelect,
 	onTokenBadgeClick,
+	onTimelineFullText,
 	onStartResize,
 	onResizerKeyDown,
 }: SessionDetailMainContentProps) {
+	const timelineDetailSelected = selectedNode?.data?.category === "timeline";
+
 	return (
 		<div className={styles.detailContent}>
 			{sessionData && (
 				<>
 					<div className={styles.timelinePane} style={{ width: timelineWidth }}>
-						<ConversationTimeline turns={sessionData.timeline || []} />
+						<ConversationTimeline
+							turns={sessionData.timeline || []}
+							onShowFullText={onTimelineFullText}
+						/>
 					</div>
 					<div
 						className={styles.timelineResizer}
@@ -88,9 +95,15 @@ export function SessionDetailMainContent({
 							edges={sessionData.edges || []}
 							onNodeSelect={onCanvasNodeSelect}
 							onTokenBadgeClick={onTokenBadgeClick}
-							interactionLocked={Boolean(selectedNode)}
-							selectedNodeId={selectedNode?.id}
-							selectedNodeType={selectedNode?.type}
+							interactionLocked={Boolean(
+								selectedNode && !timelineDetailSelected,
+							)}
+							selectedNodeId={
+								timelineDetailSelected ? undefined : selectedNode?.id
+							}
+							selectedNodeType={
+								timelineDetailSelected ? undefined : selectedNode?.type
+							}
 							zoomTarget={zoomTarget}
 						/>
 					)}

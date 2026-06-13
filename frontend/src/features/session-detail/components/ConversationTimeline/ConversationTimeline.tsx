@@ -1,9 +1,15 @@
 import { useMemo, useState } from "react";
 import type { dto } from "wailsjs/go/models";
 import styles from "./ConversationTimeline.module.css";
+import {
+	getTimelineItemPreview,
+	getTimelineItemTextLength,
+	TIMELINE_PREVIEW_LENGTH,
+} from "./timelineItemText";
 
 type ConversationTimelineProps = {
 	turns: dto.ConversationTimelineTurn[];
+	onShowFullText: (item: dto.ConversationTimelineItem) => void;
 };
 
 type TimelineCategory =
@@ -104,7 +110,10 @@ function formatDuration(durationMs: number) {
 	return `${Number.isInteger(seconds) ? seconds : seconds.toFixed(1)}秒`;
 }
 
-export function ConversationTimeline({ turns }: ConversationTimelineProps) {
+export function ConversationTimeline({
+	turns,
+	onShowFullText,
+}: ConversationTimelineProps) {
 	const [searchQuery, setSearchQuery] = useState("");
 	const [measuredOnly, setMeasuredOnly] = useState(false);
 	const [selectedCategories, setSelectedCategories] = useState<
@@ -224,6 +233,10 @@ export function ConversationTimeline({ turns }: ConversationTimelineProps) {
 								const itemKey = getTimelineItemKey(turn, item);
 								const collapsible = item.collapsible ?? kind !== "conversation";
 								const expanded = !collapsible || expandedItems.has(itemKey);
+								const truncated =
+									getTimelineItemTextLength(item) > TIMELINE_PREVIEW_LENGTH;
+								const preview =
+									expanded && truncated ? getTimelineItemPreview(item) : "";
 
 								return (
 									<article
@@ -258,15 +271,34 @@ export function ConversationTimeline({ turns }: ConversationTimelineProps) {
 										)}
 										{expanded && (
 											<div className={styles.expandedContent}>
-												<p className={styles.body}>{item.body}</p>
-												{item.details?.length > 0 && (
-													<pre className={styles.detail}>
-														{item.details
-															.map(
-																(detail) => `${detail.label}\n${detail.value}`,
-															)
-															.join("\n\n")}
-													</pre>
+												{truncated ? (
+													<>
+														<pre className={styles.detail}>
+															{preview}
+															{"\n..."}
+														</pre>
+														<button
+															className={styles.showFullText}
+															onClick={() => onShowFullText(item)}
+															type="button"
+														>
+															全文を表示
+														</button>
+													</>
+												) : (
+													<>
+														<p className={styles.body}>{item.body}</p>
+														{item.details?.length > 0 && (
+															<pre className={styles.detail}>
+																{item.details
+																	.map(
+																		(detail) =>
+																			`${detail.label}\n${detail.value}`,
+																	)
+																	.join("\n\n")}
+															</pre>
+														)}
+													</>
 												)}
 											</div>
 										)}
