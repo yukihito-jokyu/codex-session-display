@@ -1,0 +1,70 @@
+.errorContainer {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	justify-content: center;
+	flex: 1;
+	gap: 16px;
+	padding: 32px;
+	text-align: center;
+}
+
+.errorIcon {
+	font-size: 48px;
+}
+
+.errorMessage {
+	font-size: 14px;
+	color: var(--node-warning-text);
+	max-width: 400px;
+	line-height: 1.5;
+}
+
+.errorActions {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 8px;
+	justify-content: center;
+}
+
+.retryBtn,
+.backBtn {
+	padding: 8px 16px;
+	font-size: 13px;
+	font-weight: 500;
+	color: var(--text-primary);
+	background: var(--bg-btn);
+	border: 1px solid var(--border-color);
+	border-radius: 6px;
+	cursor: pointer;
+	transition: all 0.2s;
+}
+
+.retryBtn:hover,
+.backBtn:hover {
+	background: var(--bg-btn-hover);
+	border-color: var(--text-secondary);
+}
+
+.secondaryBtn {
+	padding: 8px 16px;
+	font-size: 13px;
+	font-weight: 500;
+	color: var(--text-secondary);
+	background: transparent;
+	border: 1px solid var(--border-color);
+	border-radius: 6px;
+	cursor: pointer;
+	transition: all 0.2s;
+}
+
+.secondaryBtn:hover {
+	color: var(--text-primary);
+	background: var(--bg-btn-hover);
+	border-color: var(--text-secondary);
+}
+
+.logActionMessage {
+	font-size: 12px;
+	color: var(--text-secondary);
+}
