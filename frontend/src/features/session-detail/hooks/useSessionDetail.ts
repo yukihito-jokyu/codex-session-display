@@ -8,7 +8,8 @@ import {
 	useState,
 } from "react";
 import { GetSessionDetail, OpenLogDirectory } from "wailsjs/go/main/App";
-import type { dto } from "wailsjs/go/models";
+import { dto } from "wailsjs/go/models";
+import { getTimelineItemFullText } from "../components/ConversationTimeline/timelineItemText";
 
 type BottomPanelMode = "node" | "token";
 
@@ -108,6 +109,27 @@ export function useSessionDetail(id: string | undefined) {
 		setSelectedNode(node);
 		setBottomPanelMode("token");
 	}, []);
+
+	const handleTimelineFullText = useCallback(
+		(item: dto.ConversationTimelineItem) => {
+			setSelectedNode(
+				dto.FlowNode.createFrom({
+					id: `timeline-${item.kind}-${item.timestamp}`,
+					type: "generic",
+					position: { x: 0, y: 0 },
+					data: {
+						category: "timeline",
+						label: item.label || item.kind,
+						icon: "",
+						summary: item.body,
+						fullText: getTimelineItemFullText(item),
+					},
+				}),
+			);
+			setBottomPanelMode("node");
+		},
+		[],
+	);
 
 	const handleOpenLogDirectory = useCallback(async () => {
 		try {
@@ -221,6 +243,7 @@ export function useSessionDetail(id: string | undefined) {
 		handleTokenLogClick,
 		handleCanvasNodeSelect,
 		handleTokenBadgeClick,
+		handleTimelineFullText,
 		handleOpenLogDirectory,
 		handleCopyLogPath,
 		startResize,
