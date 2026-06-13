@@ -409,6 +409,34 @@ test.describe("セッション詳細画面 E2E テスト", () => {
 		expect(after.width).toBeGreaterThan(before.width + 40);
 	});
 
+	test("左右分割表示の境界を矢印キーで変更でき、separator属性が更新されること", async ({
+		page,
+	}) => {
+		await page.locator("text=sess-001").click();
+		await page
+			.getByRole("button", { name: "User Message token badge" })
+			.click();
+
+		const resizer = page.getByTestId("bottom-panel-resizer");
+		await expect(resizer).toHaveAttribute("role", "separator");
+		await expect(resizer).toHaveAttribute("aria-orientation", "vertical");
+		await expect(resizer).toHaveAttribute(
+			"aria-label",
+			"Resize token detail panel",
+		);
+		await expect(resizer).toHaveAttribute("aria-valuemin", "25");
+		await expect(resizer).toHaveAttribute("aria-valuemax", "75");
+		await expect(resizer).toHaveAttribute("aria-valuenow", "52");
+		await expect(resizer).toHaveAttribute("tabindex", "0");
+
+		await resizer.focus();
+		await page.keyboard.press("ArrowRight");
+		await expect(resizer).toHaveAttribute("aria-valuenow", "55");
+
+		await page.keyboard.press("ArrowLeft");
+		await expect(resizer).toHaveAttribute("aria-valuenow", "52");
+	});
+
 	test("右パネル（Session Analytics）に統計カード、グラフ、サマリー、トークンテーブルが正しく描画されること", async ({
 		page,
 	}) => {
