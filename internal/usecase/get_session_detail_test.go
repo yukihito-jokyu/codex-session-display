@@ -655,14 +655,14 @@ func TestGetSessionDetailUseCase_Execute(t *testing.T) {
 			},
 		},
 		{
-			name: "schema version 3 cache triggers reparse even when cache file is fresh",
+			name: "schema version 4 cache triggers reparse even when cache file is fresh",
 			setup: func(t *testing.T, tmpDir string) (string, usecase.SessionRepository, usecase.CacheRepository, usecase.SessionParser, func()) {
 				sessionID := "legacy-cache-session"
 				cacheRepo := &mockCacheRepositoryForDetail{
 					cache: map[string]*dto.SessionDetailResponse{
 						sessionID: {
 							ID:                 sessionID,
-							CacheSchemaVersion: 3,
+							CacheSchemaVersion: 4,
 							ParsedAt:           "2026-05-31T01:00:00Z",
 						},
 					},
@@ -706,8 +706,12 @@ func TestGetSessionDetailUseCase_Execute(t *testing.T) {
 				if res == nil || res.ID != "legacy-cache-session" {
 					t.Fatalf("expected reparsed response, got %+v", res)
 				}
-				if res.CacheSchemaVersion != 4 {
-					t.Fatalf("CacheSchemaVersion = %d, want 4", res.CacheSchemaVersion)
+				if res.CacheSchemaVersion != dto.CurrentSessionDetailCacheSchemaVersion {
+					t.Fatalf(
+						"CacheSchemaVersion = %d, want %d",
+						res.CacheSchemaVersion,
+						dto.CurrentSessionDetailCacheSchemaVersion,
+					)
 				}
 			},
 		},
@@ -2491,6 +2495,18 @@ func TestGetSessionDetailUseCase_ExecuteAddsReasoningToTimelineInRecordOrder(t *
 	if items[2].RecordCount != 2 || items[2].TokenCountCount != 1 || items[2].LastTokenUsage.TotalTokens != 12 {
 		t.Errorf("Items[2] counts = %+v, want 2 records and 1 token count totaling 12", items[2])
 	}
+	if items[2].SelectionID == "" {
+		t.Error("Items[2].SelectionID is empty")
+	}
+	if items[2].NodeID == "" || len(items[2].NodeIDs) == 0 || items[2].NodeIDs[0] != items[2].NodeID {
+		t.Errorf("Items[2] node selection = %+v, want representative node first", items[2])
+	}
+	if len(items[2].TokenCountIndices) != 1 || items[2].TokenCountIndices[0] != 0 {
+		t.Errorf("Items[2].TokenCountIndices = %v, want [0]", items[2].TokenCountIndices)
+	}
+	if items[2].NodeID != res.TokenCounts[0].BoundToNodeID {
+		t.Errorf("Items[2].NodeID = %q, token count node = %q", items[2].NodeID, res.TokenCounts[0].BoundToNodeID)
+	}
 	if items[3].Kind != "conversation" || items[3].Role != "assistant" {
 		t.Errorf("Items[3] = %+v, want assistant conversation", items[3])
 	}
@@ -2949,6 +2965,9 @@ func TestGetSessionDetailUseCase_ExecuteAggregatesConversationTokenUsage(t *test
 	}
 	if item.TotalTokenUsage == nil || item.TotalTokenUsage.TotalTokens != 120 {
 		t.Errorf("TotalTokenUsage = %+v, want latest total 120", item.TotalTokenUsage)
+	}
+	if len(item.TokenCountIndices) != 2 || item.TokenCountIndices[0] != 0 || item.TokenCountIndices[1] != 1 {
+		t.Errorf("TokenCountIndices = %v, want [0 1]", item.TokenCountIndices)
 	}
 	if res.Timeline[0].ConsumedTokens.TotalTokens != 120 {
 		t.Errorf("ConsumedTokens.TotalTokens = %d, want 120", res.Timeline[0].ConsumedTokens.TotalTokens)
