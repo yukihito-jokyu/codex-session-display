@@ -3,6 +3,7 @@ import { SessionDetailError } from "./components/SessionDetailError/SessionDetai
 import { SessionDetailHeader } from "./components/SessionDetailHeader/SessionDetailHeader";
 import { SessionDetailMainContent } from "./components/SessionDetailMainContent/SessionDetailMainContent";
 import { useSessionDetail } from "./hooks/useSessionDetail";
+import { useTimelineResize } from "./hooks/useTimelineResize";
 import styles from "./SessionDetailPage.module.css";
 
 export function SessionDetailPage() {
@@ -29,6 +30,13 @@ export function SessionDetailPage() {
 		startResize,
 		handleResizerKeyDown,
 	} = useSessionDetail(id);
+	const {
+		timelineWidth,
+		timelineMinWidth,
+		timelineMaxWidth,
+		startTimelineResize,
+		handleTimelineResizerKeyDown,
+	} = useTimelineResize();
 	const handleBack = () => navigate("/");
 
 	if (loading) {
@@ -65,6 +73,11 @@ export function SessionDetailPage() {
 				boundTokenCounts={boundTokenCounts}
 				latestBoundToken={latestBoundToken}
 				showTokenSplit={showTokenSplit}
+				timelineWidth={timelineWidth}
+				timelineMinWidth={timelineMinWidth}
+				timelineMaxWidth={timelineMaxWidth}
+				onStartTimelineResize={startTimelineResize}
+				onTimelineResizerKeyDown={handleTimelineResizerKeyDown}
 				onTokenLogClick={handleTokenLogClick}
 				onCanvasNodeSelect={handleCanvasNodeSelect}
 				onTokenBadgeClick={handleTokenBadgeClick}

@@ -1,93 +1,85 @@
-# Issue #176 実装計画
+# Issue #177 実装計画
 
 ## 目的
 
-会話タイムラインへ、AIの推論、ツール・コマンド、Web、MCP、instructions、
-システムイベントをJSONLの出現順で追加する。
+セッション詳細画面の左タイムラインと中央キャンバスの境界を、ポインターと
+キーボードで変更できる縦向きseparatorにする。
 
-会話は常時展開を維持し、会話以外は初期状態で折りたたむ。展開時は、AIが参照・入力・
-実行した内容と主要な結果を追跡できる表示にする。
+タイムライン幅は初期状態で画面幅の30%、最小320px、最大50%とし、変更値を
+`localStorage`へ保存して別セッションや次回起動時にも復元する。
 
 ## 公開インターフェース
 
-既存の `SessionDetailResponse.timeline` を維持し、
-`ConversationTimelineItem` を会話以外も表せる表示DTOへ拡張する。
+画面固有フック `useTimelineResize` を追加し、次の値だけを
+`SessionDetailPage` と `SessionDetailMainContent` へ公開する。
 
-- `kind`: `conversation`, `reasoning`, `tool`, `web`, `mcp`,
-  `instructions`, `system`, `reference`
-- `label`: 折りたたみ時に表示する種類名
-- `role`, `body`: 会話本文。既存契約を維持する
-- `timestamp`: 表示単位の代表レコードのタイムスタンプ
-- `record_count`: 表示単位へ統合したレコード数
-- `collapsible`: 会話以外の展開可能な項目か
-- `details`: 展開時に表示するラベル・値の配列
-- 既存の増分トークン、紐付け件数、最新累計
+- `timelineWidth`: クランプ済みのタイムライン幅（px）
+- `startTimelineResize`: ポインタードラッグ開始ハンドラー
+- `handleTimelineResizerKeyDown`: 左右矢印キーのハンドラー
 
-フロントエンドはDTOを再分類せず、`ConversationTimeline` 内で項目ごとの展開状態だけを
-管理する。表示状態は永続化しない。
+DOM上ではタイムライン直後に次の公開契約を持つseparatorを配置する。
 
-DTO変更に伴い、セッション詳細キャッシュスキーマを4へ更新する。
+- `role="separator"`
+- `aria-orientation="vertical"`
+- `aria-label="タイムラインの幅を変更"`
+- `aria-valuemin="320"`
+- `aria-valuemax`: 現在のビューポート幅の50%
+- `aria-valuenow`: 現在の幅（px）
+- `tabIndex="0"`
 
-## 表示単位と順序
+保存キーはセッションに依存しない `session-detail.timeline-width` とする。
 
-- 既存のターン分割、Reasoningペア、Tool Batch、トークン紐付けを再利用する。
-- 各表示単位は代表レコードの行番号を持ち、代表行番号順でターン内へ配置する。
-- 会話の重複統合は既存仕様を維持する。
-- Reasoningは`agent_reasoning`と`response_item(reasoning)`を1項目へ統合する。
-- Tool Batchは呼び出し、引数、対応する結果を1項目へ統合する。
-- Webは検索クエリ、検索種別、閲覧先を表示する。
-- MCPはサーバー名、ツール名、引数、結果を表示する。
-- instructionsはbase、developer、userを区別して表示する。
-- task開始・完了・中断等はsystem項目として表示する。
-- ファイル参照、画像参照、コマンド完了等はreferenceまたはtool項目として表示する。
-- 未知レコードもsystem項目として残し、順序から脱落させない。
-- `token_count` 自体は独立項目にせず、従来どおり直前の表示単位へ集約する。
+## 振る舞い
+
+- 保存値がない場合はビューポート幅の30%を初期値にする。
+- 初期値、保存値、ドラッグ値、キー操作値は常に320pxからビューポート幅の50%に収める。
+- 左右矢印キーは1回あたり16px変更する。
+- ドラッグ中はポインターの水平移動量に追従する。
+- 操作後の幅を即時保存し、別セッション表示とページ再読み込みで復元する。
+- ウィンドウ幅が変化した場合は保存値を現在の上限へ再クランプする。
+- タイムライン内部だけをスクロールし、中央キャンバス、下部詳細パネル、
+  右側統計パネルの既存操作を維持する。
 
 ## TDDサイクル
 
-1. トレーサー弾: 推論を同じ時間軸へ追加
-   - RED: 会話の間にあるReasoningが代表レコード順で返り、トークン計測を持つことを検証する。
-   - GREEN: 汎用タイムライン項目DTOとReasoning変換を最小実装する。
-   - UI RED/GREEN: Reasoningが初期状態で折りたたまれ、展開すると本文と要約を確認できるようにする。
-2. Tool Batchとコマンド
-   - RED: 複数呼び出し、引数、対応出力、コマンド完了情報を1表示単位から確認できることを検証する。
-   - GREEN: 既存Batchとcall_id対応をタイムライン詳細へ変換する。
-3. WebとMCP
-   - RED: 検索クエリ、閲覧先、MCPサーバー・ツール・引数・結果を順序どおり返すことを検証する。
-   - GREEN: Web/MCP表示単位を追加する。
-4. instructionsとsystemイベント
-   - RED: base/developer/user instructionsとターン開始・完了・中断が時間軸へ含まれることを検証する。
-   - GREEN: セッション先頭の疑似ターンと通常ターンへ各項目を追加する。
-5. 順序、件数、トークン集約
-   - RED: 異種項目を統合した後も代表行番号順で、件数・増分・累計が正しいことを検証する。
-   - GREEN: 共通の整列とトークン集約を完成させる。
-6. キャッシュ互換性
-   - RED: スキーマ3のキャッシュが無効化されることを検証する。
-   - GREEN: キャッシュスキーマを4へ更新する。
-7. リファクタリング
-   - 分類、詳細生成、順序決定、トークン集約を小さな公開面の内部モジュールへ整理する。
-   - 会話表示、キャンバス、BottomPanel、RightPanelの回帰を確認する。
+1. トレーサー弾: 初期幅とseparator
+   - RED: 保存値なしでタイムラインが画面幅の約30%になり、必要なseparator属性を持つことをE2Eで検証する。
+   - GREEN: `useTimelineResize` とタイムラインペイン、separatorを最小実装する。
+2. キーボード操作と境界
+   - RED: 左右矢印キーで16px変更でき、320px未満と50%超過にならないことを検証する。
+   - GREEN: キー操作と共通クランプ処理を追加する。
+3. ポインタードラッグ
+   - RED: separatorのドラッグでタイムライン幅が変わり、上下限で停止することを検証する。
+   - GREEN: ポインター移動・終了処理を追加する。
+4. 永続化
+   - RED: 変更した幅が別セッションと再読み込みで復元されることを検証する。
+   - GREEN: `localStorage`への保存・復元を追加する。
+5. ウィンドウ変更と回帰
+   - RED: ビューポート縮小時に幅が50%へ再クランプされ、キャンバス、下部詳細、
+     右側統計パネルを引き続き操作できることを検証する。
+   - GREEN: resizeイベント処理を追加する。
+6. リファクタリング
+   - 幅計算、保存、ポインター状態をフック内部へ集約する。
+   - 既存の下部パネルリサイズとの命名衝突を解消する。
 
 ## ドキュメント
 
-- `docs/requirements.md`: 非会話イベントの種類、初期折りたたみ、展開内容を追加する。
-- `docs/detailed-design.md`: DTO、表示単位の統合規則、順序、UI状態、テストケースを更新する。
-- `docs/adr/0029-conversation-timeline-dto.md`: 汎用タイムラインDTOへの拡張とキャッシュ影響を追記する。
-- 新規ADR: 表示単位の分類や詳細構造が既存ADRの範囲を超える場合のみ作成する。
+- `docs/requirements.md`: タイムライン幅、操作方法、上下限、永続化を追加する。
+- `docs/detailed-design.md`: フック、保存キー、separator属性、幅計算、E2Eケースを追加する。
+- 新規ADRは作成しない。画面内状態と既存Web Storageを使う局所的なUI変更であり、
+  アーキテクチャ上の新しい意思決定を伴わないため。
 
 ## 検証
 
-- 各RED/GREENで対象Goテストまたは対象Playwrightテストを実行する。
-- `go test ./...`
-- `go test -tags production ./...`
-- `golangci-lint run`
+- 各RED/GREENで対象Playwrightテストを
+  `task test:e2e:detail -- session-detail.spec.ts --grep "<対象テスト>"` で実行する。
 - `frontend` で `npm run lint`
-- `task test:e2e:detail -- session-detail.spec.ts --grep "<対象テスト>"`
+- `frontend` で `npm run build`
 - 最終確認で `task test:e2e`
 
 ## 優先する振る舞い
 
-1. 会話を含む全表示単位のJSONL順
-2. ツール・コマンド・Web・MCPの入力と結果の追跡可能性
-3. 初期折りたたみと展開後の情報量
-4. 表示単位ごとの増分・累計トークンと件数
+1. 320pxから画面幅50%までの確実な境界制御
+2. ポインターとキーボードの同等な操作性・アクセシビリティ
+3. 別セッション・次回起動での幅復元
+4. キャンバス、下部詳細、右側統計パネルの操作維持

@@ -26,6 +26,11 @@ type SessionDetailMainContentProps = {
 	boundTokenCounts: dto.TokenCountEntry[];
 	latestBoundToken: dto.TokenCountEntry["total_token_usage"];
 	showTokenSplit: boolean;
+	timelineWidth: number;
+	timelineMinWidth: number;
+	timelineMaxWidth: number;
+	onStartTimelineResize: PointerEventHandler<HTMLDivElement>;
+	onTimelineResizerKeyDown: KeyboardEventHandler<HTMLDivElement>;
 	onTokenLogClick: (nodeId: string) => void;
 	onCanvasNodeSelect: (node: dto.FlowNode | null) => void;
 	onTokenBadgeClick: (node: dto.FlowNode) => void;
@@ -42,6 +47,11 @@ export function SessionDetailMainContent({
 	boundTokenCounts,
 	latestBoundToken,
 	showTokenSplit,
+	timelineWidth,
+	timelineMinWidth,
+	timelineMaxWidth,
+	onStartTimelineResize,
+	onTimelineResizerKeyDown,
 	onTokenLogClick,
 	onCanvasNodeSelect,
 	onTokenBadgeClick,
@@ -51,7 +61,24 @@ export function SessionDetailMainContent({
 	return (
 		<div className={styles.detailContent}>
 			{sessionData && (
-				<ConversationTimeline turns={sessionData.timeline || []} />
+				<>
+					<div className={styles.timelinePane} style={{ width: timelineWidth }}>
+						<ConversationTimeline turns={sessionData.timeline || []} />
+					</div>
+					<div
+						className={styles.timelineResizer}
+						data-testid="timeline-resizer"
+						role="separator"
+						aria-orientation="vertical"
+						aria-label="タイムラインの幅を変更"
+						aria-valuemin={timelineMinWidth}
+						aria-valuemax={timelineMaxWidth}
+						aria-valuenow={timelineWidth}
+						onPointerDown={onStartTimelineResize}
+						onKeyDown={onTimelineResizerKeyDown}
+						tabIndex={0}
+					/>
+				</>
 			)}
 			<div className={styles.mainArea}>
 				<div className={styles.canvasWrapper}>

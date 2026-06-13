@@ -1,18 +1,15 @@
-# Issue #176 タスク
+# Issue #177 タスク
 
-- [x] Issue #176とブロッカー #175の状態を確認する
-- [x] TDDスキル、プロジェクト規約、仕様、詳細設計、関連ADRを確認する
-- [x] 既存タイムラインDTO、ターン分類、表示単位、E2Eの公開契約を確認する
+- [x] Issue #177とブロッカー #175の実装状況を確認する
+- [x] TDDスキル、プロジェクト規約、仕様、詳細設計を確認する
+- [x] 既存タイムライン、詳細画面レイアウト、リサイズE2Eの公開契約を確認する
 - [x] 実装計画を作成する
 - [x] ユーザーの承認を得る
-- [x] 推論表示をRED/GREENで追加する
-- [x] 推論の折りたたみUIをRED/GREENで追加する
-- [x] Tool Batchとコマンド表示をRED/GREENで追加する
-- [x] WebとMCP表示をRED/GREENで追加する
-- [x] instructionsとsystemイベント表示をRED/GREENで追加する
-- [x] JSONL順、件数、トークン集約をRED/GREENで完成させる
-- [x] キャッシュスキーマを更新する
-- [x] 要件定義、詳細設計、ADRを同期する
-- [x] Goテスト、productionタグテスト、golangci-lintを実行する
-- [x] Biomeとセッション詳細Playwright E2Eを実行する
+- [x] 初期幅とseparatorをRED/GREENで追加する
+- [x] キーボード操作と上下限をRED/GREENで追加する
+- [x] ポインタードラッグをRED/GREENで追加する
+- [x] 幅の保存・復元をRED/GREENで追加する
+- [x] ウィンドウ変更時の再クランプと既存操作の回帰を確認する
+- [x] 要件定義と詳細設計を同期する
+- [x] Biome、ビルド、セッション詳細Playwright E2Eを実行する
 - [x] `walkthrough.md` を作成する
