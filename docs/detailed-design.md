@@ -896,6 +896,7 @@ Wailsアプリケーションのエントリポイントとなる構造体。バ
 | error              | 文字列またはnull          | エラーメッセージ                    | null       |
 | selectedNode       | FlowNodeまたはnull        | 選択中のノード（BottomPanel表示用） | null       |
 | selectedTokenBadge | TokenCountEntryまたはnull | 選択中のトークンバッジ              | null       |
+| timelineWidth      | number                    | 左タイムラインの表示幅（px）        | 画面幅の30% |
 | rightPanelOpen     | 真偽値                    | RightPanelの開閉状態                | true       |
 | exporting          | 真偽値                    | (保留) エクスポート中               | false      |
 | notification       | Notificationまたはnull    | トースト通知                        | null       |
@@ -1397,7 +1398,15 @@ SessionListPage
 
 **ConversationTimeline 仕様:**
 
-- 左側の固定幅スクロール領域として表示する。
+- 左側の可変幅スクロール領域として表示する。
+- `useTimelineResize` が表示幅、ポインター操作、キーボード操作、永続化を管理する。
+- 保存値がない場合は画面幅の30%を初期値とし、320pxから画面幅の50%へクランプする。
+- 変更値は `localStorage` の `session-detail.timeline-width` へpx単位で保存し、セッションIDに依存せず復元する。
+- 画面幅の変更時は現在幅を新しい50%上限へ再クランプし、表示値と保存値を更新する。
+- キャンバスとの境界は `role="separator"`、`aria-orientation="vertical"`、
+  `aria-valuemin="320"`、現在の上限を示す `aria-valuemax`、現在幅を示す
+  `aria-valuenow` を持つフォーカス可能な要素とする。
+- 境界のポインタードラッグで連続的に幅を変更し、左右矢印キーでは16pxずつ変更する。
 - User/AI発言本文は折りたたまず常時表示する。
 - 会話以外は種類名と `record_count` を初期表示し、項目単位のボタンで本文と `details` を展開する。
 - 展開状態はコンポーネント内で管理し、永続化しない。
@@ -2050,6 +2059,16 @@ test.beforeEach(async ({ page }) => {
   - BottomPanel が左右分割表示（左: ノード詳細, 右: トークン詳細）に切り替わること。
   - 右側エリアに、紐付く `token_count` の内訳（Input, Output, Cached, Reasoning）が表示されること。
   - 境界部分のドラッグにより、左右パネルの横幅比率が変更できること。
+
+##### TC-106: 左タイムラインの幅変更と復元
+- **前提**: セッション詳細画面が表示されている。
+- **操作**: タイムラインとキャンバスの境界をドラッグ、または左右矢印キーで操作する。
+- **検証**:
+  - 保存値がない初期表示ではタイムライン幅が画面幅の30%であること。
+  - 境界が縦向きseparatorとして必要なARIA属性を持つこと。
+  - 幅が320pxから画面幅の50%に収まり、画面縮小時にも再調整されること。
+  - 変更幅が別セッションと再読み込み後に復元されること。
+  - リサイズ後もReact Flow、BottomPanel、RightPanelを操作できること。
 
 ### 9.5 テストデータの整合性管理ルール
 
