@@ -47,9 +47,13 @@ type displayUnit struct {
 }
 
 type conversationDisplayUnit struct {
+	Kind      string
+	Label     string
 	Role      string
 	Body      string
 	Timestamp string
+	StartLine int
+	Details   []dto.TimelineItemDetail
 	Records   []*model.TypedRecord
 }
 
@@ -84,23 +88,59 @@ func buildConversationTimeline(turns []*model.Turn, turnStats []dto.TurnStatisti
 			}
 			unitIndexes[key] = len(units)
 			units = append(units, conversationDisplayUnit{
+				Kind:      "conversation",
 				Role:      role,
 				Body:      body,
 				Timestamp: timestamp,
+				StartLine: record.LineNumber,
 				Records:   []*model.TypedRecord{record},
 			})
 		}
+		for _, pair := range turn.AgentReasonings {
+			unit, ok := reasoningTimelineUnit(pair)
+			if ok {
+				units = append(units, unit)
+			}
+		}
+		for _, batch := range turn.Batches {
+			unit, ok := batchTimelineUnit(batch)
+			if ok {
+				units = append(units, unit)
+			}
+		}
+		for _, record := range turn.WebSearchRecords {
+			unit, ok := webTimelineUnit(record)
+			if ok {
+				units = append(units, unit)
+			}
+		}
+		for _, record := range turn.ExternalEventRecords {
+			unit, ok := externalTimelineUnit(record)
+			if ok {
+				units = append(units, unit)
+			}
+		}
+		units = append(units, metadataTimelineUnits(turn)...)
 		if len(units) == 0 {
 			continue
 		}
+		sort.SliceStable(units, func(i, j int) bool {
+			return units[i].StartLine < units[j].StartLine
+		})
 
 		items := make([]dto.ConversationTimelineItem, 0, len(units))
-		for _, unit := range units {
+		for index := range units {
+			unit := &units[index]
 			lastTokenUsage, tokenCountCount, totalTokenUsage := conversationTokenUsage(turn, unit)
 			items = append(items, dto.ConversationTimelineItem{
+				Kind:            unit.Kind,
+				Label:           unit.Label,
 				Role:            unit.Role,
 				Body:            unit.Body,
 				Timestamp:       unit.Timestamp,
+				RecordCount:     len(unit.Records),
+				Collapsible:     unit.Kind != "conversation",
+				Details:         unit.Details,
 				LastTokenUsage:  lastTokenUsage,
 				TokenCountCount: tokenCountCount,
 				TotalTokenUsage: totalTokenUsage,
@@ -127,9 +167,321 @@ func buildConversationTimeline(turns []*model.Turn, turnStats []dto.TurnStatisti
 	return timeline
 }
 
+func reasoningTimelineUnit(pair *model.ReasoningPair) (conversationDisplayUnit, bool) {
+	if pair == nil {
+		return conversationDisplayUnit{}, false
+	}
+
+	unit := conversationDisplayUnit{
+		Kind:      "reasoning",
+		Label:     "推論",
+		StartLine: reasoningPairStartLine(pair),
+	}
+	if pair.AgentReasoning != nil {
+		unit.Records = append(unit.Records, pair.AgentReasoning)
+		unit.Timestamp = fmt.Sprint(pair.AgentReasoning.Envelope.Timestamp)
+		if pair.AgentReasoning.EventMsg != nil {
+			unit.Body = pair.AgentReasoning.EventMsg.Text
+		}
+	}
+	if pair.Reasoning != nil {
+		unit.Records = append(unit.Records, pair.Reasoning)
+		if unit.Timestamp == "" {
+			unit.Timestamp = fmt.Sprint(pair.Reasoning.Envelope.Timestamp)
+		}
+		if pair.Reasoning.ResponseItem != nil {
+			var summary strings.Builder
+			for _, content := range pair.Reasoning.ResponseItem.Summary {
+				summary.WriteString(content.Text)
+			}
+			if summary.Len() > 0 {
+				unit.Details = append(unit.Details, dto.TimelineItemDetail{
+					Label: "要約",
+					Value: summary.String(),
+				})
+			}
+		}
+	}
+	if unit.Body == "" && len(unit.Details) > 0 {
+		unit.Body = unit.Details[0].Value
+	}
+	return unit, len(unit.Records) > 0
+}
+
+func batchTimelineUnit(batch *model.Batch) (conversationDisplayUnit, bool) {
+	if batch == nil || len(batch.CallRecords) == 0 {
+		return conversationDisplayUnit{}, false
+	}
+
+	unit := conversationDisplayUnit{
+		Kind:      "tool",
+		StartLine: batch.CallRecords[0].LineNumber,
+		Timestamp: fmt.Sprint(batch.CallRecords[0].Envelope.Timestamp),
+	}
+	names := make([]string, 0, len(batch.CallRecords))
+	for index, call := range batch.CallRecords {
+		if call == nil || call.ResponseItem == nil {
+			continue
+		}
+		unit.Records = append(unit.Records, call)
+		name := call.ResponseItem.Name
+		if name == "" {
+			name = "tool"
+		}
+		names = append(names, name)
+		arguments := call.ResponseItem.Arguments
+		if arguments == "" {
+			arguments = call.ResponseItem.Input
+		}
+		if arguments != "" {
+			unit.Details = append(unit.Details, dto.TimelineItemDetail{
+				Label: name + " 引数",
+				Value: arguments,
+			})
+		}
+		if index < len(batch.OutputRecords) && batch.OutputRecords[index] != nil {
+			output := batch.OutputRecords[index]
+			unit.Records = append(unit.Records, output)
+			if output.ResponseItem != nil && output.ResponseItem.Output != "" {
+				unit.Details = append(unit.Details, dto.TimelineItemDetail{
+					Label: name + " 結果",
+					Value: output.ResponseItem.Output,
+				})
+			}
+		}
+	}
+	unit.Records = append(unit.Records, batch.MiddleMessage...)
+	if len(names) == 0 {
+		return conversationDisplayUnit{}, false
+	}
+	unit.Body = strings.Join(names, ", ")
+	unit.Label = "ツール " + names[0]
+	if len(names) > 1 {
+		unit.Label += fmt.Sprintf(" ×%d", len(names))
+	}
+	return unit, true
+}
+
+func webTimelineUnit(record *model.TypedRecord) (conversationDisplayUnit, bool) {
+	if record == nil {
+		return conversationDisplayUnit{}, false
+	}
+	unit := conversationDisplayUnit{
+		Kind:      "web",
+		Label:     "Web",
+		StartLine: record.LineNumber,
+		Timestamp: fmt.Sprint(record.Envelope.Timestamp),
+		Records:   []*model.TypedRecord{record},
+	}
+	var action *model.SearchAction
+	if record.ResponseItem != nil {
+		action = record.ResponseItem.Action
+	}
+	if record.EventMsg != nil {
+		action = record.EventMsg.Action
+		if action == nil && record.EventMsg.Query != "" {
+			action = &model.SearchAction{Type: "search", Query: record.EventMsg.Query}
+		}
+	}
+	if action == nil {
+		unit.Body = record.SubType
+		return unit, true
+	}
+	value := action.Query
+	if value == "" && len(action.Queries) > 0 {
+		value = strings.Join(action.Queries, "\n")
+	}
+	label := "検索クエリ"
+	if action.Type != "" && action.Type != "search" {
+		label = "閲覧対象"
+	}
+	unit.Label = "Web " + action.Type
+	unit.Body = value
+	unit.Details = append(unit.Details, dto.TimelineItemDetail{Label: label, Value: value})
+	return unit, true
+}
+
+func externalTimelineUnit(record *model.TypedRecord) (conversationDisplayUnit, bool) {
+	if record == nil || record.EventMsg == nil {
+		return conversationDisplayUnit{}, false
+	}
+	if record.SubType == "exec_command_end" {
+		event := record.EventMsg
+		unit := conversationDisplayUnit{
+			Kind:      "tool",
+			Label:     "コマンド完了",
+			Body:      strings.Join(event.Command, " "),
+			StartLine: record.LineNumber,
+			Timestamp: fmt.Sprint(record.Envelope.Timestamp),
+			Records:   []*model.TypedRecord{record},
+		}
+		if len(event.Command) > 0 {
+			unit.Details = append(unit.Details, dto.TimelineItemDetail{Label: "コマンド", Value: strings.Join(event.Command, " ")})
+		}
+		if event.ExitCode != nil {
+			unit.Details = append(unit.Details, dto.TimelineItemDetail{Label: "終了コード", Value: fmt.Sprint(*event.ExitCode)})
+		}
+		if event.AggregatedOutput != "" {
+			unit.Details = append(unit.Details, dto.TimelineItemDetail{Label: "出力", Value: event.AggregatedOutput})
+		}
+		return unit, true
+	}
+	if record.SubType == "view_image_tool_call" && record.EventMsg.Path != "" {
+		return conversationDisplayUnit{
+			Kind:      "reference",
+			Label:     "画像参照",
+			Body:      record.EventMsg.Path,
+			StartLine: record.LineNumber,
+			Timestamp: fmt.Sprint(record.Envelope.Timestamp),
+			Records:   []*model.TypedRecord{record},
+			Details:   []dto.TimelineItemDetail{{Label: "パス", Value: record.EventMsg.Path}},
+		}, true
+	}
+	if record.SubType != "mcp_tool_call_end" || record.EventMsg.Invocation == nil {
+		return conversationDisplayUnit{}, false
+	}
+	invocation := record.EventMsg.Invocation
+	unit := conversationDisplayUnit{
+		Kind:      "mcp",
+		Label:     "MCP " + invocation.Tool,
+		Body:      invocation.Server + "/" + invocation.Tool,
+		StartLine: record.LineNumber,
+		Timestamp: fmt.Sprint(record.Envelope.Timestamp),
+		Records:   []*model.TypedRecord{record},
+		Details: []dto.TimelineItemDetail{
+			{Label: "サーバー", Value: invocation.Server},
+		},
+	}
+	if len(invocation.Arguments) > 0 {
+		unit.Details = append(unit.Details, dto.TimelineItemDetail{Label: "引数", Value: string(invocation.Arguments)})
+	}
+	if record.EventMsg.Result != "" {
+		unit.Details = append(unit.Details, dto.TimelineItemDetail{Label: "結果", Value: record.EventMsg.Result})
+	}
+	return unit, true
+}
+
+func metadataTimelineUnits(turn *model.Turn) []conversationDisplayUnit {
+	var units []conversationDisplayUnit
+	for _, record := range turn.Records {
+		if record == nil {
+			continue
+		}
+		base := conversationDisplayUnit{
+			StartLine: record.LineNumber,
+			Timestamp: fmt.Sprint(record.Envelope.Timestamp),
+			Records:   []*model.TypedRecord{record},
+		}
+		switch record.Type {
+		case "session_meta":
+			if record.SessionMeta != nil && record.SessionMeta.BaseInstructions != nil && record.SessionMeta.BaseInstructions.Text != "" {
+				unit := base
+				unit.Kind = "instructions"
+				unit.Label = "Base instructions"
+				unit.Body = record.SessionMeta.BaseInstructions.Text
+				units = append(units, unit)
+			}
+		case "turn_context":
+			if record.TurnContext == nil {
+				continue
+			}
+			if mode := record.TurnContext.CollaborationMode; mode != nil && mode.DeveloperInstructions != "" {
+				unit := base
+				unit.Kind = "instructions"
+				unit.Label = "Developer instructions"
+				unit.Body = mode.DeveloperInstructions
+				units = append(units, unit)
+			}
+			if record.TurnContext.UserInstructions != "" {
+				unit := base
+				unit.Kind = "instructions"
+				unit.Label = "User instructions"
+				unit.Body = record.TurnContext.UserInstructions
+				units = append(units, unit)
+			}
+		case "event_msg":
+			switch record.SubType {
+			case "task_started":
+				unit := base
+				unit.Kind = "system"
+				unit.Label = "タスク開始"
+				units = append(units, unit)
+			case "task_complete":
+				unit := base
+				unit.Kind = "system"
+				unit.Label = "タスク完了"
+				units = append(units, unit)
+			case "turn_aborted":
+				unit := base
+				unit.Kind = "system"
+				unit.Label = "ターン中断"
+				if record.EventMsg != nil {
+					unit.Body = record.EventMsg.Reason
+				}
+				units = append(units, unit)
+			case "thread_name_updated":
+				unit := base
+				unit.Kind = "system"
+				unit.Label = record.SubType
+				if record.EventMsg != nil {
+					unit.Body = record.EventMsg.ThreadName
+				}
+				units = append(units, unit)
+			case "item_completed":
+				unit := base
+				unit.Kind = "system"
+				unit.Label = record.SubType
+				if record.EventMsg != nil && record.EventMsg.Item != nil {
+					unit.Body = record.EventMsg.Item.Text
+					if unit.Body == "" {
+						unit.Body = record.EventMsg.Item.Type
+					}
+				}
+				units = append(units, unit)
+			default:
+				isUnhandledExternal := containsRecord(turn.ExternalEventRecords, record.LineNumber) &&
+					record.SubType != "exec_command_end" &&
+					record.SubType != "mcp_tool_call_end" &&
+					record.SubType != "view_image_tool_call"
+				if containsRecord(turn.GenericRecords, record.LineNumber) || isUnhandledExternal {
+					unit := base
+					unit.Kind = "system"
+					unit.Label = record.SubType
+					if record.EventMsg != nil {
+						unit.Body = record.EventMsg.Message
+						if unit.Body == "" {
+							unit.Body = record.EventMsg.Text
+						}
+					}
+					units = append(units, unit)
+				}
+			}
+		case "response_item":
+			if record.SubType == "message" && record.ResponseItem != nil && record.ResponseItem.Role == "developer" {
+				unit := base
+				unit.Kind = "instructions"
+				unit.Label = "Developer instructions"
+				for _, content := range record.ResponseItem.Content {
+					unit.Body += content.Text
+				}
+				if unit.Body != "" {
+					units = append(units, unit)
+				}
+			} else if containsRecord(turn.GenericRecords, record.LineNumber) {
+				unit := base
+				unit.Kind = "system"
+				unit.Label = record.SubType
+				unit.Body = record.Raw
+				units = append(units, unit)
+			}
+		}
+	}
+	return units
+}
+
 func conversationTokenUsage(
 	turn *model.Turn,
-	unit conversationDisplayUnit,
+	unit *conversationDisplayUnit,
 ) (lastUsage dto.TokenBreakdown, count int, totalUsage *dto.TokenBreakdown) {
 	recordLines := make(map[int]struct{}, len(unit.Records))
 	for _, record := range unit.Records {
@@ -336,7 +688,11 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 		if record.Type == "session_meta" {
 			outOfTurnBuffer = append(outOfTurnBuffer, record)
 		} else if record.Type == "event_msg" && record.SubType == "thread_name_updated" {
-			// thread_name is not currently used in the response
+			if currentTurn != nil {
+				currentTurn.Records = append(currentTurn.Records, record)
+			} else {
+				outOfTurnBuffer = append(outOfTurnBuffer, record)
+			}
 		} else if record.Type == "event_msg" && record.SubType == "task_started" {
 			var turnID string
 			if record.EventMsg != nil {
