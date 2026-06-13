@@ -334,7 +334,7 @@ export async function mockWailsAPI(
 			if (id === "sess-002-uuid-long-name") {
 				return {
 					id: id,
-					cache_schema_version: 2,
+					cache_schema_version: 3,
 					parsed_at: "2026-05-20T12:00:00Z",
 					nodes: undefined,
 					edges: undefined,
@@ -362,7 +362,7 @@ export async function mockWailsAPI(
 			if (id === "sess-003-uuid-long-name") {
 				return {
 					id: id,
-					cache_schema_version: 2,
+					cache_schema_version: 3,
 					parsed_at: "2026-04-10T09:00:00Z",
 					nodes: [
 						{
@@ -408,7 +408,7 @@ export async function mockWailsAPI(
 			if (id === "sess-no-turns") {
 				return {
 					id: id,
-					cache_schema_version: 2,
+					cache_schema_version: 3,
 					parsed_at: "2026-05-20T09:00:00Z",
 					nodes: [
 						{
@@ -441,7 +441,7 @@ export async function mockWailsAPI(
 			if (id === "performance-visibility") {
 				return {
 					id: id,
-					cache_schema_version: 2,
+					cache_schema_version: 3,
 					parsed_at: "2026-05-20T10:00:00Z",
 					nodes: [
 						{
@@ -505,7 +505,7 @@ export async function mockWailsAPI(
 
 			return {
 				id: id,
-				cache_schema_version: 2,
+				cache_schema_version: 3,
 				parsed_at: "2026-05-20T10:00:00Z",
 				nodes: [
 					{
@@ -951,6 +951,80 @@ export async function mockWailsAPI(
 							reasoning_output_tokens: 10150,
 							cached_input_tokens: 30300,
 						},
+					},
+				],
+				timeline: [
+					{
+						index: -1,
+						turn_id: "",
+						pseudo: true,
+						duration_ms: 0,
+						consumed_tokens: {
+							total_tokens: 0,
+							input_tokens: 0,
+							output_tokens: 0,
+							reasoning_output_tokens: 0,
+						},
+						items: [
+							{
+								role: "user",
+								body: "Conversation before the turn",
+								timestamp: "2026-05-20T09:59:59Z",
+								last_token_usage: {
+									total_tokens: 0,
+									input_tokens: 0,
+									output_tokens: 0,
+									reasoning_output_tokens: 0,
+								},
+								token_count_count: 0,
+								total_token_usage: undefined,
+							},
+						],
+					},
+					{
+						index: 0,
+						turn_id: "turn-1",
+						pseudo: false,
+						duration_ms: 5000,
+						consumed_tokens: {
+							total_tokens: 50000,
+							input_tokens: 40000,
+							output_tokens: 10000,
+							reasoning_output_tokens: 2000,
+						},
+						items: [
+							{
+								role: "user",
+								body: "Hello, agent, please help me.",
+								timestamp: "2026-05-20T10:00:01Z",
+								last_token_usage: {
+									total_tokens: 50000,
+									input_tokens: 40000,
+									output_tokens: 10000,
+									reasoning_output_tokens: 2000,
+								},
+								token_count_count: 2,
+								total_token_usage: {
+									total_tokens: 50000,
+									input_tokens: 40000,
+									output_tokens: 10000,
+									reasoning_output_tokens: 2000,
+								},
+							},
+							{
+								role: "assistant",
+								body: "Here is how to solve...",
+								timestamp: "2026-05-20T10:00:05Z",
+								last_token_usage: {
+									total_tokens: 0,
+									input_tokens: 0,
+									output_tokens: 0,
+									reasoning_output_tokens: 0,
+								},
+								token_count_count: 0,
+								total_token_usage: undefined,
+							},
+						],
 					},
 				],
 			};
