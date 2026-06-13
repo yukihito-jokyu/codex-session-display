@@ -84,6 +84,25 @@ TokenBreakdownに加えて、キャッシュされた入力トークン数（Cac
 | LastTokenUsage  | TokenDetail | 直近のトークン使用量          |
 | TotalTokenUsage | TokenDetail | 累計トークン使用量            |
 
+#### 2.1.7 会話タイムライン
+
+`ConversationTimelineTurn` は通常ターンまたは疑似ターンの会話表示単位を表す。
+
+| フィールド     | 型                             | 説明                                             |
+| -------------- | ------------------------------ | ------------------------------------------------ |
+| Index          | 整数                           | 通常ターンは0始まり、疑似ターンは-1             |
+| TurnID         | 文字列                         | 通常ターンの識別子。疑似ターンでは空文字列       |
+| Pseudo         | 真偽値                         | ターン外イベントをまとめた疑似ターンか           |
+| DurationMs     | 整数                           | 通常ターンの所要時間                             |
+| ConsumedTokens | TokenBreakdown                 | TurnStatisticsと同じターン消費トークン           |
+| Items          | ConversationTimelineItemの配列 | JSONL順の会話項目                                |
+
+`ConversationTimelineItem` は `role`, `body`, `timestamp`, `last_token_usage`,
+`token_count_count`, `total_token_usage` を持つ。`event_msg(user_message/agent_message)` と
+`response_item(message)` から抽出し、同一ターン内でロール・本文・タイムスタンプが同じ
+レコードを1項目へ統合する。統合対象へ紐付く全 `token_count` の
+`last_token_usage` を合算し、最後の `total_token_usage` を累計値として保持する。
+
 ### 2.2 JSONLパーサー
 
 #### 2.2.1 JSONLレコードの型分類
@@ -928,7 +947,9 @@ Wailsの起動・ビルドプロセス（`wails dev` または `wails build`）�
 | TurnStatistics        | index, collaboration_mode_kind, duration_ms, time_to_first_token_ms, token_count_count, consumed_tokens（TokenBreakdown）                          |
 | Statistics            | duration_ms, total_tokens, tool_call_count, token_count_count, context_window_size, turn_count, turns（TurnStatisticsの配列）                      |
 | TokenCountEntry       | index, turn_index, bound_to_node_id, last_token_usage（TokenDetail）, total_token_usage（TokenDetail）                                             |
-| SessionDetailResponse | id, cache_schema_version, parsed_at, nodes（FlowNodeの配列）, edges（FlowEdgeの配列）, statistics（Statistics）, token_counts（TokenCountEntryの配列）                   |
+| ConversationTimelineItem | role, body, timestamp, last_token_usage, token_count_count, total_token_usage |
+| ConversationTimelineTurn | index, turn_id, pseudo, duration_ms, consumed_tokens, items |
+| SessionDetailResponse | id, cache_schema_version, parsed_at, nodes, edges, statistics, token_counts, timeline（ConversationTimelineTurnの配列） |
 
 #### 3.4.2 React Flow関連の型
 
@@ -1362,16 +1383,21 @@ SessionListPage
 ```
 ┌─ App Header (固定) ────────────────────────────────────┐
 │ [← 一覧に戻る] [SessionID] [Branch] [CWD] [Time] [Export]│
-├────────────────────────────────────┬───────────────────┤
-│                                    │ 統計情報          │
-│  React Flow Canvas                 │ ──────────────── │
-│  (ズーム・パン可能)                │ ターン別Token     │
-│                                    │ ──────────────── │
-│                                    │ Token Count表     │
-├────────────────────────────────────┴───────────────────┤
-│ Bottom Panel (ノード詳細・クリック時に表示)              │
-└────────────────────────────────────────────────────────┘
+├──────────────────┬──────────────────────────┬─────────────┤
+│ Conversation     │ React Flow Canvas        │ RightPanel  │
+│ Timeline         │ (ズーム・パン可能)       │             │
+│                  ├──────────────────────────┤             │
+│                  │ Bottom Panel             │             │
+└──────────────────┴──────────────────────────┴─────────────┘
 ```
+
+**ConversationTimeline 仕様:**
+
+- 左側の固定幅スクロール領域として表示する。
+- User/AI発言本文は折りたたまず常時表示する。
+- 通常ターンはターン番号、所要時間、ターン消費トークンを表示する。
+- 疑似ターンは「ターン外イベント」と表示する。
+- 会話項目ごとに増分トークン合計、紐付け件数、セッション累計を表示し、紐付けがない場合は「計測なし」と表示する。
 
 **React Flow Canvas 仕様:**
 
@@ -1780,6 +1806,9 @@ IPCエラーは `AppError` 構造体（§4.1参照）で返す。
 
 ファイルの中身は `GetSessionDetail` の戻り値と同一形式。
 
+会話タイムラインDTO追加後の現行 `cache_schema_version` は3とする。バージョン2以前は
+`timeline` を持たないため再パースする。
+
 ### 7.2 再パース判定ロジック
 
 1. キャッシュファイルが存在しない → 再パースが必要
@@ -1996,6 +2025,7 @@ test.beforeEach(async ({ page }) => {
   - `/sessions/:id` に画面が遷移すること。
   - React Flow キャンバスにノード（SessionMeta, TurnEvent, UserMessage, Action等）が正しく配置され描画されていること。
   - 右パネル（RightPanel）に統計情報カード（所要時間、総トークン、ツール呼び出し数等）およびターン別トークン推移チャートが表示されていること。
+  - 左側に通常ターンと疑似ターンで区切られた会話タイムラインが表示され、User/AI本文、増分トークン、件数、累計または「計測なし」を確認できること。
 
 ##### TC-104: ノード詳細表示（BottomPanel）の展開
 - **前提**: セッション詳細画面が表示されている。
