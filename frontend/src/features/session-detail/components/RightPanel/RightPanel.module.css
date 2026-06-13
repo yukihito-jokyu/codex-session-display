@@ -100,6 +100,11 @@
 	cursor: pointer;
 }
 
+.selectedChartPoint {
+	stroke: var(--color-accent);
+	stroke-width: 4px;
+}
+
 .turnsContainer {
 	display: flex;
 	flex-direction: column;
@@ -211,6 +216,12 @@
 .tokenTable td {
 	padding: 6px 8px;
 	border-bottom: 1px solid var(--border-color);
+}
+
+.selectedTokenRow {
+	background: var(--accent-badge-bg);
+	outline: 1px solid var(--color-accent);
+	outline-offset: -1px;
 }
 
 .tokenTable th {

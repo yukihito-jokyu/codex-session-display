@@ -117,6 +117,17 @@
 	border-left: 3px solid var(--text-secondary);
 	border-radius: 4px;
 	background: var(--mono-bg);
+	cursor: pointer;
+	outline: 1px solid transparent;
+	transition:
+		outline-color 0.15s,
+		box-shadow 0.15s;
+}
+
+.item:focus-visible,
+.selected {
+	outline-color: var(--color-accent);
+	box-shadow: 0 0 0 2px var(--accent-badge-bg);
 }
 
 .user {

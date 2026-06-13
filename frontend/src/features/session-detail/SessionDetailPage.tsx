@@ -14,6 +14,10 @@ export function SessionDetailPage() {
 		loading,
 		error,
 		selectedNode,
+		selectedFlowNodeId,
+		selectedTimelineId,
+		selectedTokenCountIndices,
+		timelineScrollTarget,
 		splitRatio,
 		zoomTarget,
 		logActionMessage,
@@ -25,6 +29,7 @@ export function SessionDetailPage() {
 		handleTokenLogClick,
 		handleCanvasNodeSelect,
 		handleTokenBadgeClick,
+		handleTimelineSelect,
 		handleTimelineFullText,
 		handleOpenLogDirectory,
 		handleCopyLogPath,
@@ -68,6 +73,10 @@ export function SessionDetailPage() {
 			<SessionDetailMainContent
 				sessionData={sessionData}
 				selectedNode={selectedNode}
+				selectedFlowNodeId={selectedFlowNodeId}
+				selectedTimelineId={selectedTimelineId}
+				selectedTokenCountIndices={selectedTokenCountIndices}
+				timelineScrollTarget={timelineScrollTarget}
 				splitRatio={splitRatio}
 				zoomTarget={zoomTarget}
 				splitContainerRef={splitContainerRef}
@@ -82,6 +91,7 @@ export function SessionDetailPage() {
 				onTokenLogClick={handleTokenLogClick}
 				onCanvasNodeSelect={handleCanvasNodeSelect}
 				onTokenBadgeClick={handleTokenBadgeClick}
+				onTimelineSelect={handleTimelineSelect}
 				onTimelineFullText={handleTimelineFullText}
 				onStartResize={startResize}
 				onResizerKeyDown={handleResizerKeyDown}

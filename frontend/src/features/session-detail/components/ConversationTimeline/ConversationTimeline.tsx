@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { type MouseEvent, useEffect, useMemo, useRef, useState } from "react";
 import type { dto } from "wailsjs/go/models";
 import styles from "./ConversationTimeline.module.css";
 import {
@@ -9,6 +9,9 @@ import {
 
 type ConversationTimelineProps = {
 	turns: dto.ConversationTimelineTurn[];
+	selectedSelectionId: string | null;
+	scrollTarget: { selectionId: string; timestamp: number } | null;
+	onSelect: (item: dto.ConversationTimelineItem) => void;
 	onShowFullText: (item: dto.ConversationTimelineItem) => void;
 };
 
@@ -112,6 +115,9 @@ function formatDuration(durationMs: number) {
 
 export function ConversationTimeline({
 	turns,
+	selectedSelectionId,
+	scrollTarget,
+	onSelect,
 	onShowFullText,
 }: ConversationTimelineProps) {
 	const [searchQuery, setSearchQuery] = useState("");
@@ -122,6 +128,7 @@ export function ConversationTimeline({
 	const [expandedItems, setExpandedItems] = useState<Set<string>>(
 		() => new Set(),
 	);
+	const itemRefs = useRef(new Map<string, HTMLElement>());
 	const filteredTurns = useMemo(() => {
 		const normalizedQuery = searchQuery.trim().toLocaleLowerCase();
 
@@ -138,6 +145,15 @@ export function ConversationTimeline({
 			return items.length > 0 ? [{ ...turn, items }] : [];
 		});
 	}, [measuredOnly, searchQuery, selectedCategories, turns]);
+
+	useEffect(() => {
+		if (!scrollTarget) {
+			return;
+		}
+		itemRefs.current
+			.get(scrollTarget.selectionId)
+			?.scrollIntoView({ behavior: "smooth", block: "center" });
+	}, [scrollTarget]);
 
 	const toggleCategory = (category: TimelineCategory) => {
 		setSelectedCategories((current) => {
@@ -161,6 +177,10 @@ export function ConversationTimeline({
 			}
 			return next;
 		});
+	};
+
+	const stopPropagation = (event: MouseEvent<HTMLElement>) => {
+		event.stopPropagation();
 	};
 
 	return (
@@ -227,7 +247,15 @@ export function ConversationTimeline({
 							)}
 						</header>
 
-						<div className={styles.itemList}>
+						<div
+							aria-label={
+								turn.pseudo
+									? "ターン外イベントの表示単位"
+									: `ターン ${turn.index + 1} の表示単位`
+							}
+							className={styles.itemList}
+							role="listbox"
+						>
 							{turn.items.map((item) => {
 								const kind = item.kind || "conversation";
 								const itemKey = getTimelineItemKey(turn, item);
@@ -239,92 +267,134 @@ export function ConversationTimeline({
 									expanded && truncated ? getTimelineItemPreview(item) : "";
 
 								return (
-									<article
+									<div
 										className={`${styles.item} ${
 											kind === "conversation"
 												? item.role === "user"
 													? styles.user
 													: styles.assistant
 												: styles.event
+										} ${
+											item.selection_id === selectedSelectionId
+												? styles.selected
+												: ""
 										}`}
+										aria-selected={item.selection_id === selectedSelectionId}
+										data-testid={
+											item.selection_id
+												? `timeline-item-${item.selection_id}`
+												: undefined
+										}
 										key={itemKey}
+										onClick={() => onSelect(item)}
+										onKeyDown={(event) => {
+											if (event.target !== event.currentTarget) {
+												return;
+											}
+											if (event.key === "Enter" || event.key === " ") {
+												event.preventDefault();
+												onSelect(item);
+											}
+										}}
+										ref={(element) => {
+											if (!item.selection_id) {
+												return;
+											}
+											if (element) {
+												itemRefs.current.set(item.selection_id, element);
+											} else {
+												itemRefs.current.delete(item.selection_id);
+											}
+										}}
+										role="option"
+										tabIndex={0}
 									>
-										{collapsible ? (
-											<button
-												aria-expanded={expanded}
-												className={styles.eventToggle}
-												onClick={() => toggleItem(itemKey)}
-												type="button"
-											>
-												<strong>{item.label || kind}</strong>
-												<span>{item.record_count || 1}件の記録</span>
-											</button>
-										) : (
-											<div className={styles.itemHeader}>
-												<strong>{item.role === "user" ? "User" : "AI"}</strong>
-												{item.timestamp && (
-													<time dateTime={item.timestamp}>
-														{item.timestamp}
-													</time>
-												)}
-											</div>
-										)}
-										{expanded && (
-											<div className={styles.expandedContent}>
-												{truncated ? (
+										<article>
+											{collapsible ? (
+												<button
+													aria-expanded={expanded}
+													className={styles.eventToggle}
+													onClick={(event) => {
+														stopPropagation(event);
+														toggleItem(itemKey);
+													}}
+													type="button"
+												>
+													<strong>{item.label || kind}</strong>
+													<span>{item.record_count || 1}件の記録</span>
+												</button>
+											) : (
+												<div className={styles.itemHeader}>
+													<strong>
+														{item.role === "user" ? "User" : "AI"}
+													</strong>
+													{item.timestamp && (
+														<time dateTime={item.timestamp}>
+															{item.timestamp}
+														</time>
+													)}
+												</div>
+											)}
+											{expanded && (
+												<div className={styles.expandedContent}>
+													{truncated ? (
+														<>
+															<pre className={styles.detail}>
+																{preview}
+																{"\n..."}
+															</pre>
+															<button
+																className={styles.showFullText}
+																onClick={(event) => {
+																	stopPropagation(event);
+																	onShowFullText(item);
+																}}
+																type="button"
+															>
+																全文を表示
+															</button>
+														</>
+													) : (
+														<>
+															<p className={styles.body}>{item.body}</p>
+															{item.details?.length > 0 && (
+																<pre className={styles.detail}>
+																	{item.details
+																		.map(
+																			(detail) =>
+																				`${detail.label}\n${detail.value}`,
+																		)
+																		.join("\n\n")}
+																</pre>
+															)}
+														</>
+													)}
+												</div>
+											)}
+											<div className={styles.tokenMetrics}>
+												{item.token_count_count > 0 ? (
 													<>
-														<pre className={styles.detail}>
-															{preview}
-															{"\n..."}
-														</pre>
-														<button
-															className={styles.showFullText}
-															onClick={() => onShowFullText(item)}
-															type="button"
-														>
-															全文を表示
-														</button>
+														<strong>
+															{formatTokens(
+																item.last_token_usage?.total_tokens || 0,
+															)}
+														</strong>
+														<span>{item.token_count_count}件</span>
+														{item.total_token_usage && (
+															<span>
+																累計{" "}
+																{compactNumber.format(
+																	item.total_token_usage.total_tokens,
+																)}
+															</span>
+														)}
 													</>
 												) : (
-													<>
-														<p className={styles.body}>{item.body}</p>
-														{item.details?.length > 0 && (
-															<pre className={styles.detail}>
-																{item.details
-																	.map(
-																		(detail) =>
-																			`${detail.label}\n${detail.value}`,
-																	)
-																	.join("\n\n")}
-															</pre>
-														)}
-													</>
+													<span>計測なし</span>
 												)}
 											</div>
-										)}
-										<div className={styles.tokenMetrics}>
-											{item.token_count_count > 0 ? (
-												<>
-													<strong>
-														{formatTokens(
-															item.last_token_usage?.total_tokens || 0,
-														)}
-													</strong>
-													<span>{item.token_count_count}件</span>
-													{item.total_token_usage && (
-														<span>
-															累計{" "}
-															{compactNumber.format(
-																item.total_token_usage.total_tokens,
-															)}
-														</span>
-													)}
-												</>
-											) : (
-												<span>計測なし</span>
-											)}
-										</div>
-									</article>
+										</article>
+									</div>
 								);
 							})}
 						</div>
