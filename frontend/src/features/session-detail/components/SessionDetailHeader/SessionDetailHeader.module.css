@@ -1,0 +1,31 @@
+.detailHeader {
+	display: flex;
+	align-items: center;
+	gap: 16px;
+	padding: 12px 24px;
+	background: var(--bg-header);
+	border-bottom: 1px solid var(--border-color);
+}
+
+.backBtn {
+	padding: 6px 12px;
+	font-size: 12px;
+	font-weight: 500;
+	color: var(--text-primary);
+	background: var(--bg-btn);
+	border: 1px solid var(--border-color);
+	border-radius: 6px;
+	cursor: pointer;
+	transition: all 0.2s;
+}
+
+.backBtn:hover {
+	background: var(--bg-btn-hover);
+	border-color: var(--text-secondary);
+}
+
+.detailTitle {
+	font-size: 14px;
+	font-weight: 600;
+	color: var(--text-primary);
+}
