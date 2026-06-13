@@ -102,16 +102,37 @@ type TokenCountEntry struct {
 	TotalTokenUsage *model.TokenDetail `json:"total_token_usage"`
 }
 
+// ConversationTimelineItem は会話タイムライン内の単一の発言を表します。
+type ConversationTimelineItem struct {
+	Role            string          `json:"role"`
+	Body            string          `json:"body"`
+	Timestamp       string          `json:"timestamp"`
+	LastTokenUsage  TokenBreakdown  `json:"last_token_usage"`
+	TokenCountCount int             `json:"token_count_count"`
+	TotalTokenUsage *TokenBreakdown `json:"total_token_usage"`
+}
+
+// ConversationTimelineTurn は会話タイムライン内のターンを表します。
+type ConversationTimelineTurn struct {
+	Index          int                        `json:"index"`
+	TurnID         string                     `json:"turn_id"`
+	Pseudo         bool                       `json:"pseudo"`
+	DurationMs     int64                      `json:"duration_ms"`
+	ConsumedTokens TokenBreakdown             `json:"consumed_tokens"`
+	Items          []ConversationTimelineItem `json:"items"`
+}
+
 // CurrentSessionDetailCacheSchemaVersion は現行のセッション詳細キャッシュ形式を表します。
-const CurrentSessionDetailCacheSchemaVersion = 2
+const CurrentSessionDetailCacheSchemaVersion = 3
 
 // SessionDetailResponse はフロントエンドに返され、ディスクにキャッシュされるセッション詳細を表します。
 type SessionDetailResponse struct {
-	ID                 string            `json:"id"`
-	CacheSchemaVersion int               `json:"cache_schema_version"`
-	ParsedAt           string            `json:"parsed_at"`
-	Nodes              []FlowNode        `json:"nodes"`
-	Edges              []FlowEdge        `json:"edges"`
-	Statistics         Statistics        `json:"statistics"`
-	TokenCounts        []TokenCountEntry `json:"token_counts"`
+	ID                 string                     `json:"id"`
+	CacheSchemaVersion int                        `json:"cache_schema_version"`
+	ParsedAt           string                     `json:"parsed_at"`
+	Nodes              []FlowNode                 `json:"nodes"`
+	Edges              []FlowEdge                 `json:"edges"`
+	Statistics         Statistics                 `json:"statistics"`
+	TokenCounts        []TokenCountEntry          `json:"token_counts"`
+	Timeline           []ConversationTimelineTurn `json:"timeline"`
 }

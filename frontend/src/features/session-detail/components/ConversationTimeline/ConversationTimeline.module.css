@@ -1,0 +1,101 @@
+.timeline {
+	width: 360px;
+	min-width: 320px;
+	max-width: 30vw;
+	height: 100%;
+	display: flex;
+	flex-direction: column;
+	overflow: hidden;
+	border-right: 1px solid var(--border-color);
+	background: var(--bg-header);
+	color: var(--text-primary);
+}
+
+.heading {
+	margin: 0;
+	padding: 16px 18px;
+	border-bottom: 1px solid var(--border-color);
+	font-size: 16px;
+}
+
+.turnList {
+	flex: 1;
+	overflow-y: auto;
+	padding: 12px;
+}
+
+.turn {
+	margin-bottom: 14px;
+	border: 1px solid var(--border-color);
+	border-radius: 8px;
+	background: var(--detail-card-bg);
+}
+
+.turnHeader {
+	display: flex;
+	align-items: flex-start;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 10px 12px;
+	border-bottom: 1px solid var(--border-color);
+	font-size: 13px;
+}
+
+.turnMetrics,
+.tokenMetrics {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px 10px;
+	color: var(--text-secondary);
+	font-size: 11px;
+}
+
+.itemList {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	padding: 10px;
+}
+
+.item {
+	padding: 10px;
+	border-left: 3px solid var(--text-secondary);
+	border-radius: 4px;
+	background: var(--mono-bg);
+}
+
+.user {
+	border-left-color: var(--node-input-text);
+}
+
+.assistant {
+	border-left-color: var(--node-think-text);
+}
+
+.itemHeader {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	font-size: 12px;
+}
+
+.itemHeader time {
+	overflow: hidden;
+	color: var(--text-secondary);
+	font-size: 10px;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.body {
+	margin: 8px 0;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	font-size: 13px;
+	line-height: 1.5;
+}
+
+.tokenMetrics strong {
+	color: var(--text-primary);
+}

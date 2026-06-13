@@ -88,6 +88,32 @@ test.describe("セッション詳細画面 E2E テスト", () => {
 		await expect(page.locator("text=Orphan Complete").first()).toBeVisible();
 	});
 
+	test("左側に会話タイムラインとターン・トークン情報が常時表示されること", async ({
+		page,
+	}) => {
+		await page.locator("text=sess-001").click();
+
+		const timeline = page.getByTestId("conversation-timeline");
+		await expect(timeline).toBeVisible();
+		await expect(timeline.getByText("ターン外イベント")).toBeVisible();
+		await expect(
+			timeline.getByText("Conversation before the turn"),
+		).toBeVisible();
+		await expect(timeline.getByText("ターン 1")).toBeVisible();
+		await expect(timeline.getByText("5秒")).toBeVisible();
+		await expect(timeline.getByText("50K tokens")).toHaveCount(2);
+		await expect(timeline.getByText("2件")).toBeVisible();
+		await expect(timeline.getByText("累計 50K")).toBeVisible();
+		await expect(timeline.getByText("計測なし")).toHaveCount(2);
+		await expect(
+			timeline.getByText("Hello, agent, please help me."),
+		).toBeVisible();
+		await expect(timeline.getByText("Here is how to solve...")).toBeVisible();
+
+		await expect(page.locator(".react-flow")).toBeVisible();
+		await expect(page.locator("text=Session Analytics")).toBeVisible();
+	});
+
 	test("初期表示時から viewport 外のノードが DOM に描画されないこと", async ({
 		page,
 	}) => {
@@ -218,7 +244,9 @@ test.describe("セッション詳細画面 E2E テスト", () => {
 
 		// fullTextの表示を確認
 		await expect(
-			page.locator("text=Hello, agent, please help me."),
+			page
+				.getByTestId("bottom-panel-node-detail")
+				.getByText("Hello, agent, please help me."),
 		).toBeVisible();
 
 		// 閉じるボタン「✕」をクリック
@@ -377,6 +405,7 @@ test.describe("セッション詳細画面 E2E テスト", () => {
 		await page
 			.getByRole("button", { name: "User Message token badge" })
 			.click();
+		await expect(page.getByText("Session Analytics")).toBeVisible();
 
 		const leftPane = page.getByTestId("bottom-panel-node-detail");
 		const resizer = page.getByTestId("bottom-panel-resizer");

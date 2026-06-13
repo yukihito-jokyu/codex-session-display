@@ -1,5 +1,103 @@
 export namespace dto {
 	
+	export class TokenBreakdown {
+	    total_tokens: number;
+	    input_tokens: number;
+	    output_tokens: number;
+	    reasoning_output_tokens: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new TokenBreakdown(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.total_tokens = source["total_tokens"];
+	        this.input_tokens = source["input_tokens"];
+	        this.output_tokens = source["output_tokens"];
+	        this.reasoning_output_tokens = source["reasoning_output_tokens"];
+	    }
+	}
+	export class ConversationTimelineItem {
+	    role: string;
+	    body: string;
+	    timestamp: string;
+	    last_token_usage: TokenBreakdown;
+	    token_count_count: number;
+	    total_token_usage?: TokenBreakdown;
+	
+	    static createFrom(source: any = {}) {
+	        return new ConversationTimelineItem(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.role = source["role"];
+	        this.body = source["body"];
+	        this.timestamp = source["timestamp"];
+	        this.last_token_usage = this.convertValues(source["last_token_usage"], TokenBreakdown);
+	        this.token_count_count = source["token_count_count"];
+	        this.total_token_usage = this.convertValues(source["total_token_usage"], TokenBreakdown);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
+	export class ConversationTimelineTurn {
+	    index: number;
+	    turn_id: string;
+	    pseudo: boolean;
+	    duration_ms: number;
+	    consumed_tokens: TokenBreakdown;
+	    items: ConversationTimelineItem[];
+	
+	    static createFrom(source: any = {}) {
+	        return new ConversationTimelineTurn(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.index = source["index"];
+	        this.turn_id = source["turn_id"];
+	        this.pseudo = source["pseudo"];
+	        this.duration_ms = source["duration_ms"];
+	        this.consumed_tokens = this.convertValues(source["consumed_tokens"], TokenBreakdown);
+	        this.items = this.convertValues(source["items"], ConversationTimelineItem);
+	    }
+	
+		convertValues(a: any, classs: any, asMap: boolean = false): any {
+		    if (!a) {
+		        return a;
+		    }
+		    if (a.slice && a.map) {
+		        return (a as any[]).map(elem => this.convertValues(elem, classs));
+		    } else if ("object" === typeof a) {
+		        if (asMap) {
+		            for (const key of Object.keys(a)) {
+		                a[key] = new classs(a[key]);
+		            }
+		            return a;
+		        }
+		        return new classs(a);
+		    }
+		    return a;
+		}
+	}
 	export class FlowEdge {
 	    id: string;
 	    source: string;
@@ -178,24 +276,6 @@ export namespace dto {
 		    return a;
 		}
 	}
-	export class TokenBreakdown {
-	    total_tokens: number;
-	    input_tokens: number;
-	    output_tokens: number;
-	    reasoning_output_tokens: number;
-	
-	    static createFrom(source: any = {}) {
-	        return new TokenBreakdown(source);
-	    }
-	
-	    constructor(source: any = {}) {
-	        if ('string' === typeof source) source = JSON.parse(source);
-	        this.total_tokens = source["total_tokens"];
-	        this.input_tokens = source["input_tokens"];
-	        this.output_tokens = source["output_tokens"];
-	        this.reasoning_output_tokens = source["reasoning_output_tokens"];
-	    }
-	}
 	export class TurnStatistics {
 	    index: number;
 	    collaboration_mode_kind: string;
@@ -286,6 +366,7 @@ export namespace dto {
 	    edges: FlowEdge[];
 	    statistics: Statistics;
 	    token_counts: TokenCountEntry[];
+	    timeline: ConversationTimelineTurn[];
 	
 	    static createFrom(source: any = {}) {
 	        return new SessionDetailResponse(source);
@@ -300,6 +381,7 @@ export namespace dto {
 	        this.edges = this.convertValues(source["edges"], FlowEdge);
 	        this.statistics = this.convertValues(source["statistics"], Statistics);
 	        this.token_counts = this.convertValues(source["token_counts"], TokenCountEntry);
+	        this.timeline = this.convertValues(source["timeline"], ConversationTimelineTurn);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {

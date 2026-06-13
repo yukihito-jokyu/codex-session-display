@@ -653,14 +653,15 @@ func TestGetSessionDetailUseCase_Execute(t *testing.T) {
 			},
 		},
 		{
-			name: "legacy cache triggers reparse even when cache file is fresh",
+			name: "schema version 2 cache triggers reparse even when cache file is fresh",
 			setup: func(t *testing.T, tmpDir string) (string, usecase.SessionRepository, usecase.CacheRepository, usecase.SessionParser, func()) {
 				sessionID := "legacy-cache-session"
 				cacheRepo := &mockCacheRepositoryForDetail{
 					cache: map[string]*dto.SessionDetailResponse{
 						sessionID: {
-							ID:       sessionID,
-							ParsedAt: "2026-05-31T01:00:00Z",
+							ID:                 sessionID,
+							CacheSchemaVersion: 2,
+							ParsedAt:           "2026-05-31T01:00:00Z",
 						},
 					},
 					modTimes: map[string]time.Time{
@@ -2293,5 +2294,320 @@ func TestGetSessionDetailUseCase_Execute(t *testing.T) {
 				tt.verify(t, res, err)
 			}
 		})
+	}
+}
+
+func TestGetSessionDetailUseCase_ExecuteBuildsConversationTimelineInRecordOrder(t *testing.T) {
+	t.Parallel()
+
+	sessionRepo := &mockSessionRepositoryForDetail{
+		paths: map[string]string{"session-timeline": "/tmp/session-timeline.jsonl"},
+	}
+	cacheRepo := &mockCacheRepositoryForDetail{}
+	parser := &mockSessionParser{
+		records: []*model.TypedRecord{
+			{
+				LineNumber: 1,
+				Type:       "session_meta",
+				SessionMeta: &model.SessionMetaPayload{
+					ID:         "session-timeline",
+					CliVersion: "v0.131.0",
+				},
+			},
+			{
+				LineNumber: 2,
+				Type:       "event_msg",
+				SubType:    "task_started",
+				EventMsg: &model.EventMsgPayload{
+					TurnID:    "turn-1",
+					StartedAt: 100,
+				},
+			},
+			{
+				LineNumber: 3,
+				Type:       "event_msg",
+				SubType:    "user_message",
+				Envelope: model.RecordEnvelope{
+					Timestamp: "2026-06-13T01:00:01Z",
+				},
+				EventMsg: &model.EventMsgPayload{
+					Message: "テストを追加してください",
+				},
+			},
+			{
+				LineNumber: 4,
+				Type:       "response_item",
+				SubType:    "message",
+				Envelope: model.RecordEnvelope{
+					Timestamp: "2026-06-13T01:00:02Z",
+				},
+				ResponseItem: &model.ResponseItemPayload{
+					Role: "assistant",
+					Content: []model.MessageContent{
+						{Type: "output_text", Text: "実装します"},
+					},
+				},
+			},
+			{
+				LineNumber: 5,
+				Type:       "event_msg",
+				SubType:    "task_complete",
+				EventMsg: &model.EventMsgPayload{
+					TurnID:      "turn-1",
+					CompletedAt: 130,
+				},
+			},
+		},
+	}
+
+	uc := usecase.NewGetSessionDetailUseCase(sessionRepo, cacheRepo, parser)
+	res, err := uc.Execute(context.Background(), "session-timeline")
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	if len(res.Timeline) != 1 {
+		t.Fatalf("len(Timeline) = %d, want 1", len(res.Timeline))
+	}
+	turn := res.Timeline[0]
+	if turn.Index != 0 || turn.TurnID != "turn-1" || turn.Pseudo {
+		t.Fatalf("Timeline[0] = %+v, want normal turn 0", turn)
+	}
+	if turn.DurationMs != 30000 {
+		t.Errorf("DurationMs = %d, want 30000", turn.DurationMs)
+	}
+	if len(turn.Items) != 2 {
+		t.Fatalf("len(Timeline[0].Items) = %d, want 2", len(turn.Items))
+	}
+	if turn.Items[0].Role != "user" || turn.Items[0].Body != "テストを追加してください" {
+		t.Errorf("Items[0] = %+v, want user message", turn.Items[0])
+	}
+	if turn.Items[1].Role != "assistant" || turn.Items[1].Body != "実装します" {
+		t.Errorf("Items[1] = %+v, want assistant message", turn.Items[1])
+	}
+}
+
+func TestGetSessionDetailUseCase_ExecuteDeduplicatesConversationMessages(t *testing.T) {
+	t.Parallel()
+
+	sessionRepo := &mockSessionRepositoryForDetail{
+		paths: map[string]string{"session-deduplicate": "/tmp/session-deduplicate.jsonl"},
+	}
+	cacheRepo := &mockCacheRepositoryForDetail{}
+	parser := &mockSessionParser{
+		records: []*model.TypedRecord{
+			{
+				LineNumber: 1,
+				Type:       "session_meta",
+				SessionMeta: &model.SessionMetaPayload{
+					ID:         "session-deduplicate",
+					CliVersion: "v0.131.0",
+				},
+			},
+			{
+				LineNumber: 2,
+				Type:       "event_msg",
+				SubType:    "task_started",
+				EventMsg:   &model.EventMsgPayload{TurnID: "turn-1"},
+			},
+			{
+				LineNumber: 3,
+				Type:       "event_msg",
+				SubType:    "agent_message",
+				Envelope: model.RecordEnvelope{
+					Timestamp: "2026-06-13T01:00:01Z",
+				},
+				EventMsg: &model.EventMsgPayload{Message: "同じ応答"},
+			},
+			{
+				LineNumber: 4,
+				Type:       "response_item",
+				SubType:    "message",
+				Envelope: model.RecordEnvelope{
+					Timestamp: "2026-06-13T01:00:01Z",
+				},
+				ResponseItem: &model.ResponseItemPayload{
+					Role:    "assistant",
+					Content: []model.MessageContent{{Type: "output_text", Text: "同じ応答"}},
+				},
+			},
+			{
+				LineNumber: 5,
+				Type:       "event_msg",
+				SubType:    "task_complete",
+				EventMsg:   &model.EventMsgPayload{TurnID: "turn-1"},
+			},
+		},
+	}
+
+	uc := usecase.NewGetSessionDetailUseCase(sessionRepo, cacheRepo, parser)
+	res, err := uc.Execute(context.Background(), "session-deduplicate")
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	if len(res.Timeline) != 1 {
+		t.Fatalf("len(Timeline) = %d, want 1", len(res.Timeline))
+	}
+	if len(res.Timeline[0].Items) != 1 {
+		t.Fatalf("len(Timeline[0].Items) = %d, want 1", len(res.Timeline[0].Items))
+	}
+}
+
+func TestGetSessionDetailUseCase_ExecuteAggregatesConversationTokenUsage(t *testing.T) {
+	t.Parallel()
+
+	sessionRepo := &mockSessionRepositoryForDetail{
+		paths: map[string]string{"session-token-usage": "/tmp/session-token-usage.jsonl"},
+	}
+	cacheRepo := &mockCacheRepositoryForDetail{}
+	parser := &mockSessionParser{
+		records: []*model.TypedRecord{
+			{
+				LineNumber: 1,
+				Type:       "session_meta",
+				SessionMeta: &model.SessionMetaPayload{
+					ID:         "session-token-usage",
+					CliVersion: "v0.131.0",
+				},
+			},
+			{
+				LineNumber: 2,
+				Type:       "event_msg",
+				SubType:    "task_started",
+				EventMsg:   &model.EventMsgPayload{TurnID: "turn-1"},
+			},
+			{
+				LineNumber: 3,
+				Type:       "event_msg",
+				SubType:    "agent_message",
+				Envelope:   model.RecordEnvelope{Timestamp: "2026-06-13T01:00:01Z"},
+				EventMsg:   &model.EventMsgPayload{Message: "統合対象"},
+			},
+			{
+				LineNumber: 4,
+				Type:       "event_msg",
+				SubType:    "token_count",
+				EventMsg: &model.EventMsgPayload{
+					Info: &model.TokenInfo{
+						LastTokenUsage:  &model.TokenDetail{TotalTokens: 10, InputTokens: 7, OutputTokens: 3},
+						TotalTokenUsage: &model.TokenDetail{TotalTokens: 100, InputTokens: 70, OutputTokens: 30},
+					},
+				},
+			},
+			{
+				LineNumber: 5,
+				Type:       "response_item",
+				SubType:    "message",
+				Envelope:   model.RecordEnvelope{Timestamp: "2026-06-13T01:00:01Z"},
+				ResponseItem: &model.ResponseItemPayload{
+					Role:    "assistant",
+					Content: []model.MessageContent{{Type: "output_text", Text: "統合対象"}},
+				},
+			},
+			{
+				LineNumber: 6,
+				Type:       "event_msg",
+				SubType:    "token_count",
+				EventMsg: &model.EventMsgPayload{
+					Info: &model.TokenInfo{
+						LastTokenUsage:  &model.TokenDetail{TotalTokens: 20, InputTokens: 12, OutputTokens: 8},
+						TotalTokenUsage: &model.TokenDetail{TotalTokens: 120, InputTokens: 82, OutputTokens: 38},
+					},
+				},
+			},
+			{
+				LineNumber: 7,
+				Type:       "event_msg",
+				SubType:    "task_complete",
+				EventMsg:   &model.EventMsgPayload{TurnID: "turn-1"},
+			},
+		},
+	}
+
+	uc := usecase.NewGetSessionDetailUseCase(sessionRepo, cacheRepo, parser)
+	res, err := uc.Execute(context.Background(), "session-token-usage")
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	item := res.Timeline[0].Items[0]
+	if item.TokenCountCount != 2 {
+		t.Errorf("TokenCountCount = %d, want 2", item.TokenCountCount)
+	}
+	if item.LastTokenUsage.TotalTokens != 30 || item.LastTokenUsage.InputTokens != 19 || item.LastTokenUsage.OutputTokens != 11 {
+		t.Errorf("LastTokenUsage = %+v, want totals 30/19/11", item.LastTokenUsage)
+	}
+	if item.TotalTokenUsage == nil || item.TotalTokenUsage.TotalTokens != 120 {
+		t.Errorf("TotalTokenUsage = %+v, want latest total 120", item.TotalTokenUsage)
+	}
+	if res.Timeline[0].ConsumedTokens.TotalTokens != 120 {
+		t.Errorf("ConsumedTokens.TotalTokens = %d, want 120", res.Timeline[0].ConsumedTokens.TotalTokens)
+	}
+}
+
+func TestGetSessionDetailUseCase_ExecuteBuildsPseudoConversationTurn(t *testing.T) {
+	t.Parallel()
+
+	sessionRepo := &mockSessionRepositoryForDetail{
+		paths: map[string]string{"session-pseudo-turn": "/tmp/session-pseudo-turn.jsonl"},
+	}
+	cacheRepo := &mockCacheRepositoryForDetail{}
+	parser := &mockSessionParser{
+		records: []*model.TypedRecord{
+			{
+				LineNumber: 1,
+				Type:       "session_meta",
+				SessionMeta: &model.SessionMetaPayload{
+					ID:         "session-pseudo-turn",
+					CliVersion: "v0.131.0",
+				},
+			},
+			{
+				LineNumber: 2,
+				Type:       "event_msg",
+				SubType:    "user_message",
+				Envelope:   model.RecordEnvelope{Timestamp: "2026-06-13T00:59:59Z"},
+				EventMsg:   &model.EventMsgPayload{Message: "ターン外の発言"},
+			},
+			{
+				LineNumber: 3,
+				Type:       "event_msg",
+				SubType:    "task_started",
+				EventMsg:   &model.EventMsgPayload{TurnID: "turn-1"},
+			},
+			{
+				LineNumber: 4,
+				Type:       "event_msg",
+				SubType:    "agent_message",
+				Envelope:   model.RecordEnvelope{Timestamp: "2026-06-13T01:00:00Z"},
+				EventMsg:   &model.EventMsgPayload{Message: "通常ターンの発言"},
+			},
+			{
+				LineNumber: 5,
+				Type:       "event_msg",
+				SubType:    "task_complete",
+				EventMsg:   &model.EventMsgPayload{TurnID: "turn-1"},
+			},
+		},
+	}
+
+	uc := usecase.NewGetSessionDetailUseCase(sessionRepo, cacheRepo, parser)
+	res, err := uc.Execute(context.Background(), "session-pseudo-turn")
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	if len(res.Timeline) != 2 {
+		t.Fatalf("len(Timeline) = %d, want 2", len(res.Timeline))
+	}
+	if !res.Timeline[0].Pseudo || res.Timeline[0].Index != -1 {
+		t.Errorf("Timeline[0] = %+v, want pseudo turn", res.Timeline[0])
+	}
+	if res.Timeline[0].Items[0].Body != "ターン外の発言" {
+		t.Errorf("Timeline[0].Items[0].Body = %q", res.Timeline[0].Items[0].Body)
+	}
+	if res.Timeline[1].Pseudo || res.Timeline[1].Items[0].Body != "通常ターンの発言" {
+		t.Errorf("Timeline[1] = %+v, want normal turn", res.Timeline[1])
 	}
 }

@@ -46,12 +46,151 @@ type displayUnit struct {
 	Batch          *model.Batch
 }
 
+type conversationDisplayUnit struct {
+	Role      string
+	Body      string
+	Timestamp string
+	Records   []*model.TypedRecord
+}
+
 func NewGetSessionDetailUseCase(sessionRepo SessionRepository, cacheRepo CacheRepository, parser SessionParser) *GetSessionDetailUseCase {
 	return &GetSessionDetailUseCase{
 		sessionRepo: sessionRepo,
 		cacheRepo:   cacheRepo,
 		parser:      parser,
 	}
+}
+
+func buildConversationTimeline(turns []*model.Turn, turnStats []dto.TurnStatistics) []dto.ConversationTimelineTurn {
+	var timeline []dto.ConversationTimelineTurn
+	consumedTokensByTurn := make(map[int]dto.TokenBreakdown, len(turnStats))
+	for _, turnStat := range turnStats {
+		consumedTokensByTurn[turnStat.Index] = turnStat.ConsumedTokens
+	}
+
+	for _, turn := range turns {
+		units := make([]conversationDisplayUnit, 0)
+		unitIndexes := make(map[string]int)
+		for _, record := range turn.Records {
+			role, body, ok := conversationMessage(record)
+			if !ok {
+				continue
+			}
+			timestamp := fmt.Sprint(record.Envelope.Timestamp)
+			key := role + "\x00" + body + "\x00" + timestamp
+			if index, exists := unitIndexes[key]; exists {
+				units[index].Records = append(units[index].Records, record)
+				continue
+			}
+			unitIndexes[key] = len(units)
+			units = append(units, conversationDisplayUnit{
+				Role:      role,
+				Body:      body,
+				Timestamp: timestamp,
+				Records:   []*model.TypedRecord{record},
+			})
+		}
+		if len(units) == 0 {
+			continue
+		}
+
+		items := make([]dto.ConversationTimelineItem, 0, len(units))
+		for _, unit := range units {
+			lastTokenUsage, tokenCountCount, totalTokenUsage := conversationTokenUsage(turn, unit)
+			items = append(items, dto.ConversationTimelineItem{
+				Role:            unit.Role,
+				Body:            unit.Body,
+				Timestamp:       unit.Timestamp,
+				LastTokenUsage:  lastTokenUsage,
+				TokenCountCount: tokenCountCount,
+				TotalTokenUsage: totalTokenUsage,
+			})
+		}
+
+		var durationMs int64
+		if turn.TaskComplete != nil {
+			durationMs = turn.TaskComplete.DurationMs
+			if durationMs == 0 && turn.TaskStarted != nil && turn.TaskComplete.CompletedAt >= turn.TaskStarted.StartedAt {
+				durationMs = (turn.TaskComplete.CompletedAt - turn.TaskStarted.StartedAt) * 1000
+			}
+		}
+		timeline = append(timeline, dto.ConversationTimelineTurn{
+			Index:          turn.Index,
+			TurnID:         turn.TurnID,
+			Pseudo:         turn.Index < 0,
+			DurationMs:     durationMs,
+			ConsumedTokens: consumedTokensByTurn[turn.Index],
+			Items:          items,
+		})
+	}
+
+	return timeline
+}
+
+func conversationTokenUsage(
+	turn *model.Turn,
+	unit conversationDisplayUnit,
+) (lastUsage dto.TokenBreakdown, count int, totalUsage *dto.TokenBreakdown) {
+	recordLines := make(map[int]struct{}, len(unit.Records))
+	for _, record := range unit.Records {
+		recordLines[record.LineNumber] = struct{}{}
+	}
+
+	for _, tokenCount := range turn.TokenCounts {
+		if tokenCount.BoundToRecord == nil {
+			continue
+		}
+		if _, ok := recordLines[tokenCount.BoundToRecord.LineNumber]; !ok {
+			continue
+		}
+		count++
+		if tokenCount.Record == nil || tokenCount.Record.EventMsg == nil || tokenCount.Record.EventMsg.Info == nil {
+			continue
+		}
+		info := tokenCount.Record.EventMsg.Info
+		if info.LastTokenUsage != nil {
+			lastUsage.TotalTokens += info.LastTokenUsage.TotalTokens
+			lastUsage.InputTokens += info.LastTokenUsage.InputTokens
+			lastUsage.OutputTokens += info.LastTokenUsage.OutputTokens
+			lastUsage.ReasoningOutputTokens += info.LastTokenUsage.ReasoningOutputTokens
+		}
+		if info.TotalTokenUsage != nil {
+			totalUsage = &dto.TokenBreakdown{
+				TotalTokens:           info.TotalTokenUsage.TotalTokens,
+				InputTokens:           info.TotalTokenUsage.InputTokens,
+				OutputTokens:          info.TotalTokenUsage.OutputTokens,
+				ReasoningOutputTokens: info.TotalTokenUsage.ReasoningOutputTokens,
+			}
+		}
+	}
+	return lastUsage, count, totalUsage
+}
+
+func conversationMessage(record *model.TypedRecord) (role, body string, ok bool) {
+	if record == nil {
+		return "", "", false
+	}
+	if record.Type == "event_msg" && record.EventMsg != nil {
+		switch record.SubType {
+		case "user_message":
+			return "user", record.EventMsg.Message, record.EventMsg.Message != ""
+		case "agent_message":
+			return "assistant", record.EventMsg.Message, record.EventMsg.Message != ""
+		}
+	}
+	if record.Type != "response_item" || record.SubType != "message" || record.ResponseItem == nil {
+		return "", "", false
+	}
+	if record.ResponseItem.Role != "user" && record.ResponseItem.Role != "assistant" {
+		return "", "", false
+	}
+
+	var bodyBuilder strings.Builder
+	for _, content := range record.ResponseItem.Content {
+		bodyBuilder.WriteString(content.Text)
+	}
+	body = bodyBuilder.String()
+	return record.ResponseItem.Role, body, body != ""
 }
 
 func resolveFunctionCallOutputs(filePath, turnID string, callBatch, outputBatch []*model.TypedRecord) batchOutputResolution {
@@ -1221,6 +1360,7 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 		Edges:              edges,
 		Statistics:         stats,
 		TokenCounts:        tokenCountsList,
+		Timeline:           buildConversationTimeline(turns, turnStats),
 	}
 
 	// 9. キャッシュへの保存
