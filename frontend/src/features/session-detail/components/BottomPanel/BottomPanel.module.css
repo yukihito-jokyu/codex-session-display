@@ -1,0 +1,93 @@
+.bottomPanel {
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	height: 200px;
+	background: var(--bg-header);
+	border-top: 1px solid var(--border-color);
+	display: flex;
+	flex-direction: column;
+	z-index: 100;
+	box-shadow: 0 -4px 16px var(--panel-shadow);
+	animation: panelSlideUp 0.18s ease-out;
+}
+
+.bottomPanelHeader {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 8px 16px;
+	border-bottom: 1px solid var(--border-color);
+	background: rgba(255, 255, 255, 0.02);
+}
+
+.bottomPanelTitle {
+	font-size: 12px;
+	font-weight: 600;
+	color: var(--text-primary);
+}
+
+.panelCloseBtn {
+	background: transparent;
+	border: none;
+	color: var(--text-secondary);
+	font-size: 16px;
+	cursor: pointer;
+	padding: 4px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	border-radius: 4px;
+	width: 24px;
+	height: 24px;
+	transition: background-color 0.2s;
+}
+
+.panelCloseBtn:hover {
+	background: var(--bg-btn-hover);
+	color: var(--text-primary);
+}
+
+.bottomPanelContent {
+	flex: 1;
+	padding: 16px;
+	overflow-y: auto;
+	display: flex;
+	gap: 16px;
+	font-size: 12px;
+}
+
+.bottomPanelContentSplit {
+	gap: 0;
+	overflow: hidden;
+}
+
+.panelResizer {
+	width: 12px;
+	margin: -16px 0;
+	background: linear-gradient(
+		90deg,
+		transparent 0,
+		transparent 5px,
+		var(--border-color) 5px,
+		var(--border-color) 7px,
+		transparent 7px,
+		transparent 100%
+	);
+	cursor: col-resize;
+	touch-action: none;
+	flex-shrink: 0;
+}
+
+@keyframes panelSlideUp {
+	from {
+		transform: translateY(16px);
+		opacity: 0;
+	}
+
+	to {
+		transform: translateY(0);
+		opacity: 1;
+	}
+}

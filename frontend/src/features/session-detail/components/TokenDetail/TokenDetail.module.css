@@ -1,0 +1,105 @@
+.tokenDetail {
+	flex: 1;
+	min-width: 280px;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+	padding-left: 16px;
+	overflow: hidden auto;
+}
+
+.tokenDetailHeader {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	font-weight: 600;
+	color: var(--text-primary);
+}
+
+.tokenDetailBadge {
+	padding: 4px 8px;
+	border-radius: 999px;
+	background: var(--accent-badge-bg);
+	border: 1px solid var(--accent-badge-border);
+	color: var(--color-accent);
+	font-size: 11px;
+}
+
+.tokenSummaryGrid {
+	display: grid;
+	grid-template-columns: repeat(5, minmax(0, 1fr));
+	gap: 8px;
+}
+
+.tokenSummaryItem {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+	padding: 10px 12px;
+	background: var(--mono-bg);
+	border: 1px solid var(--border-color);
+	border-radius: 8px;
+}
+
+.tokenSummaryItem span {
+	color: var(--text-secondary);
+	font-size: 11px;
+}
+
+.tokenSummaryItem strong {
+	color: var(--text-primary);
+	font-size: 14px;
+}
+
+.tokenEntries {
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.tokenEntryCard {
+	padding: 12px;
+	border: 1px solid var(--border-color);
+	border-radius: 8px;
+	background: color-mix(in srgb, var(--bg-btn) 60%, transparent);
+}
+
+.tokenEntryHeader {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	margin-bottom: 10px;
+	color: var(--text-secondary);
+	font-size: 11px;
+}
+
+.tokenEntryGrid {
+	display: grid;
+	grid-template-columns: repeat(5, minmax(0, 1fr));
+	gap: 8px;
+}
+
+.tokenEntryGrid div {
+	display: flex;
+	flex-direction: column;
+	gap: 4px;
+}
+
+.tokenEntryGrid span {
+	color: var(--text-secondary);
+	font-size: 11px;
+}
+
+.tokenEntryGrid strong {
+	color: var(--text-primary);
+	font-size: 13px;
+}
+
+@media (max-width: 1200px) {
+	.tokenSummaryGrid,
+	.tokenEntryGrid {
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+	}
+}
