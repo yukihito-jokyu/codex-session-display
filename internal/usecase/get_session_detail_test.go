@@ -7,10 +7,12 @@ import (
 	"codex-session-display/internal/repository"
 	"codex-session-display/internal/usecase"
 	"context"
+	"encoding/json"
 	"errors"
 	"log/slog"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -653,14 +655,14 @@ func TestGetSessionDetailUseCase_Execute(t *testing.T) {
 			},
 		},
 		{
-			name: "schema version 2 cache triggers reparse even when cache file is fresh",
+			name: "schema version 3 cache triggers reparse even when cache file is fresh",
 			setup: func(t *testing.T, tmpDir string) (string, usecase.SessionRepository, usecase.CacheRepository, usecase.SessionParser, func()) {
 				sessionID := "legacy-cache-session"
 				cacheRepo := &mockCacheRepositoryForDetail{
 					cache: map[string]*dto.SessionDetailResponse{
 						sessionID: {
 							ID:                 sessionID,
-							CacheSchemaVersion: 2,
+							CacheSchemaVersion: 3,
 							ParsedAt:           "2026-05-31T01:00:00Z",
 						},
 					},
@@ -703,6 +705,9 @@ func TestGetSessionDetailUseCase_Execute(t *testing.T) {
 				}
 				if res == nil || res.ID != "legacy-cache-session" {
 					t.Fatalf("expected reparsed response, got %+v", res)
+				}
+				if res.CacheSchemaVersion != 4 {
+					t.Fatalf("CacheSchemaVersion = %d, want 4", res.CacheSchemaVersion)
 				}
 			},
 		},
@@ -2376,14 +2381,418 @@ func TestGetSessionDetailUseCase_ExecuteBuildsConversationTimelineInRecordOrder(
 	if turn.DurationMs != 30000 {
 		t.Errorf("DurationMs = %d, want 30000", turn.DurationMs)
 	}
-	if len(turn.Items) != 2 {
-		t.Fatalf("len(Timeline[0].Items) = %d, want 2", len(turn.Items))
+	if len(turn.Items) != 4 {
+		t.Fatalf("len(Timeline[0].Items) = %d, want 4", len(turn.Items))
 	}
-	if turn.Items[0].Role != "user" || turn.Items[0].Body != "テストを追加してください" {
-		t.Errorf("Items[0] = %+v, want user message", turn.Items[0])
+	if turn.Items[1].Role != "user" || turn.Items[1].Body != "テストを追加してください" {
+		t.Errorf("Items[1] = %+v, want user message", turn.Items[1])
 	}
-	if turn.Items[1].Role != "assistant" || turn.Items[1].Body != "実装します" {
-		t.Errorf("Items[1] = %+v, want assistant message", turn.Items[1])
+	if turn.Items[2].Role != "assistant" || turn.Items[2].Body != "実装します" {
+		t.Errorf("Items[2] = %+v, want assistant message", turn.Items[2])
+	}
+}
+
+func TestGetSessionDetailUseCase_ExecuteAddsReasoningToTimelineInRecordOrder(t *testing.T) {
+	t.Parallel()
+
+	sessionRepo := &mockSessionRepositoryForDetail{
+		paths: map[string]string{"session-reasoning-timeline": "/tmp/session-reasoning-timeline.jsonl"},
+	}
+	cacheRepo := &mockCacheRepositoryForDetail{}
+	parser := &mockSessionParser{
+		records: []*model.TypedRecord{
+			{
+				LineNumber: 1,
+				Type:       "session_meta",
+				SessionMeta: &model.SessionMetaPayload{
+					ID:         "session-reasoning-timeline",
+					CliVersion: "v0.131.0",
+				},
+			},
+			{
+				LineNumber: 2,
+				Type:       "event_msg",
+				SubType:    "task_started",
+				EventMsg:   &model.EventMsgPayload{TurnID: "turn-1"},
+			},
+			{
+				LineNumber: 3,
+				Type:       "event_msg",
+				SubType:    "user_message",
+				EventMsg:   &model.EventMsgPayload{Message: "原因を調べてください"},
+			},
+			{
+				LineNumber: 4,
+				Type:       "event_msg",
+				SubType:    "agent_reasoning",
+				Envelope:   model.RecordEnvelope{Timestamp: "2026-06-13T01:00:02Z"},
+				EventMsg:   &model.EventMsgPayload{Text: "関連する実装を確認する"},
+			},
+			{
+				LineNumber: 5,
+				Type:       "response_item",
+				SubType:    "reasoning",
+				Envelope:   model.RecordEnvelope{Timestamp: "2026-06-13T01:00:03Z"},
+				ResponseItem: &model.ResponseItemPayload{
+					Summary: []model.MessageContent{{Type: "summary_text", Text: "実装確認"}},
+				},
+			},
+			{
+				LineNumber: 6,
+				Type:       "event_msg",
+				SubType:    "token_count",
+				EventMsg: &model.EventMsgPayload{
+					Info: &model.TokenInfo{
+						LastTokenUsage:  &model.TokenDetail{TotalTokens: 12, InputTokens: 8, OutputTokens: 4},
+						TotalTokenUsage: &model.TokenDetail{TotalTokens: 112, InputTokens: 88, OutputTokens: 24},
+					},
+				},
+			},
+			{
+				LineNumber: 7,
+				Type:       "response_item",
+				SubType:    "message",
+				ResponseItem: &model.ResponseItemPayload{
+					Role:    "assistant",
+					Content: []model.MessageContent{{Type: "output_text", Text: "原因を特定しました"}},
+				},
+			},
+			{
+				LineNumber: 8,
+				Type:       "event_msg",
+				SubType:    "task_complete",
+				EventMsg:   &model.EventMsgPayload{TurnID: "turn-1"},
+			},
+		},
+	}
+
+	uc := usecase.NewGetSessionDetailUseCase(sessionRepo, cacheRepo, parser)
+	res, err := uc.Execute(context.Background(), "session-reasoning-timeline")
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	items := res.Timeline[0].Items
+	if len(items) != 5 {
+		t.Fatalf("len(Timeline[0].Items) = %d, want 5", len(items))
+	}
+	if items[1].Kind != "conversation" || items[1].Role != "user" {
+		t.Errorf("Items[1] = %+v, want user conversation", items[1])
+	}
+	if items[2].Kind != "reasoning" || items[2].Label != "推論" || !items[2].Collapsible {
+		t.Errorf("Items[2] = %+v, want collapsible reasoning", items[2])
+	}
+	if items[2].Body != "関連する実装を確認する" {
+		t.Errorf("Items[2].Body = %q, want reasoning body", items[2].Body)
+	}
+	if len(items[2].Details) != 1 || items[2].Details[0].Label != "要約" || items[2].Details[0].Value != "実装確認" {
+		t.Errorf("Items[2].Details = %+v, want reasoning summary", items[2].Details)
+	}
+	if items[2].RecordCount != 2 || items[2].TokenCountCount != 1 || items[2].LastTokenUsage.TotalTokens != 12 {
+		t.Errorf("Items[2] counts = %+v, want 2 records and 1 token count totaling 12", items[2])
+	}
+	if items[3].Kind != "conversation" || items[3].Role != "assistant" {
+		t.Errorf("Items[3] = %+v, want assistant conversation", items[3])
+	}
+}
+
+func TestGetSessionDetailUseCase_ExecuteAddsToolBatchToTimeline(t *testing.T) {
+	t.Parallel()
+
+	sessionRepo := &mockSessionRepositoryForDetail{
+		paths: map[string]string{"session-tool-timeline": "/tmp/session-tool-timeline.jsonl"},
+	}
+	cacheRepo := &mockCacheRepositoryForDetail{}
+	parser := &mockSessionParser{
+		records: []*model.TypedRecord{
+			{LineNumber: 1, Type: "session_meta", SessionMeta: &model.SessionMetaPayload{ID: "session-tool-timeline"}},
+			{LineNumber: 2, Type: "event_msg", SubType: "task_started", EventMsg: &model.EventMsgPayload{TurnID: "turn-1"}},
+			{
+				LineNumber: 3,
+				Type:       "response_item",
+				SubType:    "function_call",
+				ResponseItem: &model.ResponseItemPayload{
+					Name: "read_file", Arguments: `{"path":"a.go"}`, CallID: "call-1",
+				},
+			},
+			{
+				LineNumber: 4,
+				Type:       "response_item",
+				SubType:    "function_call",
+				ResponseItem: &model.ResponseItemPayload{
+					Name: "read_file", Arguments: `{"path":"b.go"}`, CallID: "call-2",
+				},
+			},
+			{LineNumber: 5, Type: "response_item", SubType: "function_call_output", ResponseItem: &model.ResponseItemPayload{CallID: "call-2", Output: "b contents"}},
+			{LineNumber: 6, Type: "response_item", SubType: "function_call_output", ResponseItem: &model.ResponseItemPayload{CallID: "call-1", Output: "a contents"}},
+			{LineNumber: 7, Type: "event_msg", SubType: "task_complete", EventMsg: &model.EventMsgPayload{TurnID: "turn-1"}},
+		},
+	}
+
+	uc := usecase.NewGetSessionDetailUseCase(sessionRepo, cacheRepo, parser)
+	res, err := uc.Execute(context.Background(), "session-tool-timeline")
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	items := res.Timeline[0].Items
+	if len(items) != 3 {
+		t.Fatalf("len(Timeline[0].Items) = %d, want 3", len(items))
+	}
+	item := items[1]
+	if item.Kind != "tool" || item.Label != "ツール read_file ×2" || item.RecordCount != 4 {
+		t.Fatalf("tool item = %+v, want one batch containing four records", item)
+	}
+	wantDetails := []dto.TimelineItemDetail{
+		{Label: "read_file 引数", Value: `{"path":"a.go"}`},
+		{Label: "read_file 結果", Value: "a contents"},
+		{Label: "read_file 引数", Value: `{"path":"b.go"}`},
+		{Label: "read_file 結果", Value: "b contents"},
+	}
+	if !reflect.DeepEqual(item.Details, wantDetails) {
+		t.Errorf("Details = %#v, want %#v", item.Details, wantDetails)
+	}
+}
+
+func TestGetSessionDetailUseCase_ExecuteAddsWebAndMCPEventsToTimeline(t *testing.T) {
+	t.Parallel()
+
+	sessionRepo := &mockSessionRepositoryForDetail{
+		paths: map[string]string{"session-reference-timeline": "/tmp/session-reference-timeline.jsonl"},
+	}
+	cacheRepo := &mockCacheRepositoryForDetail{}
+	parser := &mockSessionParser{
+		records: []*model.TypedRecord{
+			{LineNumber: 1, Type: "session_meta", SessionMeta: &model.SessionMetaPayload{ID: "session-reference-timeline"}},
+			{LineNumber: 2, Type: "event_msg", SubType: "task_started", EventMsg: &model.EventMsgPayload{TurnID: "turn-1"}},
+			{
+				LineNumber: 3,
+				Type:       "response_item",
+				SubType:    "web_search_call",
+				ResponseItem: &model.ResponseItemPayload{
+					Action: &model.SearchAction{Type: "search", Query: "Go stable release"},
+				},
+			},
+			{
+				LineNumber: 4,
+				Type:       "event_msg",
+				SubType:    "web_search_end",
+				EventMsg: &model.EventMsgPayload{
+					Action: &model.SearchAction{Type: "open", Query: "https://go.dev/doc/devel/release"},
+				},
+			},
+			{
+				LineNumber: 5,
+				Type:       "event_msg",
+				SubType:    "mcp_tool_call_end",
+				EventMsg: &model.EventMsgPayload{
+					CallID: "mcp-1",
+					Invocation: &model.MCPInvocation{
+						Server: "figma", Tool: "whoami", Arguments: json.RawMessage(`{"verbose":true}`),
+					},
+					Result: `{"user":"codex"}`,
+				},
+			},
+			{LineNumber: 6, Type: "event_msg", SubType: "task_complete", EventMsg: &model.EventMsgPayload{TurnID: "turn-1"}},
+		},
+	}
+
+	uc := usecase.NewGetSessionDetailUseCase(sessionRepo, cacheRepo, parser)
+	res, err := uc.Execute(context.Background(), "session-reference-timeline")
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	items := res.Timeline[0].Items
+	if len(items) != 5 {
+		t.Fatalf("len(Timeline[0].Items) = %d, want 5", len(items))
+	}
+	if items[1].Kind != "web" || items[1].Details[0].Value != "Go stable release" {
+		t.Errorf("Items[1] = %+v, want web search query", items[1])
+	}
+	if items[2].Kind != "web" || items[2].Details[0].Value != "https://go.dev/doc/devel/release" {
+		t.Errorf("Items[2] = %+v, want visited target", items[2])
+	}
+	wantMCPDetails := []dto.TimelineItemDetail{
+		{Label: "サーバー", Value: "figma"},
+		{Label: "引数", Value: `{"verbose":true}`},
+		{Label: "結果", Value: `{"user":"codex"}`},
+	}
+	if items[3].Kind != "mcp" || items[3].Label != "MCP whoami" || !reflect.DeepEqual(items[3].Details, wantMCPDetails) {
+		t.Errorf("Items[3] = %+v, want MCP invocation details %#v", items[3], wantMCPDetails)
+	}
+}
+
+func TestGetSessionDetailUseCase_ExecuteAddsInstructionsAndSystemEventsToTimeline(t *testing.T) {
+	t.Parallel()
+
+	sessionRepo := &mockSessionRepositoryForDetail{
+		paths: map[string]string{"session-instructions-timeline": "/tmp/session-instructions-timeline.jsonl"},
+	}
+	cacheRepo := &mockCacheRepositoryForDetail{}
+	parser := &mockSessionParser{
+		records: []*model.TypedRecord{
+			{
+				LineNumber: 1,
+				Type:       "session_meta",
+				SessionMeta: &model.SessionMetaPayload{
+					ID: "session-instructions-timeline", BaseInstructions: &model.Instructions{Text: "base rules"},
+				},
+			},
+			{
+				LineNumber: 2,
+				Type:       "turn_context",
+				TurnContext: &model.TurnContextPayload{
+					TurnID:            "turn-1",
+					UserInstructions:  "user rules",
+					CollaborationMode: &model.CollaborationMode{DeveloperInstructions: "developer rules"},
+				},
+			},
+			{LineNumber: 3, Type: "event_msg", SubType: "task_started", EventMsg: &model.EventMsgPayload{TurnID: "turn-1"}},
+			{LineNumber: 4, Type: "event_msg", SubType: "custom_notice", EventMsg: &model.EventMsgPayload{Message: "unknown event"}},
+			{LineNumber: 5, Type: "event_msg", SubType: "task_complete", EventMsg: &model.EventMsgPayload{TurnID: "turn-1"}},
+		},
+	}
+
+	uc := usecase.NewGetSessionDetailUseCase(sessionRepo, cacheRepo, parser)
+	res, err := uc.Execute(context.Background(), "session-instructions-timeline")
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	if len(res.Timeline) != 2 {
+		t.Fatalf("len(Timeline) = %d, want pseudo and normal turn", len(res.Timeline))
+	}
+	if got := res.Timeline[0].Items; len(got) != 1 || got[0].Kind != "instructions" || got[0].Label != "Base instructions" || got[0].Body != "base rules" {
+		t.Errorf("pseudo turn items = %+v, want base instructions", got)
+	}
+	items := res.Timeline[1].Items
+	want := []struct {
+		kind  string
+		label string
+		body  string
+	}{
+		{kind: "instructions", label: "Developer instructions", body: "developer rules"},
+		{kind: "instructions", label: "User instructions", body: "user rules"},
+		{kind: "system", label: "タスク開始"},
+		{kind: "system", label: "custom_notice", body: "unknown event"},
+		{kind: "system", label: "タスク完了"},
+	}
+	if len(items) != len(want) {
+		t.Fatalf("len(normal turn items) = %d, want %d: %+v", len(items), len(want), items)
+	}
+	for index, expected := range want {
+		if items[index].Kind != expected.kind || items[index].Label != expected.label || items[index].Body != expected.body {
+			t.Errorf("Items[%d] = %+v, want %+v", index, items[index], expected)
+		}
+	}
+}
+
+func TestGetSessionDetailUseCase_ExecuteAddsCommandAndReferenceEventsToTimeline(t *testing.T) {
+	t.Parallel()
+
+	exitCode := 0
+	sessionRepo := &mockSessionRepositoryForDetail{
+		paths: map[string]string{"session-command-timeline": "/tmp/session-command-timeline.jsonl"},
+	}
+	cacheRepo := &mockCacheRepositoryForDetail{}
+	parser := &mockSessionParser{
+		records: []*model.TypedRecord{
+			{LineNumber: 1, Type: "session_meta", SessionMeta: &model.SessionMetaPayload{ID: "session-command-timeline"}},
+			{LineNumber: 2, Type: "event_msg", SubType: "task_started", EventMsg: &model.EventMsgPayload{TurnID: "turn-1"}},
+			{
+				LineNumber: 3,
+				Type:       "event_msg",
+				SubType:    "exec_command_end",
+				EventMsg: &model.EventMsgPayload{
+					CallID: "command-1", Command: []string{"go", "test", "./..."}, ExitCode: &exitCode, AggregatedOutput: "ok packages",
+				},
+			},
+			{
+				LineNumber: 4,
+				Type:       "event_msg",
+				SubType:    "view_image_tool_call",
+				EventMsg:   &model.EventMsgPayload{CallID: "image-1", Path: "/tmp/screenshot.png"},
+			},
+			{LineNumber: 5, Type: "event_msg", SubType: "task_complete", EventMsg: &model.EventMsgPayload{TurnID: "turn-1"}},
+		},
+	}
+
+	uc := usecase.NewGetSessionDetailUseCase(sessionRepo, cacheRepo, parser)
+	res, err := uc.Execute(context.Background(), "session-command-timeline")
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	items := res.Timeline[0].Items
+	if len(items) != 4 {
+		t.Fatalf("len(Timeline[0].Items) = %d, want start, command, reference, complete: %+v", len(items), items)
+	}
+	command := items[1]
+	wantCommandDetails := []dto.TimelineItemDetail{
+		{Label: "コマンド", Value: "go test ./..."},
+		{Label: "終了コード", Value: "0"},
+		{Label: "出力", Value: "ok packages"},
+	}
+	if command.Kind != "tool" || command.Label != "コマンド完了" || !reflect.DeepEqual(command.Details, wantCommandDetails) {
+		t.Errorf("command item = %+v, want details %#v", command, wantCommandDetails)
+	}
+	reference := items[2]
+	if reference.Kind != "reference" || reference.Label != "画像参照" || len(reference.Details) != 1 || reference.Details[0].Value != "/tmp/screenshot.png" {
+		t.Errorf("reference item = %+v, want image path", reference)
+	}
+}
+
+func TestGetSessionDetailUseCase_ExecuteKeepsOtherSystemEventsInTimeline(t *testing.T) {
+	t.Parallel()
+
+	sessionRepo := &mockSessionRepositoryForDetail{
+		paths: map[string]string{"session-system-timeline": "/tmp/session-system-timeline.jsonl"},
+	}
+	cacheRepo := &mockCacheRepositoryForDetail{}
+	parser := &mockSessionParser{
+		records: []*model.TypedRecord{
+			{LineNumber: 1, Type: "session_meta", SessionMeta: &model.SessionMetaPayload{ID: "session-system-timeline"}},
+			{LineNumber: 2, Type: "event_msg", SubType: "thread_name_updated", EventMsg: &model.EventMsgPayload{ThreadName: "Issue 176"}},
+			{LineNumber: 3, Type: "event_msg", SubType: "task_started", EventMsg: &model.EventMsgPayload{TurnID: "turn-1"}},
+			{
+				LineNumber: 4,
+				Type:       "event_msg",
+				SubType:    "item_completed",
+				EventMsg:   &model.EventMsgPayload{Item: &model.CompletedItem{Type: "plan", Text: "step done"}},
+			},
+			{LineNumber: 5, Type: "response_item", SubType: "unknown_response", Raw: `{"payload":{"type":"unknown_response"}}`},
+			{
+				LineNumber: 6,
+				Type:       "event_msg",
+				SubType:    "collab_waiting_end",
+				EventMsg:   &model.EventMsgPayload{CallID: "collab-1", Statuses: map[string]string{"agent": "completed"}},
+			},
+			{LineNumber: 7, Type: "event_msg", SubType: "task_complete", EventMsg: &model.EventMsgPayload{TurnID: "turn-1"}},
+		},
+	}
+
+	uc := usecase.NewGetSessionDetailUseCase(sessionRepo, cacheRepo, parser)
+	res, err := uc.Execute(context.Background(), "session-system-timeline")
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	if len(res.Timeline) != 2 {
+		t.Fatalf("len(Timeline) = %d, want pseudo and normal turn", len(res.Timeline))
+	}
+	if got := res.Timeline[0].Items; len(got) != 1 || got[0].Label != "thread_name_updated" || got[0].Body != "Issue 176" {
+		t.Errorf("pseudo system items = %+v, want thread name update", got)
+	}
+	items := res.Timeline[1].Items
+	wantLabels := []string{"タスク開始", "item_completed", "unknown_response", "collab_waiting_end", "タスク完了"}
+	if len(items) != len(wantLabels) {
+		t.Fatalf("len(normal items) = %d, want %d: %+v", len(items), len(wantLabels), items)
+	}
+	for index, label := range wantLabels {
+		if items[index].Kind != "system" || items[index].Label != label {
+			t.Errorf("Items[%d] = %+v, want system %q", index, items[index], label)
+		}
 	}
 }
 
@@ -2449,8 +2858,8 @@ func TestGetSessionDetailUseCase_ExecuteDeduplicatesConversationMessages(t *test
 	if len(res.Timeline) != 1 {
 		t.Fatalf("len(Timeline) = %d, want 1", len(res.Timeline))
 	}
-	if len(res.Timeline[0].Items) != 1 {
-		t.Fatalf("len(Timeline[0].Items) = %d, want 1", len(res.Timeline[0].Items))
+	if len(res.Timeline[0].Items) != 3 {
+		t.Fatalf("len(Timeline[0].Items) = %d, want 3", len(res.Timeline[0].Items))
 	}
 }
 
@@ -2531,7 +2940,7 @@ func TestGetSessionDetailUseCase_ExecuteAggregatesConversationTokenUsage(t *test
 		t.Fatalf("Execute() error = %v", err)
 	}
 
-	item := res.Timeline[0].Items[0]
+	item := res.Timeline[0].Items[1]
 	if item.TokenCountCount != 2 {
 		t.Errorf("TokenCountCount = %d, want 2", item.TokenCountCount)
 	}
@@ -2607,7 +3016,7 @@ func TestGetSessionDetailUseCase_ExecuteBuildsPseudoConversationTurn(t *testing.
 	if res.Timeline[0].Items[0].Body != "ターン外の発言" {
 		t.Errorf("Timeline[0].Items[0].Body = %q", res.Timeline[0].Items[0].Body)
 	}
-	if res.Timeline[1].Pseudo || res.Timeline[1].Items[0].Body != "通常ターンの発言" {
+	if res.Timeline[1].Pseudo || res.Timeline[1].Items[1].Body != "通常ターンの発言" {
 		t.Errorf("Timeline[1] = %+v, want normal turn", res.Timeline[1])
 	}
 }
