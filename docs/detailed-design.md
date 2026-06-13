@@ -97,7 +97,8 @@ TokenBreakdownに加えて、キャッシュされた入力トークン数（Cac
 | ConsumedTokens | TokenBreakdown                 | TurnStatisticsと同じターン消費トークン           |
 | Items          | ConversationTimelineItemの配列 | JSONL順の会話・AI行動項目                        |
 
-`ConversationTimelineItem` は `kind`, `label`, `role`, `body`, `timestamp`,
+`ConversationTimelineItem` は `selection_id`, `node_id`, `node_ids`,
+`token_count_indices`, `kind`, `label`, `role`, `body`, `timestamp`,
 `record_count`, `collapsible`, `details`, `last_token_usage`, `token_count_count`,
 `total_token_usage` を持つ。`kind` は `conversation`, `reasoning`, `tool`, `web`,
 `mcp`, `instructions`, `system`, `reference` のいずれかとする。
@@ -106,6 +107,9 @@ TokenBreakdownに加えて、キャッシュされた入力トークン数（Cac
 reasoningペアとtool batchは既存の表示単位を再利用し、その他の項目も代表レコードの
 行番号を持つ。全項目を代表行番号で安定ソートしてJSONL順を維持する。統合対象へ紐付く全 `token_count` の
 `last_token_usage` を合算し、最後の `total_token_usage` を累計値として保持する。
+`selection_id` はターン番号と代表行番号から生成し、`node_ids` は表示単位に含まれる
+全レコードの対応ノード、`node_id` はその先頭、`token_count_indices` は表示単位へ
+紐付く全token_countの配列インデックスとする。
 
 ### 2.2 JSONLパーサー
 
@@ -894,8 +898,11 @@ Wailsアプリケーションのエントリポイントとなる構造体。バ
 | sessionData        | SessionDetailまたはnull   | APIから取得したセッション詳細       | null       |
 | loading            | 真偽値                    | ローディング状態                    | false      |
 | error              | 文字列またはnull          | エラーメッセージ                    | null       |
-| selectedNode       | FlowNodeまたはnull        | 選択中のノード（BottomPanel表示用） | null       |
-| selectedTokenBadge | TokenCountEntryまたはnull | 選択中のトークンバッジ              | null       |
+| selectedNode       | FlowNodeまたはnull        | BottomPanelに表示するノードまたはタイムライン全文 | null |
+| selectedFlowNodeId | 文字列またはnull          | キャンバスで強調する代表ノードID     | null       |
+| selectedTimelineId | 文字列またはnull          | 強調するタイムライン表示単位ID       | null       |
+| selectedTokenCountIndices | 整数配列          | 強調する全token_countインデックス    | 空配列     |
+| timelineScrollTarget | 選択IDと更新時刻またはnull | 外部選択時のタイムライン移動要求   | null       |
 | timelineWidth      | number                    | 左タイムラインの表示幅（px）        | 画面幅の30% |
 | rightPanelOpen     | 真偽値                    | RightPanelの開閉状態                | true       |
 | exporting          | 真偽値                    | (保留) エクスポート中               | false      |
@@ -903,7 +910,8 @@ Wailsアプリケーションのエントリポイントとなる構造体。バ
 
 Notification型: `{ message: string, type: 'success' \| 'error' \| 'info' }`
 
-BottomPanelの表示状態は導出判定とする: `bottomPanelOpen = selectedNode !== null || selectedTokenBadge !== null`
+BottomPanelの表示状態は `selectedNode !== null` から導出する。トークン詳細は
+`selectedTokenCountIndices` に一致する全エントリを表示し、未設定時だけ代表ノードIDで補完する。
 
 #### 3.2.3 React Flowの状態管理方針
 
@@ -952,7 +960,7 @@ Wailsの起動・ビルドプロセス（`wails dev` または `wails build`）�
 | TurnStatistics        | index, collaboration_mode_kind, duration_ms, time_to_first_token_ms, token_count_count, consumed_tokens（TokenBreakdown）                          |
 | Statistics            | duration_ms, total_tokens, tool_call_count, token_count_count, context_window_size, turn_count, turns（TurnStatisticsの配列）                      |
 | TokenCountEntry       | index, turn_index, bound_to_node_id, last_token_usage（TokenDetail）, total_token_usage（TokenDetail）                                             |
-| ConversationTimelineItem | kind, label, role, body, timestamp, record_count, collapsible, details, last_token_usage, token_count_count, total_token_usage |
+| ConversationTimelineItem | selection_id, node_id, node_ids, token_count_indices, kind, label, role, body, timestamp, record_count, collapsible, details, last_token_usage, token_count_count, total_token_usage |
 | ConversationTimelineTurn | index, turn_id, pseudo, duration_ms, consumed_tokens, items |
 | SessionDetailResponse | id, cache_schema_version, parsed_at, nodes, edges, statistics, token_counts, timeline（ConversationTimelineTurnの配列） |
 
@@ -1431,6 +1439,11 @@ SessionListPage
 - 通常ターンはターン番号、所要時間、ターン消費トークンを表示する。
 - 疑似ターンは「ターン外イベント」と表示する。
 - 各項目に増分トークン合計、紐付け件数、セッション累計を表示し、紐付けがない場合は「計測なし」と表示する。
+- 項目全体をクリックして選択でき、選択中は `selection_id` を
+  `role="option"` と `aria-selected`、テーマアクセントのアウトラインで表現する。
+- タイムライン以外から `scrollTarget` が更新された場合は、対応 `selection_id` の項目を
+  `scrollIntoView({ behavior: "smooth", block: "center" })` で表示領域中央へ移動する。
+- 項目選択は代表ノードと `token_count_indices` を共通選択する。同じ項目の再選択で解除する。
 
 **React Flow Canvas 仕様:**
 
@@ -1463,8 +1476,10 @@ SessionListPage
    - `Last Token Consumption per Index` として LastTokenUsage の推移を表示する。
    - Total / Input / Output / Reasoning / Cached の全系列について、
      BoundToNodeID が現在の nodes に存在するデータ点だけを操作可能な点として表示する。
-   - 操作時は対応ノードを選択して BottomPanel をトークン詳細モードで開き、
-     React Flow の対象ノード中央へ800ms・ズーム1.2で移動する。
+   - 操作時はtoken_countインデックスからタイムライン表示単位を解決し、関連する全系列の点と
+     TOKEN COUNT LOG行、タイムライン項目、代表ノードを共通選択する。
+   - BottomPanel をトークン詳細モードで開き、React Flow の代表ノード中央へ
+     800ms・ズーム1.2で移動する。右パネルのスクロール位置は変更しない。
 
 **StatisticsPanel（6 stat-card）:**
 
@@ -1501,7 +1516,8 @@ SessionListPage
 - BoundToNodeID が現在の nodes に存在する行だけ、クリックおよび Enter / Space で
   操作可能な行として表示する
 - 操作時は対応ノードを選択して BottomPanel をトークン詳細モードで開き、
-  React Flow の対象ノード中央へ800ms・ズーム1.2で移動する
+  対応表示単位の全token_countを強調し、React Flow の代表ノード中央へ800ms・
+  ズーム1.2で移動する。対応タイムライン項目へは自動スクロールする
 - 同じ行を連続して操作した場合も、クリックごとに移動を再実行する
 - BoundToNodeID がない、または参照先ノードが存在しない行は操作属性と操作スタイルを
   付与せず、エラー通知も行わない
@@ -1841,8 +1857,8 @@ IPCエラーは `AppError` 構造体（§4.1参照）で返す。
 
 ファイルの中身は `GetSessionDetail` の戻り値と同一形式。
 
-汎用タイムラインDTO拡張後の現行 `cache_schema_version` は4とする。バージョン3以前は
-非会話項目用フィールドを持たないため再パースする。
+共通選択情報追加後の現行 `cache_schema_version` は5とする。バージョン4以前は
+`selection_id`, `node_id`, `node_ids`, `token_count_indices` を持たないため再パースする。
 
 ### 7.2 再パース判定ロジック
 
@@ -2109,6 +2125,15 @@ test.beforeEach(async ({ page }) => {
   - 大文字・小文字を区別せず一致箇所が強調され、一致件数と不一致時の0件を確認できること。
   - 短い項目には「全文を表示」が表示されないこと。
   - タイムライン全文表示後もキャンバスノードの詳細へ切り替えられること。
+
+##### TC-109: 表示単位の共通選択
+- **前提**: 1つのタイムライン表示単位に代表ノードと複数のtoken_countが紐付いている。
+- **操作**: タイムライン項目、キャンバスノード、TOKEN COUNT LOG行、各系列の点を順に選択する。
+- **検証**:
+  - どの領域から選択しても同じタイムライン項目、代表ノード、全統計行・全系列の点が強調されること。
+  - タイムライン以外からの選択で対応項目へスクロールし、ノード以外からの選択で代表ノードへズームすること。
+  - 右側統計パネルのスクロール位置は変更されないこと。
+  - タイムライン項目の再選択、キャンバス背景、BottomPanelの閉じる操作で全選択が解除されること。
 
 ### 9.5 テストデータの整合性管理ルール
 
