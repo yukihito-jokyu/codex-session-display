@@ -102,14 +102,25 @@ type TokenCountEntry struct {
 	TotalTokenUsage *model.TokenDetail `json:"total_token_usage"`
 }
 
-// ConversationTimelineItem は会話タイムライン内の単一の発言を表します。
+// TimelineItemDetail はタイムライン項目を展開した際の補足情報を表します。
+type TimelineItemDetail struct {
+	Label string `json:"label"`
+	Value string `json:"value"`
+}
+
+// ConversationTimelineItem はタイムライン内の単一の表示項目を表します。
 type ConversationTimelineItem struct {
-	Role            string          `json:"role"`
-	Body            string          `json:"body"`
-	Timestamp       string          `json:"timestamp"`
-	LastTokenUsage  TokenBreakdown  `json:"last_token_usage"`
-	TokenCountCount int             `json:"token_count_count"`
-	TotalTokenUsage *TokenBreakdown `json:"total_token_usage"`
+	Kind            string               `json:"kind"`
+	Label           string               `json:"label"`
+	Role            string               `json:"role"`
+	Body            string               `json:"body"`
+	Timestamp       string               `json:"timestamp"`
+	RecordCount     int                  `json:"record_count"`
+	Collapsible     bool                 `json:"collapsible"`
+	Details         []TimelineItemDetail `json:"details"`
+	LastTokenUsage  TokenBreakdown       `json:"last_token_usage"`
+	TokenCountCount int                  `json:"token_count_count"`
+	TotalTokenUsage *TokenBreakdown      `json:"total_token_usage"`
 }
 
 // ConversationTimelineTurn は会話タイムライン内のターンを表します。
@@ -123,7 +134,7 @@ type ConversationTimelineTurn struct {
 }
 
 // CurrentSessionDetailCacheSchemaVersion は現行のセッション詳細キャッシュ形式を表します。
-const CurrentSessionDetailCacheSchemaVersion = 3
+const CurrentSessionDetailCacheSchemaVersion = 4
 
 // SessionDetailResponse はフロントエンドに返され、ディスクにキャッシュされるセッション詳細を表します。
 type SessionDetailResponse struct {
