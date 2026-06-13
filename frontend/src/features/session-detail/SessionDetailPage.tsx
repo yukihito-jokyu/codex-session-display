@@ -1,15 +1,5 @@
-import {
-	lazy,
-	Suspense,
-	useCallback,
-	useEffect,
-	useMemo,
-	useRef,
-	useState,
-} from "react";
+import { lazy, Suspense } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { OpenLogDirectory } from "wailsjs/go/main/App";
-import type { dto } from "wailsjs/go/models";
 import { FlowCanvas } from "../../components/ui/FlowCanvas/FlowCanvas";
 import { useSessionDetail } from "./hooks/useSessionDetail";
 import styles from "./SessionDetailPage.module.css";
@@ -20,170 +10,34 @@ const RightPanel = lazy(() =>
 	})),
 );
 
-type AppWindow = Window & {
-	go?: {
-		main?: {
-			App?: {
-				GetLogFilePath?: () => Promise<string>;
-			};
-		};
-	};
-};
-
-async function getLogFilePath() {
-	const app = (window as AppWindow).go?.main?.App;
-	if (!app?.GetLogFilePath) {
-		throw new Error("GetLogFilePath is unavailable");
-	}
-	return app.GetLogFilePath();
+function formatNumber(value?: number) {
+	return new Intl.NumberFormat().format(value ?? 0);
 }
 
 export function SessionDetailPage() {
 	const { id } = useParams<{ id: string }>();
 	const navigate = useNavigate();
-	const { sessionData, loading, error, selectedNode, handleNodeSelect, retry } =
-		useSessionDetail(id);
-	const [bottomPanelMode, setBottomPanelMode] = useState<"node" | "token">(
-		"node",
-	);
-	const [splitRatio, setSplitRatio] = useState(0.52);
-	const [zoomTarget, setZoomTarget] = useState<{
-		nodeId: string;
-		timestamp: number;
-	} | null>(null);
-	const [logActionMessage, setLogActionMessage] = useState<string | null>(null);
-	const splitContainerRef = useRef<HTMLDivElement | null>(null);
-	const dragStateRef = useRef<{
-		startX: number;
-		startRatio: number;
-		width: number;
-	} | null>(null);
-
-	const handleTokenLogClick = useCallback(
-		(nodeId: string) => {
-			if (!sessionData?.nodes) return;
-			const node = sessionData.nodes.find((n) => n.id === nodeId);
-			if (node) {
-				handleNodeSelect(node);
-				setBottomPanelMode("token");
-				setZoomTarget({ nodeId, timestamp: Date.now() });
-			}
-		},
-		[handleNodeSelect, sessionData?.nodes],
-	);
-
-	const handleCanvasNodeSelect = useCallback(
-		(node: dto.FlowNode | null) => {
-			handleNodeSelect(node);
-			if (node) {
-				setBottomPanelMode("node");
-			}
-		},
-		[handleNodeSelect],
-	);
-
-	const handleTokenBadgeClick = useCallback(
-		(node: dto.FlowNode) => {
-			handleNodeSelect(node);
-			setBottomPanelMode("token");
-		},
-		[handleNodeSelect],
-	);
-
-	const handleOpenLogDirectory = async () => {
-		try {
-			await OpenLogDirectory();
-			setLogActionMessage("ログフォルダを開きました");
-		} catch (openError) {
-			setLogActionMessage(
-				`ログフォルダを開けませんでした: ${String(openError)}`,
-			);
-		}
-	};
-
-	const handleCopyLogPath = async () => {
-		try {
-			const logPath = await getLogFilePath();
-			await navigator.clipboard.writeText(logPath);
-			setLogActionMessage("ログパスをコピーしました");
-		} catch (copyError) {
-			setLogActionMessage(
-				`ログパスをコピーできませんでした: ${String(copyError)}`,
-			);
-		}
-	};
-
-	useEffect(() => {
-		if (!selectedNode) {
-			setBottomPanelMode("node");
-		}
-	}, [selectedNode]);
-
-	useEffect(() => {
-		const handlePointerMove = (event: PointerEvent) => {
-			const dragState = dragStateRef.current;
-			if (!dragState) {
-				return;
-			}
-			const deltaX = event.clientX - dragState.startX;
-			const nextRatio =
-				(dragState.startRatio * dragState.width + deltaX) / dragState.width;
-			setSplitRatio(Math.min(0.75, Math.max(0.25, nextRatio)));
-		};
-
-		const handlePointerUp = () => {
-			dragStateRef.current = null;
-		};
-
-		window.addEventListener("pointermove", handlePointerMove);
-		window.addEventListener("pointerup", handlePointerUp);
-
-		return () => {
-			window.removeEventListener("pointermove", handlePointerMove);
-			window.removeEventListener("pointerup", handlePointerUp);
-		};
-	}, []);
-
-	const boundTokenCounts = useMemo(() => {
-		if (!selectedNode || !sessionData?.token_counts) {
-			return [];
-		}
-		return sessionData.token_counts.filter(
-			(entry) => entry.bound_to_node_id === selectedNode.id,
-		);
-	}, [selectedNode, sessionData?.token_counts]);
-
-	const latestBoundToken = boundTokenCounts.at(-1)?.total_token_usage;
-
-	const formatNumber = (value?: number) => {
-		return new Intl.NumberFormat().format(value ?? 0);
-	};
-
-	const startResize = (event: React.PointerEvent<HTMLDivElement>) => {
-		if (!splitContainerRef.current) {
-			return;
-		}
-		const rect = splitContainerRef.current.getBoundingClientRect();
-		dragStateRef.current = {
-			startX: event.clientX,
-			startRatio: splitRatio,
-			width: rect.width,
-		};
-	};
-
-	const handleResizerKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
-		if (event.key === "ArrowLeft") {
-			event.preventDefault();
-			setSplitRatio((current) => Math.max(0.25, current - 0.03));
-		}
-		if (event.key === "ArrowRight") {
-			event.preventDefault();
-			setSplitRatio((current) => Math.min(0.75, current + 0.03));
-		}
-	};
-
-	const showTokenSplit =
-		bottomPanelMode === "token" && boundTokenCounts.length > 0;
+	const {
+		sessionData,
+		loading,
+		error,
+		selectedNode,
+		splitRatio,
+		zoomTarget,
+		logActionMessage,
+		splitContainerRef,
+		boundTokenCounts,
+		latestBoundToken,
+		showTokenSplit,
+		retry,
+		handleTokenLogClick,
+		handleCanvasNodeSelect,
+		handleTokenBadgeClick,
+		handleOpenLogDirectory,
+		handleCopyLogPath,
+		startResize,
+		handleResizerKeyDown,
+	} = useSessionDetail(id);
 
 	if (loading) {
 		return (
