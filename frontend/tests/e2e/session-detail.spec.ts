@@ -102,7 +102,7 @@ test.describe("セッション詳細画面 E2E テスト", () => {
 		await expect(timeline.getByText("ターン 1")).toBeVisible();
 		await expect(timeline.getByText("5秒")).toBeVisible();
 		await expect(timeline.getByText("50K tokens")).toHaveCount(2);
-		await expect(timeline.getByText("2件")).toBeVisible();
+		await expect(timeline.getByText("2件", { exact: true })).toBeVisible();
 		await expect(timeline.getByText("累計 50K")).toBeVisible();
 		await expect(timeline.getByText("計測なし")).toHaveCount(2);
 		await expect(
@@ -112,6 +112,27 @@ test.describe("セッション詳細画面 E2E テスト", () => {
 
 		await expect(page.locator(".react-flow")).toBeVisible();
 		await expect(page.locator("text=Session Analytics")).toBeVisible();
+	});
+
+	test("推論は初期状態で折りたたまれ、展開すると本文と要約を確認できること", async ({
+		page,
+	}) => {
+		await page.locator("text=sess-001").click();
+
+		const timeline = page.getByTestId("conversation-timeline");
+		const reasoning = timeline.getByRole("button", { name: /推論/ });
+		await expect(reasoning).toBeVisible();
+		await expect(
+			timeline.getByText("Inspect the relevant implementation."),
+		).toBeHidden();
+		await expect(timeline.getByText("Implementation inspection")).toBeHidden();
+
+		await reasoning.click();
+
+		await expect(
+			timeline.getByText("Inspect the relevant implementation."),
+		).toBeVisible();
+		await expect(timeline.getByText("Implementation inspection")).toBeVisible();
 	});
 
 	test("初期表示時から viewport 外のノードが DOM に描画されないこと", async ({

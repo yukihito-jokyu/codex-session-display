@@ -18,10 +18,29 @@ export namespace dto {
 	        this.reasoning_output_tokens = source["reasoning_output_tokens"];
 	    }
 	}
+	export class TimelineItemDetail {
+	    label: string;
+	    value: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new TimelineItemDetail(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.label = source["label"];
+	        this.value = source["value"];
+	    }
+	}
 	export class ConversationTimelineItem {
+	    kind: string;
+	    label: string;
 	    role: string;
 	    body: string;
 	    timestamp: string;
+	    record_count: number;
+	    collapsible: boolean;
+	    details: TimelineItemDetail[];
 	    last_token_usage: TokenBreakdown;
 	    token_count_count: number;
 	    total_token_usage?: TokenBreakdown;
@@ -32,9 +51,14 @@ export namespace dto {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.kind = source["kind"];
+	        this.label = source["label"];
 	        this.role = source["role"];
 	        this.body = source["body"];
 	        this.timestamp = source["timestamp"];
+	        this.record_count = source["record_count"];
+	        this.collapsible = source["collapsible"];
+	        this.details = this.convertValues(source["details"], TimelineItemDetail);
 	        this.last_token_usage = this.convertValues(source["last_token_usage"], TokenBreakdown);
 	        this.token_count_count = source["token_count_count"];
 	        this.total_token_usage = this.convertValues(source["total_token_usage"], TokenBreakdown);
@@ -436,6 +460,7 @@ export namespace dto {
 	        this.parsed = source["parsed"];
 	    }
 	}
+	
 	
 	
 	
