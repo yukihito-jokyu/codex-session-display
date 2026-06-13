@@ -15,10 +15,68 @@
 	font-size: 16px;
 }
 
+.filters {
+	display: grid;
+	gap: 10px;
+	padding: 12px;
+	border-bottom: 1px solid var(--border-color);
+}
+
+.searchField {
+	display: grid;
+	gap: 6px;
+	color: var(--text-secondary);
+	font-size: 12px;
+}
+
+.searchField input {
+	width: 100%;
+	padding: 8px 10px;
+	border: 1px solid var(--border-color);
+	border-radius: 6px;
+	background: var(--mono-bg);
+	color: var(--text-primary);
+	font: inherit;
+}
+
+.categoryFilters {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 6px 12px;
+	margin: 0;
+	padding: 0;
+	border: 0;
+	color: var(--text-secondary);
+	font-size: 12px;
+}
+
+.categoryFilters legend {
+	margin-bottom: 6px;
+}
+
+.categoryFilters label,
+.checkboxFilter {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+}
+
+.checkboxFilter {
+	color: var(--text-secondary);
+	font-size: 12px;
+}
+
 .turnList {
 	flex: 1;
 	overflow-y: auto;
 	padding: 12px;
+}
+
+.emptyState {
+	margin: 24px 12px;
+	color: var(--text-secondary);
+	font-size: 13px;
+	text-align: center;
 }
 
 .turn {

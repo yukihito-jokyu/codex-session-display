@@ -114,6 +114,116 @@ test.describe("セッション詳細画面 E2E テスト", () => {
 		await expect(page.locator("text=Session Analytics")).toBeVisible();
 	});
 
+	test("タイムラインの本文と要約を検索し、元のターン境界を維持すること", async ({
+		page,
+	}) => {
+		await page.locator("text=sess-001").click();
+
+		const timeline = page.getByTestId("conversation-timeline");
+		const search = timeline.getByLabel("タイムラインを検索");
+
+		await search.fill("Conversation before the turn");
+		await expect(timeline.getByText("ターン外イベント")).toBeVisible();
+		await expect(
+			timeline.getByText("Conversation before the turn"),
+		).toBeVisible();
+		await expect(timeline.getByText("ターン 1")).toHaveCount(0);
+
+		await search.fill("Implementation inspection");
+		await expect(timeline.getByText("ターン外イベント")).toHaveCount(0);
+		await expect(timeline.getByText("ターン 1")).toBeVisible();
+		await expect(timeline.getByRole("button", { name: /推論/ })).toBeVisible();
+	});
+
+	test("タイムラインの5種別を個別に非表示・再表示できること", async ({
+		page,
+	}) => {
+		await page.locator("text=sess-001").click();
+
+		const timeline = page.getByTestId("conversation-timeline");
+		const categories = [
+			{ name: "会話", marker: "Hello, agent, please help me." },
+			{ name: "推論", marker: "推論" },
+			{ name: "ツール・コマンド", marker: "コマンド実行" },
+			{ name: "参照情報", marker: "参照ファイル" },
+			{ name: "システムイベント", marker: "システム通知" },
+		];
+
+		for (const category of categories) {
+			const checkbox = timeline.getByRole("checkbox", {
+				name: category.name,
+				exact: true,
+			});
+			const marker = timeline
+				.locator("article")
+				.getByText(category.marker, { exact: true });
+			await expect(checkbox).toBeChecked();
+			await expect(marker.first()).toBeVisible();
+
+			await checkbox.uncheck();
+			await expect(marker).toHaveCount(0);
+
+			await checkbox.check();
+			await expect(marker.first()).toBeVisible();
+		}
+
+		await timeline.getByRole("button", { name: /推論/ }).click();
+		await expect(timeline.getByText("Implementation inspection")).toBeVisible();
+		await timeline
+			.getByRole("checkbox", { name: "会話", exact: true })
+			.uncheck();
+		await expect(timeline.getByText("Implementation inspection")).toBeVisible();
+	});
+
+	test("トークン計測があるタイムライン項目だけに絞り込めること", async ({
+		page,
+	}) => {
+		await page.locator("text=sess-001").click();
+
+		const timeline = page.getByTestId("conversation-timeline");
+		const measuredOnly = timeline.getByRole("checkbox", {
+			name: "トークン計測あり",
+		});
+		await expect(measuredOnly).not.toBeChecked();
+		await expect(
+			timeline.getByText("Hello, agent, please help me."),
+		).toBeVisible();
+		await expect(timeline.getByText("Here is how to solve...")).toBeVisible();
+
+		await measuredOnly.check();
+		await expect(
+			timeline.getByText("Hello, agent, please help me."),
+		).toBeVisible();
+		await expect(timeline.getByText("Here is how to solve...")).toHaveCount(0);
+		await expect(timeline.getByText("ターン外イベント")).toHaveCount(0);
+
+		await measuredOnly.uncheck();
+		await expect(timeline.getByText("Here is how to solve...")).toBeVisible();
+		await expect(timeline.getByText("ターン外イベント")).toBeVisible();
+	});
+
+	test("検索・種別・トークン条件をAND適用し、不一致時に空状態を表示すること", async ({
+		page,
+	}) => {
+		await page.locator("text=sess-001").click();
+
+		const timeline = page.getByTestId("conversation-timeline");
+		await timeline.getByLabel("タイムラインを検索").fill("focused test");
+		await timeline.getByRole("checkbox", { name: "トークン計測あり" }).check();
+		await expect(
+			timeline.locator("article").getByText("コマンド実行", { exact: true }),
+		).toBeVisible();
+		await expect(timeline.getByText("ターン 1")).toBeVisible();
+
+		await timeline
+			.getByRole("checkbox", { name: "ツール・コマンド" })
+			.uncheck();
+		await expect(timeline.getByText("ターン 1")).toHaveCount(0);
+		await expect(
+			timeline.getByText("条件に一致するタイムライン項目はありません"),
+		).toBeVisible();
+	});
+
 	test("左タイムラインが初期幅30%で表示され、幅変更用separatorを持つこと", async ({
 		page,
 	}) => {
