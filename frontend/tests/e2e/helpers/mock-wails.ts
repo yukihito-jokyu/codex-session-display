@@ -967,9 +967,14 @@ export async function mockWailsAPI(
 						},
 						items: [
 							{
+								kind: "conversation",
+								label: "",
 								role: "user",
 								body: "Conversation before the turn",
 								timestamp: "2026-05-20T09:59:59Z",
+								record_count: 1,
+								collapsible: false,
+								details: [],
 								last_token_usage: {
 									total_tokens: 0,
 									input_tokens: 0,
@@ -994,9 +999,14 @@ export async function mockWailsAPI(
 						},
 						items: [
 							{
+								kind: "conversation",
+								label: "",
 								role: "user",
 								body: "Hello, agent, please help me.",
 								timestamp: "2026-05-20T10:00:01Z",
+								record_count: 1,
+								collapsible: false,
+								details: [],
 								last_token_usage: {
 									total_tokens: 50000,
 									input_tokens: 40000,
@@ -1012,9 +1022,42 @@ export async function mockWailsAPI(
 								},
 							},
 							{
+								kind: "reasoning",
+								label: "推論",
+								role: "",
+								body: "Inspect the relevant implementation.",
+								timestamp: "2026-05-20T10:00:03Z",
+								record_count: 2,
+								collapsible: true,
+								details: [
+									{
+										label: "要約",
+										value: "Implementation inspection",
+									},
+								],
+								last_token_usage: {
+									total_tokens: 500,
+									input_tokens: 300,
+									output_tokens: 200,
+									reasoning_output_tokens: 150,
+								},
+								token_count_count: 1,
+								total_token_usage: {
+									total_tokens: 49500,
+									input_tokens: 39700,
+									output_tokens: 9800,
+									reasoning_output_tokens: 1850,
+								},
+							},
+							{
+								kind: "conversation",
+								label: "",
 								role: "assistant",
 								body: "Here is how to solve...",
 								timestamp: "2026-05-20T10:00:05Z",
+								record_count: 1,
+								collapsible: false,
+								details: [],
 								last_token_usage: {
 									total_tokens: 0,
 									input_tokens: 0,
