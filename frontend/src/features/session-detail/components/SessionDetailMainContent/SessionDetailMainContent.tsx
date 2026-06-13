@@ -8,6 +8,7 @@ import {
 import type { dto } from "wailsjs/go/models";
 import { FlowCanvas } from "../../../../components/ui/FlowCanvas/FlowCanvas";
 import { BottomPanel } from "../BottomPanel/BottomPanel";
+import { ConversationTimeline } from "../ConversationTimeline/ConversationTimeline";
 import styles from "./SessionDetailMainContent.module.css";
 
 const RightPanel = lazy(() =>
@@ -49,6 +50,9 @@ export function SessionDetailMainContent({
 }: SessionDetailMainContentProps) {
 	return (
 		<div className={styles.detailContent}>
+			{sessionData && (
+				<ConversationTimeline turns={sessionData.timeline || []} />
+			)}
 			<div className={styles.mainArea}>
 				<div className={styles.canvasWrapper}>
 					{sessionData && (
