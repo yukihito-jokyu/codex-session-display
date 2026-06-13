@@ -7,6 +7,20 @@
 	height: 100%;
 }
 
+.timelinePane {
+	flex: 0 0 auto;
+	height: 100%;
+	overflow: hidden;
+}
+
+.timelineResizer {
+	width: 8px;
+	flex: 0 0 8px;
+	border-left: 1px solid var(--border-color);
+	cursor: col-resize;
+	touch-action: none;
+}
+
 .mainArea {
 	flex: 1;
 	display: flex;
