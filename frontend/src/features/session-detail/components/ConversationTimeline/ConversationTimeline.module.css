@@ -72,6 +72,30 @@
 	border-left-color: var(--node-think-text);
 }
 
+.event {
+	border-left-color: var(--node-tool-text);
+}
+
+.eventToggle {
+	width: 100%;
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	padding: 0;
+	border: 0;
+	background: transparent;
+	color: inherit;
+	cursor: pointer;
+	font: inherit;
+	text-align: left;
+}
+
+.eventToggle span {
+	color: var(--text-secondary);
+	font-size: 11px;
+}
+
 .itemHeader {
 	display: flex;
 	align-items: center;
@@ -93,6 +117,19 @@
 	white-space: pre-wrap;
 	overflow-wrap: anywhere;
 	font-size: 13px;
+	line-height: 1.5;
+}
+
+.expandedContent {
+	margin-top: 8px;
+}
+
+.detail {
+	margin: 8px 0;
+	white-space: pre-wrap;
+	overflow-wrap: anywhere;
+	font-family: inherit;
+	font-size: 12px;
 	line-height: 1.5;
 }
 

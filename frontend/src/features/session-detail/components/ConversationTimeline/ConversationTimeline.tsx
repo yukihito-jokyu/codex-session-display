@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { dto } from "wailsjs/go/models";
 import styles from "./ConversationTimeline.module.css";
 
@@ -23,6 +24,22 @@ function formatDuration(durationMs: number) {
 }
 
 export function ConversationTimeline({ turns }: ConversationTimelineProps) {
+	const [expandedItems, setExpandedItems] = useState<Set<string>>(
+		() => new Set(),
+	);
+
+	const toggleItem = (itemKey: string) => {
+		setExpandedItems((current) => {
+			const next = new Set(current);
+			if (next.has(itemKey)) {
+				next.delete(itemKey);
+			} else {
+				next.add(itemKey);
+			}
+			return next;
+		});
+	};
+
 	return (
 		<aside
 			aria-label="会話タイムライン"
@@ -51,44 +68,82 @@ export function ConversationTimeline({ turns }: ConversationTimelineProps) {
 						</header>
 
 						<div className={styles.itemList}>
-							{turn.items.map((item) => (
-								<article
-									className={`${styles.item} ${
-										item.role === "user" ? styles.user : styles.assistant
-									}`}
-									key={`${item.role}-${item.timestamp}-${item.body}`}
-								>
-									<div className={styles.itemHeader}>
-										<strong>{item.role === "user" ? "User" : "AI"}</strong>
-										{item.timestamp && (
-											<time dateTime={item.timestamp}>{item.timestamp}</time>
-										)}
-									</div>
-									<p className={styles.body}>{item.body}</p>
-									<div className={styles.tokenMetrics}>
-										{item.token_count_count > 0 ? (
-											<>
-												<strong>
-													{formatTokens(
-														item.last_token_usage?.total_tokens || 0,
-													)}
-												</strong>
-												<span>{item.token_count_count}件</span>
-												{item.total_token_usage && (
-													<span>
-														累計{" "}
-														{compactNumber.format(
-															item.total_token_usage.total_tokens,
-														)}
-													</span>
-												)}
-											</>
+							{turn.items.map((item, itemIndex) => {
+								const kind = item.kind || "conversation";
+								const itemKey = `${turn.index}-${itemIndex}-${kind}-${item.timestamp}`;
+								const collapsible = item.collapsible ?? kind !== "conversation";
+								const expanded = !collapsible || expandedItems.has(itemKey);
+
+								return (
+									<article
+										className={`${styles.item} ${
+											kind === "conversation"
+												? item.role === "user"
+													? styles.user
+													: styles.assistant
+												: styles.event
+										}`}
+										key={itemKey}
+									>
+										{collapsible ? (
+											<button
+												aria-expanded={expanded}
+												className={styles.eventToggle}
+												onClick={() => toggleItem(itemKey)}
+												type="button"
+											>
+												<strong>{item.label || kind}</strong>
+												<span>{item.record_count || 1}件の記録</span>
+											</button>
 										) : (
-											<span>計測なし</span>
+											<div className={styles.itemHeader}>
+												<strong>{item.role === "user" ? "User" : "AI"}</strong>
+												{item.timestamp && (
+													<time dateTime={item.timestamp}>
+														{item.timestamp}
+													</time>
+												)}
+											</div>
 										)}
-									</div>
-								</article>
-							))}
+										{expanded && (
+											<div className={styles.expandedContent}>
+												<p className={styles.body}>{item.body}</p>
+												{item.details?.length > 0 && (
+													<pre className={styles.detail}>
+														{item.details
+															.map(
+																(detail) => `${detail.label}\n${detail.value}`,
+															)
+															.join("\n\n")}
+													</pre>
+												)}
+											</div>
+										)}
+										<div className={styles.tokenMetrics}>
+											{item.token_count_count > 0 ? (
+												<>
+													<strong>
+														{formatTokens(
+															item.last_token_usage?.total_tokens || 0,
+														)}
+													</strong>
+													<span>{item.token_count_count}件</span>
+													{item.total_token_usage && (
+														<span>
+															累計{" "}
+															{compactNumber.format(
+																item.total_token_usage.total_tokens,
+															)}
+														</span>
+													)}
+												</>
+											) : (
+												<span>計測なし</span>
+											)}
+										</div>
+									</article>
+								);
+							})}
 						</div>
 					</section>
 				))}
