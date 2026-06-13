@@ -1057,7 +1057,18 @@ export async function mockWailsAPI(
 								timestamp: "2026-05-20T10:00:03.500Z",
 								record_count: 1,
 								collapsible: true,
-								details: [],
+								details: [
+									{
+										label: "出力",
+										value:
+											"SEARCH_NEEDLE first.\n" +
+											"Long command output line.\n".repeat(20) +
+											"SEARCH_NEEDLE second.\n" +
+											"Long command output line.\n".repeat(20) +
+											"SEARCH_NEEDLE third.\n" +
+											"LONG_COMMAND_OUTPUT_END",
+									},
+								],
 								last_token_usage: {
 									total_tokens: 100,
 									input_tokens: 50,
