@@ -33,6 +33,10 @@ export namespace dto {
 	    }
 	}
 	export class ConversationTimelineItem {
+	    selection_id: string;
+	    node_id: string;
+	    node_ids: string[];
+	    token_count_indices: number[];
 	    kind: string;
 	    label: string;
 	    role: string;
@@ -51,6 +55,10 @@ export namespace dto {
 	
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.selection_id = source["selection_id"];
+	        this.node_id = source["node_id"];
+	        this.node_ids = source["node_ids"];
+	        this.token_count_indices = source["token_count_indices"];
 	        this.kind = source["kind"];
 	        this.label = source["label"];
 	        this.role = source["role"];

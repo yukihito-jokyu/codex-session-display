@@ -65,7 +65,12 @@ func NewGetSessionDetailUseCase(sessionRepo SessionRepository, cacheRepo CacheRe
 	}
 }
 
-func buildConversationTimeline(turns []*model.Turn, turnStats []dto.TurnStatistics) []dto.ConversationTimelineTurn {
+func buildConversationTimeline(
+	turns []*model.Turn,
+	turnStats []dto.TurnStatistics,
+	recordToNodeID map[int]string,
+	tokenCountIndexByRecordLine map[int]int,
+) []dto.ConversationTimelineTurn {
 	var timeline []dto.ConversationTimelineTurn
 	consumedTokensByTurn := make(map[int]dto.TokenBreakdown, len(turnStats))
 	for _, turnStat := range turnStats {
@@ -132,18 +137,32 @@ func buildConversationTimeline(turns []*model.Turn, turnStats []dto.TurnStatisti
 		for index := range units {
 			unit := &units[index]
 			lastTokenUsage, tokenCountCount, totalTokenUsage := conversationTokenUsage(turn, unit)
+			nodeIDs, tokenCountIndices := conversationSelection(
+				turn,
+				unit,
+				recordToNodeID,
+				tokenCountIndexByRecordLine,
+			)
+			var nodeID string
+			if len(nodeIDs) > 0 {
+				nodeID = nodeIDs[0]
+			}
 			items = append(items, dto.ConversationTimelineItem{
-				Kind:            unit.Kind,
-				Label:           unit.Label,
-				Role:            unit.Role,
-				Body:            unit.Body,
-				Timestamp:       unit.Timestamp,
-				RecordCount:     len(unit.Records),
-				Collapsible:     unit.Kind != "conversation",
-				Details:         unit.Details,
-				LastTokenUsage:  lastTokenUsage,
-				TokenCountCount: tokenCountCount,
-				TotalTokenUsage: totalTokenUsage,
+				SelectionID:       fmt.Sprintf("timeline-%d-%d", turn.Index, unit.StartLine),
+				NodeID:            nodeID,
+				NodeIDs:           nodeIDs,
+				TokenCountIndices: tokenCountIndices,
+				Kind:              unit.Kind,
+				Label:             unit.Label,
+				Role:              unit.Role,
+				Body:              unit.Body,
+				Timestamp:         unit.Timestamp,
+				RecordCount:       len(unit.Records),
+				Collapsible:       unit.Kind != "conversation",
+				Details:           unit.Details,
+				LastTokenUsage:    lastTokenUsage,
+				TokenCountCount:   tokenCountCount,
+				TotalTokenUsage:   totalTokenUsage,
 			})
 		}
 
@@ -477,6 +496,41 @@ func metadataTimelineUnits(turn *model.Turn) []conversationDisplayUnit {
 		}
 	}
 	return units
+}
+
+func conversationSelection(
+	turn *model.Turn,
+	unit *conversationDisplayUnit,
+	recordToNodeID map[int]string,
+	tokenCountIndexByRecordLine map[int]int,
+) (nodeIDs []string, tokenCountIndices []int) {
+	recordLines := make(map[int]struct{}, len(unit.Records))
+	seenNodeIDs := make(map[string]struct{}, len(unit.Records))
+	for _, record := range unit.Records {
+		recordLines[record.LineNumber] = struct{}{}
+		nodeID := recordToNodeID[record.LineNumber]
+		if nodeID == "" {
+			continue
+		}
+		if _, exists := seenNodeIDs[nodeID]; exists {
+			continue
+		}
+		seenNodeIDs[nodeID] = struct{}{}
+		nodeIDs = append(nodeIDs, nodeID)
+	}
+
+	for _, tokenCount := range turn.TokenCounts {
+		if tokenCount.BoundToRecord == nil || tokenCount.Record == nil {
+			continue
+		}
+		if _, ok := recordLines[tokenCount.BoundToRecord.LineNumber]; !ok {
+			continue
+		}
+		if tokenCountIndex, ok := tokenCountIndexByRecordLine[tokenCount.Record.LineNumber]; ok {
+			tokenCountIndices = append(tokenCountIndices, tokenCountIndex)
+		}
+	}
+	return nodeIDs, tokenCountIndices
 }
 
 func conversationTokenUsage(
@@ -1533,6 +1587,7 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 
 	// Step 4: 各 token_count を Binding
 	var tokenCountsList []dto.TokenCountEntry
+	tokenCountIndexByRecordLine := make(map[int]int)
 	var tcIdx int
 	resolveBoundNodeID := func(turn *model.Turn, tc *model.TokenCountWithBinding) string {
 		if tc.BoundToRecord != nil {
@@ -1572,6 +1627,7 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 				LastTokenUsage:  lastUsage,
 			}
 			tokenCountsList = append(tokenCountsList, entry)
+			tokenCountIndexByRecordLine[tc.Record.LineNumber] = tcIdx
 			tcIdx++
 
 			// NodeID にバッジを集約
@@ -1716,7 +1772,12 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 		Edges:              edges,
 		Statistics:         stats,
 		TokenCounts:        tokenCountsList,
-		Timeline:           buildConversationTimeline(turns, turnStats),
+		Timeline: buildConversationTimeline(
+			turns,
+			turnStats,
+			RecordToNodeID,
+			tokenCountIndexByRecordLine,
+		),
 	}
 
 	// 9. キャッシュへの保存

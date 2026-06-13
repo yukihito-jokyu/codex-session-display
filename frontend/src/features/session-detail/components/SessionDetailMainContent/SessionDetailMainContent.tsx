@@ -20,6 +20,10 @@ const RightPanel = lazy(() =>
 type SessionDetailMainContentProps = {
 	sessionData: dto.SessionDetailResponse | null;
 	selectedNode: dto.FlowNode | null;
+	selectedFlowNodeId: string | null;
+	selectedTimelineId: string | null;
+	selectedTokenCountIndices: number[];
+	timelineScrollTarget: { selectionId: string; timestamp: number } | null;
 	splitRatio: number;
 	zoomTarget: { nodeId: string; timestamp: number } | null;
 	splitContainerRef: MutableRefObject<HTMLDivElement | null>;
@@ -31,9 +35,10 @@ type SessionDetailMainContentProps = {
 	timelineMaxWidth: number;
 	onStartTimelineResize: PointerEventHandler<HTMLDivElement>;
 	onTimelineResizerKeyDown: KeyboardEventHandler<HTMLDivElement>;
-	onTokenLogClick: (nodeId: string) => void;
+	onTokenLogClick: (tokenIndex: number) => void;
 	onCanvasNodeSelect: (node: dto.FlowNode | null) => void;
 	onTokenBadgeClick: (node: dto.FlowNode) => void;
+	onTimelineSelect: (item: dto.ConversationTimelineItem) => void;
 	onTimelineFullText: (item: dto.ConversationTimelineItem) => void;
 	onStartResize: PointerEventHandler<HTMLDivElement>;
 	onResizerKeyDown: KeyboardEventHandler<HTMLDivElement>;
@@ -42,6 +47,10 @@ type SessionDetailMainContentProps = {
 export function SessionDetailMainContent({
 	sessionData,
 	selectedNode,
+	selectedFlowNodeId,
+	selectedTimelineId,
+	selectedTokenCountIndices,
+	timelineScrollTarget,
 	splitRatio,
 	zoomTarget,
 	splitContainerRef,
@@ -56,11 +65,15 @@ export function SessionDetailMainContent({
 	onTokenLogClick,
 	onCanvasNodeSelect,
 	onTokenBadgeClick,
+	onTimelineSelect,
 	onTimelineFullText,
 	onStartResize,
 	onResizerKeyDown,
 }: SessionDetailMainContentProps) {
 	const timelineDetailSelected = selectedNode?.data?.category === "timeline";
+	const selectedFlowNode = sessionData?.nodes?.find(
+		(node) => node.id === selectedFlowNodeId,
+	);
 
 	return (
 		<div className={styles.detailContent}>
@@ -69,6 +82,9 @@ export function SessionDetailMainContent({
 					<div className={styles.timelinePane} style={{ width: timelineWidth }}>
 						<ConversationTimeline
 							turns={sessionData.timeline || []}
+							selectedSelectionId={selectedTimelineId}
+							scrollTarget={timelineScrollTarget}
+							onSelect={onTimelineSelect}
 							onShowFullText={onTimelineFullText}
 						/>
 					</div>
@@ -96,14 +112,10 @@ export function SessionDetailMainContent({
 							onNodeSelect={onCanvasNodeSelect}
 							onTokenBadgeClick={onTokenBadgeClick}
 							interactionLocked={Boolean(
-								selectedNode && !timelineDetailSelected,
+								selectedFlowNodeId && !timelineDetailSelected,
 							)}
-							selectedNodeId={
-								timelineDetailSelected ? undefined : selectedNode?.id
-							}
-							selectedNodeType={
-								timelineDetailSelected ? undefined : selectedNode?.type
-							}
+							selectedNodeId={selectedFlowNodeId ?? undefined}
+							selectedNodeType={selectedFlowNode?.type}
 							zoomTarget={zoomTarget}
 						/>
 					)}
@@ -130,6 +142,7 @@ export function SessionDetailMainContent({
 						statistics={sessionData.statistics}
 						tokenCounts={sessionData.token_counts || []}
 						nodes={sessionData.nodes || []}
+						selectedTokenCountIndices={selectedTokenCountIndices}
 						onTokenLogClick={onTokenLogClick}
 					/>
 				</Suspense>

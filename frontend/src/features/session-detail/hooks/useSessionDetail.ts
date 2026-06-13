@@ -37,6 +37,19 @@ export function useSessionDetail(id: string | undefined) {
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [selectedNode, setSelectedNode] = useState<dto.FlowNode | null>(null);
+	const [selectedFlowNodeId, setSelectedFlowNodeId] = useState<string | null>(
+		null,
+	);
+	const [selectedTimelineId, setSelectedTimelineId] = useState<string | null>(
+		null,
+	);
+	const [selectedTokenCountIndices, setSelectedTokenCountIndices] = useState<
+		number[]
+	>([]);
+	const [timelineScrollTarget, setTimelineScrollTarget] = useState<{
+		selectionId: string;
+		timestamp: number;
+	} | null>(null);
 	const [bottomPanelMode, setBottomPanelMode] =
 		useState<BottomPanelMode>("node");
 	const [splitRatio, setSplitRatio] = useState(0.52);
@@ -83,38 +96,136 @@ export function useSessionDetail(id: string | undefined) {
 		}
 	}, [id, fetchSessionDetail]);
 
-	const handleTokenLogClick = useCallback(
-		(nodeId: string) => {
-			const node = sessionData?.nodes?.find(
-				(candidate) => candidate.id === nodeId,
-			);
-			if (!node) {
-				return;
-			}
-			setSelectedNode(node);
-			setBottomPanelMode("token");
-			setZoomTarget({ nodeId, timestamp: Date.now() });
-		},
-		[sessionData?.nodes],
+	const timelineItems = useMemo(
+		() =>
+			(sessionData?.timeline ?? []).flatMap((turn) =>
+				(turn.items ?? []).map((item) => item),
+			),
+		[sessionData?.timeline],
 	);
 
-	const handleCanvasNodeSelect = useCallback((node: dto.FlowNode | null) => {
-		setSelectedNode(node);
-		if (node) {
-			setBottomPanelMode("node");
-		}
+	const clearSelection = useCallback(() => {
+		setSelectedNode(null);
+		setSelectedFlowNodeId(null);
+		setSelectedTimelineId(null);
+		setSelectedTokenCountIndices([]);
+		setBottomPanelMode("node");
 	}, []);
 
-	const handleTokenBadgeClick = useCallback((node: dto.FlowNode) => {
-		setSelectedNode(node);
-		setBottomPanelMode("token");
-	}, []);
+	const findTimelineItemByNodeId = useCallback(
+		(nodeId: string) =>
+			timelineItems.find(
+				(item) =>
+					item.node_id === nodeId || (item.node_ids ?? []).includes(nodeId),
+			),
+		[timelineItems],
+	);
+
+	const applyTimelineSelection = useCallback(
+		(
+			item: dto.ConversationTimelineItem | undefined,
+			node: dto.FlowNode | null,
+			mode: BottomPanelMode,
+			scrollTimeline: boolean,
+			zoomCanvas: boolean,
+		) => {
+			const selectionId = item?.selection_id ?? null;
+			const flowNodeId = node?.id || item?.node_id || null;
+			setSelectedNode(node);
+			setSelectedFlowNodeId(flowNodeId);
+			setSelectedTimelineId(selectionId);
+			setSelectedTokenCountIndices(item?.token_count_indices ?? []);
+			setBottomPanelMode(mode);
+			if (selectionId && scrollTimeline) {
+				setTimelineScrollTarget({
+					selectionId,
+					timestamp: Date.now(),
+				});
+			}
+			if (flowNodeId && zoomCanvas) {
+				setZoomTarget({ nodeId: flowNodeId, timestamp: Date.now() });
+			}
+		},
+		[],
+	);
+
+	const handleTokenLogClick = useCallback(
+		(tokenIndex: number) => {
+			const item = timelineItems.find((candidate) =>
+				(candidate.token_count_indices ?? []).includes(tokenIndex),
+			);
+			const tokenCount = sessionData?.token_counts?.find(
+				(entry) => entry.index === tokenIndex,
+			);
+			const nodeId = item?.node_id || tokenCount?.bound_to_node_id;
+			const node =
+				sessionData?.nodes?.find((candidate) => candidate.id === nodeId) ??
+				null;
+			applyTimelineSelection(item, node, "token", true, true);
+		},
+		[
+			applyTimelineSelection,
+			sessionData?.nodes,
+			sessionData?.token_counts,
+			timelineItems,
+		],
+	);
+
+	const handleCanvasNodeSelect = useCallback(
+		(node: dto.FlowNode | null) => {
+			if (!node) {
+				clearSelection();
+				return;
+			}
+			applyTimelineSelection(
+				findTimelineItemByNodeId(node.id),
+				node,
+				"node",
+				true,
+				false,
+			);
+		},
+		[applyTimelineSelection, clearSelection, findTimelineItemByNodeId],
+	);
+
+	const handleTokenBadgeClick = useCallback(
+		(node: dto.FlowNode) => {
+			applyTimelineSelection(
+				findTimelineItemByNodeId(node.id),
+				node,
+				"token",
+				true,
+				false,
+			);
+		},
+		[applyTimelineSelection, findTimelineItemByNodeId],
+	);
+
+	const handleTimelineSelect = useCallback(
+		(item: dto.ConversationTimelineItem) => {
+			if (item.selection_id && item.selection_id === selectedTimelineId) {
+				clearSelection();
+				return;
+			}
+			const node =
+				sessionData?.nodes?.find(
+					(candidate) => candidate.id === item.node_id,
+				) ?? null;
+			applyTimelineSelection(item, node, "node", false, true);
+		},
+		[
+			applyTimelineSelection,
+			clearSelection,
+			selectedTimelineId,
+			sessionData?.nodes,
+		],
+	);
 
 	const handleTimelineFullText = useCallback(
 		(item: dto.ConversationTimelineItem) => {
 			setSelectedNode(
 				dto.FlowNode.createFrom({
-					id: `timeline-${item.kind}-${item.timestamp}`,
+					id: item.selection_id || `timeline-${item.kind}-${item.timestamp}`,
 					type: "generic",
 					position: { x: 0, y: 0 },
 					data: {
@@ -126,7 +237,13 @@ export function useSessionDetail(id: string | undefined) {
 					},
 				}),
 			);
+			setSelectedFlowNodeId(item.node_id || null);
+			setSelectedTimelineId(item.selection_id || null);
+			setSelectedTokenCountIndices(item.token_count_indices ?? []);
 			setBottomPanelMode("node");
+			if (item.node_id) {
+				setZoomTarget({ nodeId: item.node_id, timestamp: Date.now() });
+			}
 		},
 		[],
 	);
@@ -186,13 +303,26 @@ export function useSessionDetail(id: string | undefined) {
 	}, []);
 
 	const boundTokenCounts = useMemo(() => {
-		if (!selectedNode || !sessionData?.token_counts) {
+		if (!sessionData?.token_counts) {
+			return [];
+		}
+		if (selectedTokenCountIndices.length > 0) {
+			const selectedIndices = new Set(selectedTokenCountIndices);
+			return sessionData.token_counts.filter((entry) =>
+				selectedIndices.has(entry.index),
+			);
+		}
+		if (!selectedFlowNodeId) {
 			return [];
 		}
 		return sessionData.token_counts.filter(
-			(entry) => entry.bound_to_node_id === selectedNode.id,
+			(entry) => entry.bound_to_node_id === selectedFlowNodeId,
 		);
-	}, [selectedNode, sessionData?.token_counts]);
+	}, [
+		selectedFlowNodeId,
+		selectedTokenCountIndices,
+		sessionData?.token_counts,
+	]);
 
 	const latestBoundToken = boundTokenCounts.at(-1)?.total_token_usage;
 	const showTokenSplit =
@@ -232,6 +362,10 @@ export function useSessionDetail(id: string | undefined) {
 		loading,
 		error,
 		selectedNode,
+		selectedFlowNodeId,
+		selectedTimelineId,
+		selectedTokenCountIndices,
+		timelineScrollTarget,
 		splitRatio,
 		zoomTarget,
 		logActionMessage,
@@ -243,6 +377,7 @@ export function useSessionDetail(id: string | undefined) {
 		handleTokenLogClick,
 		handleCanvasNodeSelect,
 		handleTokenBadgeClick,
+		handleTimelineSelect,
 		handleTimelineFullText,
 		handleOpenLogDirectory,
 		handleCopyLogPath,

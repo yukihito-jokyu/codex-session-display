@@ -18,7 +18,8 @@ interface RightPanelProps {
 	statistics: dto.Statistics;
 	tokenCounts: dto.TokenCountEntry[];
 	nodes: dto.FlowNode[];
-	onTokenLogClick?: (nodeId: string) => void;
+	selectedTokenCountIndices: number[];
+	onTokenLogClick?: (tokenIndex: number) => void;
 }
 
 interface LastTokenChartData {
@@ -39,7 +40,8 @@ interface TokenChartDotProps {
 	payload?: LastTokenChartData;
 	series: "input" | "output" | "reasoning" | "cached" | "total";
 	radius: number;
-	onSelect?: (nodeId: string) => void;
+	selected: boolean;
+	onSelect?: (tokenIndex: number) => void;
 }
 
 function TokenChartDot({
@@ -49,6 +51,7 @@ function TokenChartDot({
 	payload,
 	series,
 	radius,
+	selected,
 	onSelect,
 }: TokenChartDotProps) {
 	if (cx === undefined || cy === undefined || !payload) {
@@ -56,9 +59,9 @@ function TokenChartDot({
 	}
 
 	const interactive = Boolean(payload.nodeId && onSelect);
-	const selectNode = () => {
-		if (payload.nodeId && onSelect) {
-			onSelect(payload.nodeId);
+	const selectTokenCount = () => {
+		if (onSelect) {
+			onSelect(payload.index);
 		}
 	};
 
@@ -70,6 +73,7 @@ function TokenChartDot({
 				r={radius}
 				fill={stroke}
 				stroke={stroke}
+				data-selected={selected}
 				data-testid={
 					series === "total"
 						? `last-token-point-${payload.index}`
@@ -83,26 +87,30 @@ function TokenChartDot({
 		<circle
 			cx={cx}
 			cy={cy}
-			r={radius}
+			r={selected ? radius + 2 : radius}
 			fill={stroke}
 			stroke={stroke}
-			className={styles.interactiveChartPoint}
+			className={`${styles.interactiveChartPoint} ${
+				selected ? styles.selectedChartPoint : ""
+			}`}
+			data-selected={selected}
 			data-testid={
 				series === "total"
 					? `last-token-point-${payload.index}`
 					: `last-token-point-${series}-${payload.index}`
 			}
 			role="button"
+			aria-pressed={selected}
 			tabIndex={0}
-			aria-label={`Select node for token index ${payload.index}`}
+			aria-label={`Select token index ${payload.index}`}
 			onClick={(event) => {
 				event.stopPropagation();
-				selectNode();
+				selectTokenCount();
 			}}
 			onKeyDown={(event) => {
 				if (event.key === "Enter" || event.key === " ") {
 					event.preventDefault();
-					selectNode();
+					selectTokenCount();
 				}
 			}}
 		/>
@@ -113,6 +121,7 @@ export function RightPanel({
 	statistics,
 	tokenCounts,
 	nodes,
+	selectedTokenCountIndices,
 	onTokenLogClick,
 }: RightPanelProps) {
 	const [tokenLogMode, setTokenLogMode] = useState<"cumulative" | "last">(
@@ -136,6 +145,10 @@ export function RightPanel({
 	}, [nodes, statistics.turn_count]);
 
 	const nodeIds = useMemo(() => new Set(nodes.map((node) => node.id)), [nodes]);
+	const selectedTokenIndices = useMemo(
+		() => new Set(selectedTokenCountIndices),
+		[selectedTokenCountIndices],
+	);
 
 	// グラフ用データの整形
 	const chartData = useMemo(() => {
@@ -173,14 +186,10 @@ export function RightPanel({
 		});
 	}, [nodeIds, tokenCounts]);
 
-	const handleRowKeyDown = (event: React.KeyboardEvent, nodeId?: string) => {
-		if (
-			(event.key === "Enter" || event.key === " ") &&
-			nodeId &&
-			onTokenLogClick
-		) {
+	const handleRowKeyDown = (event: React.KeyboardEvent, tokenIndex: number) => {
+		if ((event.key === "Enter" || event.key === " ") && onTokenLogClick) {
 			event.preventDefault();
-			onTokenLogClick(nodeId);
+			onTokenLogClick(tokenIndex);
 		}
 	};
 
@@ -442,6 +451,7 @@ export function RightPanel({
 											{...props}
 											series="input"
 											radius={2}
+											selected={selectedTokenIndices.has(props.payload?.index)}
 											onSelect={onTokenLogClick}
 										/>
 									)}
@@ -459,6 +469,7 @@ export function RightPanel({
 											{...props}
 											series="output"
 											radius={2}
+											selected={selectedTokenIndices.has(props.payload?.index)}
 											onSelect={onTokenLogClick}
 										/>
 									)}
@@ -476,6 +487,7 @@ export function RightPanel({
 											{...props}
 											series="reasoning"
 											radius={2}
+											selected={selectedTokenIndices.has(props.payload?.index)}
 											onSelect={onTokenLogClick}
 										/>
 									)}
@@ -493,6 +505,7 @@ export function RightPanel({
 											{...props}
 											series="cached"
 											radius={2}
+											selected={selectedTokenIndices.has(props.payload?.index)}
 											onSelect={onTokenLogClick}
 										/>
 									)}
@@ -510,6 +523,7 @@ export function RightPanel({
 											{...props}
 											series="total"
 											radius={3}
+											selected={selectedTokenIndices.has(props.payload?.index)}
 											onSelect={onTokenLogClick}
 										/>
 									)}
@@ -643,6 +657,8 @@ export function RightPanel({
 											? entry.total_token_usage
 											: entry.last_token_usage;
 
+									const selected = selectedTokenIndices.has(entry.index);
+
 									return (
 										<React.Fragment key={entry.index}>
 											{showSeparator && (
@@ -653,15 +669,28 @@ export function RightPanel({
 												</tr>
 											)}
 											<tr
-												className={targetNodeId ? styles.tokenRow : ""}
+												className={`${targetNodeId && onTokenLogClick ? styles.tokenRow : ""} ${
+													selected ? styles.selectedTokenRow : ""
+												}`}
+												aria-current={selected ? "true" : undefined}
+												data-selected={selected}
+												data-testid={`token-row-${entry.index}`}
 												onClick={() => {
 													if (targetNodeId && onTokenLogClick) {
-														onTokenLogClick(targetNodeId);
+														onTokenLogClick(entry.index);
 													}
 												}}
-												onKeyDown={(e) => handleRowKeyDown(e, targetNodeId)}
-												tabIndex={targetNodeId ? 0 : undefined}
-												role={targetNodeId ? "button" : undefined}
+												onKeyDown={(e) => {
+													if (targetNodeId) {
+														handleRowKeyDown(e, entry.index);
+													}
+												}}
+												tabIndex={
+													targetNodeId && onTokenLogClick ? 0 : undefined
+												}
+												role={
+													targetNodeId && onTokenLogClick ? "button" : undefined
+												}
 											>
 												<td>{entry.index}</td>
 												<td>
