@@ -55,6 +55,7 @@ export function BottomPanel({
 				}
 			>
 				<NodeDetail
+					key={node.id}
 					node={node}
 					splitRatio={showTokenSplit ? splitRatio : undefined}
 				/>
