@@ -892,6 +892,140 @@ test.describe("セッション詳細画面 E2E テスト", () => {
 			.not.toBe(beforeTransform);
 	});
 
+	test("タイムライン項目を選択するとノード・統計・下部詳細が同じ表示単位として選択されること", async ({
+		page,
+	}) => {
+		await page.locator("text=sess-001").click();
+
+		const timelineItem = page.getByTestId("timeline-item-timeline-turn-1-user");
+		await timelineItem.click();
+
+		await expect(timelineItem).toHaveAttribute("aria-selected", "true");
+		await expect(
+			page.locator('.react-flow__node[data-id="node-user-msg"]'),
+		).toHaveClass(/selected/);
+		await expect(page.locator('[data-testid="token-row-0"]')).toHaveAttribute(
+			"data-selected",
+			"true",
+		);
+		await expect(page.locator('[data-testid="token-row-1"]')).toHaveAttribute(
+			"data-selected",
+			"true",
+		);
+		await expect(page.getByTestId("last-token-point-0")).toHaveAttribute(
+			"data-selected",
+			"true",
+		);
+		await expect(page.getByTestId("last-token-point-1")).toHaveAttribute(
+			"data-selected",
+			"true",
+		);
+		for (const series of ["input", "output", "reasoning", "cached"]) {
+			await expect(
+				page.getByTestId(`last-token-point-${series}-0`),
+			).toHaveAttribute("data-selected", "true");
+			await expect(
+				page.getByTestId(`last-token-point-${series}-1`),
+			).toHaveAttribute("data-selected", "true");
+		}
+		await expect(page.locator("text=Node Detail: User Message")).toBeVisible();
+	});
+
+	test("統計行から選択すると対応タイムラインへスクロールして表示単位全体を選択すること", async ({
+		page,
+	}) => {
+		await page.locator("text=sess-001").click();
+		await page.evaluate(() => {
+			const testWindow = window as Window & {
+				__timelineScrollTarget?: string | null;
+			};
+			testWindow.__timelineScrollTarget = null;
+			Element.prototype.scrollIntoView = function scrollIntoView() {
+				testWindow.__timelineScrollTarget = this.getAttribute("data-testid");
+			};
+		});
+
+		await page.getByTestId("token-row-0").click();
+
+		await expect(
+			page.getByTestId("timeline-item-timeline-turn-1-user"),
+		).toHaveAttribute("aria-selected", "true");
+		await expect(page.getByTestId("token-row-1")).toHaveAttribute(
+			"data-selected",
+			"true",
+		);
+		await expect
+			.poll(() =>
+				page.evaluate(
+					() =>
+						(
+							window as Window & {
+								__timelineScrollTarget?: string | null;
+							}
+						).__timelineScrollTarget,
+				),
+			)
+			.toBe("timeline-item-timeline-turn-1-user");
+	});
+
+	test("統計から選択しても右パネルのスクロール位置を変更しないこと", async ({
+		page,
+	}) => {
+		await page.locator("text=sess-001").click();
+		const rightPanel = page
+			.getByRole("heading", { name: "Session Analytics" })
+			.locator("..");
+		const tokenRow = page.getByTestId("token-row-0");
+		await tokenRow.scrollIntoViewIfNeeded();
+		const beforeScrollTop = await rightPanel.evaluate(
+			(element) => element.scrollTop,
+		);
+
+		await tokenRow.click();
+
+		await expect
+			.poll(() => rightPanel.evaluate((element) => element.scrollTop))
+			.toBe(beforeScrollTop);
+	});
+
+	test("キャンバスノードから選択すると対応タイムラインと全token_countを選択すること", async ({
+		page,
+	}) => {
+		await page.locator("text=sess-001").click();
+
+		await page.locator(".react-flow__node-userMessage").click();
+
+		await expect(
+			page.getByTestId("timeline-item-timeline-turn-1-user"),
+		).toHaveAttribute("aria-selected", "true");
+		await expect(page.getByTestId("token-row-0")).toHaveAttribute(
+			"data-selected",
+			"true",
+		);
+		await expect(page.getByTestId("token-row-1")).toHaveAttribute(
+			"data-selected",
+			"true",
+		);
+		await expect(page.locator("text=Node Detail: User Message")).toBeVisible();
+	});
+
+	test("選択中のタイムライン項目を再選択すると全領域の選択を解除すること", async ({
+		page,
+	}) => {
+		await page.locator("text=sess-001").click();
+		const timelineItem = page.getByTestId("timeline-item-timeline-turn-1-user");
+
+		await timelineItem.click();
+		await timelineItem.click();
+
+		await expect(timelineItem).toHaveAttribute("aria-selected", "false");
+		await expect(page.getByTestId("token-row-0")).toHaveAttribute(
+			"data-selected",
+			"false",
+		);
+		await expect(page.locator("text=Node Detail:")).not.toBeVisible();
+	});
+
 	test("TOKEN COUNT LOG の同じ行を連続してクリックしても対象ノードへ再度ズームすること", async ({
 		page,
 	}) => {

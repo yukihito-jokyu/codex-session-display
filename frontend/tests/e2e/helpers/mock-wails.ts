@@ -967,6 +967,10 @@ export async function mockWailsAPI(
 						},
 						items: [
 							{
+								selection_id: "timeline-turn-1-user",
+								node_id: "node-user-msg",
+								node_ids: ["node-user-msg"],
+								token_count_indices: [0, 1],
 								kind: "conversation",
 								label: "",
 								role: "user",
