@@ -1110,6 +1110,49 @@ test.describe("セッション詳細画面 E2E テスト", () => {
 		expect(tickBox?.x).toBeGreaterThanOrEqual(chartBox?.x ?? 0);
 	});
 
+	test("LAST TOKEN CONSUMPTION PER INDEX にコンテキスト使用率と算出不能表示があること", async ({
+		page,
+	}) => {
+		await page.locator("text=sess-001").click();
+
+		const chart = page.getByTestId("last-token-chart");
+		await expect(chart.locator(".recharts-yAxis")).toHaveCount(2);
+		await expect(
+			chart.getByText("Context Usage (%)", { exact: true }),
+		).toBeVisible();
+		await expect(page.getByTestId("last-token-point-context-0")).toBeVisible();
+		await expect(page.getByTestId("last-token-point-context-3")).toHaveCount(0);
+
+		await page.getByTestId("last-token-point-3").hover();
+		await expect(page.getByTestId("last-token-tooltip-context")).toHaveText(
+			"Context Usage (%): N/A",
+		);
+	});
+
+	test("コンテキスト使用率はキャッシュ入力を差し引かず100%超過値のまま共通選択できること", async ({
+		page,
+	}) => {
+		await page.locator("text=sess-001").click();
+
+		const contextPoint = page.getByTestId("last-token-point-context-0");
+		await contextPoint.hover();
+		await expect(page.getByTestId("last-token-tooltip-context")).toHaveText(
+			"Context Usage (%): 150%",
+		);
+
+		await contextPoint.click();
+		await expect(contextPoint).toHaveAttribute("data-selected", "true");
+		await expect(page.getByTestId("token-row-0")).toHaveAttribute(
+			"data-selected",
+			"true",
+		);
+		await expect(
+			page.getByTestId("timeline-item-timeline-turn-1-user"),
+		).toHaveAttribute("aria-selected", "true");
+		await expect(page.locator("text=Node Detail: User Message")).toBeVisible();
+		await expect(page.getByTestId("bottom-panel-token-detail")).toBeVisible();
+	});
+
 	test("TOKEN CONSUMPTION PER TURN の6桁Y軸ラベルが見切れず表示されること", async ({
 		page,
 	}) => {

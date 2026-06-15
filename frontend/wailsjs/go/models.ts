@@ -274,6 +274,7 @@ export namespace dto {
 	    index: number;
 	    turn_index: number;
 	    bound_to_node_id: string;
+	    model_context_window: number;
 	    last_token_usage?: model.TokenDetail;
 	    total_token_usage?: model.TokenDetail;
 	
@@ -286,6 +287,7 @@ export namespace dto {
 	        this.index = source["index"];
 	        this.turn_index = source["turn_index"];
 	        this.bound_to_node_id = source["bound_to_node_id"];
+	        this.model_context_window = source["model_context_window"];
 	        this.last_token_usage = this.convertValues(source["last_token_usage"], model.TokenDetail);
 	        this.total_token_usage = this.convertValues(source["total_token_usage"], model.TokenDetail);
 	    }

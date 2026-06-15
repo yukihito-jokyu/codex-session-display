@@ -456,13 +456,24 @@ JSONLは各レコードのトップレベル `type` フィールドで4種類に
 各 `token_count` イベントの `last_token_usage` を行列表で表示する。
 
 - 各行に `last_token_usage` の内訳を表示: `total_tokens`, `input_tokens`, `output_tokens`, `cached_input_tokens`, `reasoning_output_tokens`
+- `Last Token Consumption per Index` では既存の Total / Input / Output /
+  Reasoning / Cached を左軸のトークン数系列として維持し、右軸に
+  `Context Usage (%)` を表示する
+- コンテキスト使用率は
+  `last_token_usage.input_tokens / model_context_window * 100` とし、
+  `cached_input_tokens` は差し引かない
+- 分母は正の `token_count.info.model_context_window` を優先し、欠落または0以下なら
+  所属ターンの正の `task_started.model_context_window` を使用する
+- 入力トークン数または有効な分母がない点は使用率を算出不能とし、点を描画せず、
+  同インデックスのツールチップでは `Context Usage (%): N/A` と表示する
+- 使用率は100%で打ち切らず、右軸を実値に応じて拡張する
 - 行頭に連番とターン番号を表示
 - ターン境界をセパレータで区切る（Turn 1 / Turn 2 ...）
 - フッターにセッション累計（最後の `token_count` の `total_token_usage`）を表示
 - リストはスクロール可能とする
 - `bound_to_node_id` が現在のセッションに存在するノードを指す行、および
   `Last Token Consumption per Index` の Total / Input / Output / Reasoning /
-  Cached の各データ点は操作可能とする
+  Cached / Context Usage の各データ点は操作可能とする
 - 操作時は対応するタイムライン表示単位、ノード、同じ表示単位に属する全token_countを
   共通選択し、トークン詳細パネルを開く。対象タイムラインへ自動スクロールし、
   800ms のアニメーション・最大1.2倍で代表ノードを中央へズームする
@@ -495,6 +506,10 @@ JSONLは各レコードのトップレベル `type` フィールドで4種類に
 - **ターンごとのツール呼び出し回数グラフ**:
   - 横軸: ターン番号
   - 縦軸: ツール呼び出し回数（棒グラフまたは折れ線グラフで表現）
+- **token_countごとの直近消費量・コンテキスト使用率グラフ**:
+  - 横軸: token_countの通しインデックス
+  - 左縦軸: Total / Input / Output / Reasoning / Cached のトークン数
+  - 右縦軸: Context Usage (%)。100%超過を含む実値に応じて自動拡張する
 
 ### 2.6 エクスポート（保留）
 

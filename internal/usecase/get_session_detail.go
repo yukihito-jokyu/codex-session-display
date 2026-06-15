@@ -1614,17 +1614,28 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 			boundNodeID := resolveBoundNodeID(turn, tc)
 
 			var totalUsage, lastUsage *model.TokenDetail
+			var modelContextWindow int64
 			if tc.Record.EventMsg != nil && tc.Record.EventMsg.Info != nil {
 				totalUsage = tc.Record.EventMsg.Info.TotalTokenUsage
 				lastUsage = tc.Record.EventMsg.Info.LastTokenUsage
+				modelContextWindow = tc.Record.EventMsg.Info.ModelContextWindow
+			}
+			if modelContextWindow <= 0 &&
+				turn.TaskStarted != nil &&
+				turn.TaskStarted.ModelContextWindow > 0 {
+				modelContextWindow = turn.TaskStarted.ModelContextWindow
+			}
+			if modelContextWindow <= 0 {
+				modelContextWindow = 0
 			}
 
 			entry := dto.TokenCountEntry{
-				Index:           tcIdx,
-				TurnIndex:       tc.TurnIndex,
-				BoundToNodeID:   boundNodeID,
-				TotalTokenUsage: totalUsage,
-				LastTokenUsage:  lastUsage,
+				Index:              tcIdx,
+				TurnIndex:          tc.TurnIndex,
+				BoundToNodeID:      boundNodeID,
+				ModelContextWindow: modelContextWindow,
+				TotalTokenUsage:    totalUsage,
+				LastTokenUsage:     lastUsage,
 			}
 			tokenCountsList = append(tokenCountsList, entry)
 			tokenCountIndexByRecordLine[tc.Record.LineNumber] = tcIdx

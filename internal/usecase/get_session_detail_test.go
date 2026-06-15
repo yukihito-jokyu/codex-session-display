@@ -195,7 +195,7 @@ func TestGetSessionDetailUseCase_Execute(t *testing.T) {
 					// External event branch (exec_command_end)
 					`{"type":"event_msg","timestamp":1717084828,"payload":{"type":"exec_command_end","call_id":"call-1","command":["cat","file"],"exit_code":0}}`,
 					// Token count
-					`{"type":"event_msg","timestamp":1717084830,"payload":{"type":"token_count","info":{"total_token_usage":{"total_tokens":1000,"input_tokens":800,"output_tokens":200},"last_token_usage":{"total_tokens":150,"input_tokens":100,"output_tokens":50}}}}`,
+					`{"type":"event_msg","timestamp":1717084830,"payload":{"type":"token_count","info":{"total_token_usage":{"total_tokens":1000,"input_tokens":800,"output_tokens":200},"last_token_usage":{"total_tokens":150,"input_tokens":100,"output_tokens":50},"model_context_window":64000}}}`,
 					// Turn 1 End
 					`{"type":"event_msg","timestamp":1717084840,"payload":{"type":"task_complete","turn_id":"turn-1","completed_at":1717084840}}`,
 				}
@@ -281,6 +281,136 @@ func TestGetSessionDetailUseCase_Execute(t *testing.T) {
 					if entry.TotalTokenUsage == nil || entry.TotalTokenUsage.TotalTokens != 1000 {
 						t.Errorf("incorrect token usage in entry: %+v", entry.TotalTokenUsage)
 					}
+					if entry.ModelContextWindow != 64000 {
+						t.Errorf("ModelContextWindow = %d, want 64000", entry.ModelContextWindow)
+					}
+				}
+			},
+		},
+		{
+			name: "token count context window falls back to task started",
+			setup: func(t *testing.T, tmpDir string) (string, usecase.SessionRepository, usecase.CacheRepository, usecase.SessionParser, func()) {
+				filePath := filepath.Join(tmpDir, "rollout-context-window-fallback.jsonl")
+				sessionRepo := &mockSessionRepositoryForDetail{
+					paths: map[string]string{"session-context-window-fallback": filePath},
+				}
+				cacheRepo := &mockCacheRepositoryForDetail{}
+				parser := &mockSessionParser{
+					records: []*model.TypedRecord{
+						{
+							LineNumber:  1,
+							Type:        "session_meta",
+							SessionMeta: &model.SessionMetaPayload{ID: "session-context-window-fallback", CliVersion: "v0.131.0"},
+						},
+						{
+							LineNumber: 2,
+							Type:       "event_msg",
+							SubType:    "task_started",
+							EventMsg: &model.EventMsgPayload{
+								TurnID:             "turn-1",
+								ModelContextWindow: 128000,
+							},
+						},
+						{
+							LineNumber: 3,
+							Type:       "event_msg",
+							SubType:    "agent_message",
+							EventMsg:   &model.EventMsgPayload{Message: "Working"},
+						},
+						{
+							LineNumber: 4,
+							Type:       "event_msg",
+							SubType:    "token_count",
+							EventMsg: &model.EventMsgPayload{
+								Info: &model.TokenInfo{
+									LastTokenUsage: &model.TokenDetail{InputTokens: 64000},
+								},
+							},
+						},
+						{
+							LineNumber: 5,
+							Type:       "event_msg",
+							SubType:    "task_complete",
+							EventMsg:   &model.EventMsgPayload{TurnID: "turn-1"},
+						},
+					},
+				}
+				return "session-context-window-fallback", sessionRepo, cacheRepo, parser, nil
+			},
+			wantErr: false,
+			verify: func(t *testing.T, res *dto.SessionDetailResponse, err error) {
+				if err != nil {
+					t.Fatalf("expected no error, got %v", err)
+				}
+				if len(res.TokenCounts) != 1 {
+					t.Fatalf("TokenCounts length = %d, want 1", len(res.TokenCounts))
+				}
+				if res.TokenCounts[0].ModelContextWindow != 128000 {
+					t.Errorf(
+						"ModelContextWindow = %d, want 128000",
+						res.TokenCounts[0].ModelContextWindow,
+					)
+				}
+			},
+		},
+		{
+			name: "non-positive token count context window is omitted without a valid fallback",
+			setup: func(t *testing.T, tmpDir string) (string, usecase.SessionRepository, usecase.CacheRepository, usecase.SessionParser, func()) {
+				filePath := filepath.Join(tmpDir, "rollout-invalid-context-window.jsonl")
+				sessionRepo := &mockSessionRepositoryForDetail{
+					paths: map[string]string{"session-invalid-context-window": filePath},
+				}
+				cacheRepo := &mockCacheRepositoryForDetail{}
+				parser := &mockSessionParser{
+					records: []*model.TypedRecord{
+						{
+							LineNumber:  1,
+							Type:        "session_meta",
+							SessionMeta: &model.SessionMetaPayload{ID: "session-invalid-context-window", CliVersion: "v0.131.0"},
+						},
+						{
+							LineNumber: 2,
+							Type:       "event_msg",
+							SubType:    "task_started",
+							EventMsg: &model.EventMsgPayload{
+								TurnID:             "turn-1",
+								ModelContextWindow: 0,
+							},
+						},
+						{
+							LineNumber: 3,
+							Type:       "event_msg",
+							SubType:    "token_count",
+							EventMsg: &model.EventMsgPayload{
+								Info: &model.TokenInfo{
+									ModelContextWindow: -1,
+									LastTokenUsage:     &model.TokenDetail{InputTokens: 100},
+								},
+							},
+						},
+						{
+							LineNumber: 4,
+							Type:       "event_msg",
+							SubType:    "task_complete",
+							EventMsg:   &model.EventMsgPayload{TurnID: "turn-1"},
+						},
+					},
+				}
+				return "session-invalid-context-window", sessionRepo, cacheRepo, parser, nil
+			},
+			wantErr: false,
+			verify: func(t *testing.T, res *dto.SessionDetailResponse, err error) {
+				if err != nil {
+					t.Fatalf("expected no error, got %v", err)
+				}
+				if len(res.TokenCounts) != 1 {
+					t.Fatalf("TokenCounts length = %d, want 1", len(res.TokenCounts))
+				}
+				if res.TokenCounts[0].ModelContextWindow != 0 {
+					t.Errorf(
+						"ModelContextWindow = %d, want 0",
+						res.TokenCounts[0].ModelContextWindow,
+					)
 				}
 			},
 		},
@@ -655,14 +785,14 @@ func TestGetSessionDetailUseCase_Execute(t *testing.T) {
 			},
 		},
 		{
-			name: "schema version 4 cache triggers reparse even when cache file is fresh",
+			name: "schema version 5 cache triggers reparse even when cache file is fresh",
 			setup: func(t *testing.T, tmpDir string) (string, usecase.SessionRepository, usecase.CacheRepository, usecase.SessionParser, func()) {
 				sessionID := "legacy-cache-session"
 				cacheRepo := &mockCacheRepositoryForDetail{
 					cache: map[string]*dto.SessionDetailResponse{
 						sessionID: {
 							ID:                 sessionID,
-							CacheSchemaVersion: 4,
+							CacheSchemaVersion: 5,
 							ParsedAt:           "2026-05-31T01:00:00Z",
 						},
 					},
