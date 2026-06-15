@@ -95,11 +95,12 @@ type Statistics struct {
 
 // TokenCountEntry は詳細画面で管理されるトークンカウント情報を表します。
 type TokenCountEntry struct {
-	Index           int                `json:"index"`
-	TurnIndex       int                `json:"turn_index"`
-	BoundToNodeID   string             `json:"bound_to_node_id"`
-	LastTokenUsage  *model.TokenDetail `json:"last_token_usage"`
-	TotalTokenUsage *model.TokenDetail `json:"total_token_usage"`
+	Index              int                `json:"index"`
+	TurnIndex          int                `json:"turn_index"`
+	BoundToNodeID      string             `json:"bound_to_node_id"`
+	ModelContextWindow int64              `json:"model_context_window"`
+	LastTokenUsage     *model.TokenDetail `json:"last_token_usage"`
+	TotalTokenUsage    *model.TokenDetail `json:"total_token_usage"`
 }
 
 // TimelineItemDetail はタイムライン項目を展開した際の補足情報を表します。
@@ -138,7 +139,7 @@ type ConversationTimelineTurn struct {
 }
 
 // CurrentSessionDetailCacheSchemaVersion は現行のセッション詳細キャッシュ形式を表します。
-const CurrentSessionDetailCacheSchemaVersion = 5
+const CurrentSessionDetailCacheSchemaVersion = 6
 
 // SessionDetailResponse はフロントエンドに返され、ディスクにキャッシュされるセッション詳細を表します。
 type SessionDetailResponse struct {
