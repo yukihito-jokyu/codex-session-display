@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from "react";
+import type { TooltipContentProps } from "recharts";
 import {
 	Bar,
 	BarChart,
@@ -31,6 +32,7 @@ interface LastTokenChartData {
 	output: number;
 	reasoning: number;
 	cached: number;
+	contextUsage?: number;
 }
 
 interface TokenChartDotProps {
@@ -38,7 +40,7 @@ interface TokenChartDotProps {
 	cy?: number;
 	stroke?: string;
 	payload?: LastTokenChartData;
-	series: "input" | "output" | "reasoning" | "cached" | "total";
+	series: "input" | "output" | "reasoning" | "cached" | "total" | "context";
 	radius: number;
 	selected: boolean;
 	onSelect?: (tokenIndex: number) => void;
@@ -117,6 +119,56 @@ function TokenChartDot({
 	);
 }
 
+function calculateContextUsage(
+	inputTokens: number,
+	modelContextWindow: number,
+): number | undefined {
+	if (inputTokens <= 0 || modelContextWindow <= 0) {
+		return undefined;
+	}
+	return (inputTokens / modelContextWindow) * 100;
+}
+
+function formatContextUsage(value: number | undefined): string {
+	if (value === undefined) {
+		return "N/A";
+	}
+	return `${new Intl.NumberFormat(undefined, {
+		maximumFractionDigits: 1,
+	}).format(value)}%`;
+}
+
+function LastTokenTooltip({ active, payload, label }: TooltipContentProps) {
+	if (!active || payload.length === 0) {
+		return null;
+	}
+
+	const data = payload[0]?.payload as LastTokenChartData | undefined;
+	if (!data) {
+		return null;
+	}
+
+	const rows = [
+		["Total", data.total.toLocaleString()],
+		["Input", data.input.toLocaleString()],
+		["Output", data.output.toLocaleString()],
+		["Reasoning", data.reasoning.toLocaleString()],
+		["Cached", data.cached.toLocaleString()],
+	] as const;
+
+	return (
+		<div className={styles.chartTooltip}>
+			<div className={styles.chartTooltipLabel}>{label}</div>
+			{rows.map(([name, value]) => (
+				<div key={name}>{`${name}: ${value}`}</div>
+			))}
+			<div data-testid="last-token-tooltip-context">
+				{`Context Usage (%): ${formatContextUsage(data.contextUsage)}`}
+			</div>
+		</div>
+	);
+}
+
 export function RightPanel({
 	statistics,
 	tokenCounts,
@@ -170,6 +222,7 @@ export function RightPanel({
 	const lastTokenChartData = useMemo(() => {
 		return tokenCounts.map((entry) => {
 			const usage = entry.last_token_usage;
+			const input = usage ? Number(usage.input_tokens) : 0;
 			return {
 				name: `#${entry.index}`,
 				index: entry.index,
@@ -178,10 +231,14 @@ export function RightPanel({
 						? entry.bound_to_node_id
 						: undefined,
 				total: usage ? Number(usage.total_tokens) : 0,
-				input: usage ? Number(usage.input_tokens) : 0,
+				input,
 				output: usage ? Number(usage.output_tokens) : 0,
 				reasoning: usage ? Number(usage.reasoning_output_tokens) : 0,
 				cached: usage ? Number(usage.cached_input_tokens) : 0,
+				contextUsage: calculateContextUsage(
+					input,
+					Number(entry.model_context_window),
+				),
 			};
 		});
 	}, [nodeIds, tokenCounts]);
@@ -410,7 +467,7 @@ export function RightPanel({
 						<ResponsiveContainer width="100%" height={180}>
 							<LineChart
 								data={lastTokenChartData}
-								margin={{ top: 5, right: 5, left: 0, bottom: 5 }}
+								margin={{ top: 5, right: 0, left: 0, bottom: 5 }}
 							>
 								<CartesianGrid
 									strokeDasharray="3 3"
@@ -424,22 +481,26 @@ export function RightPanel({
 									tickLine={false}
 								/>
 								<YAxis
+									yAxisId="tokens"
 									stroke="var(--text-secondary)"
 									fontSize={10}
 									tickLine={false}
 									width={60}
 								/>
-								<Tooltip
-									contentStyle={{
-										background: "var(--bg-header)",
-										border: "1px solid var(--border-color)",
-										borderRadius: "4px",
-										color: "var(--text-primary)",
-										fontSize: "11px",
-									}}
+								<YAxis
+									yAxisId="context"
+									orientation="right"
+									stroke="var(--node-warning-text)"
+									fontSize={10}
+									tickLine={false}
+									width={42}
+									domain={[0, "auto"]}
+									tickFormatter={(value: number) => `${value}%`}
 								/>
+								<Tooltip content={LastTokenTooltip} />
 								<Legend wrapperStyle={{ fontSize: 10 }} />
 								<Line
+									yAxisId="tokens"
 									type="monotone"
 									dataKey="input"
 									name="Input"
@@ -458,6 +519,7 @@ export function RightPanel({
 									activeDot={false}
 								/>
 								<Line
+									yAxisId="tokens"
 									type="monotone"
 									dataKey="output"
 									name="Output"
@@ -476,6 +538,7 @@ export function RightPanel({
 									activeDot={false}
 								/>
 								<Line
+									yAxisId="tokens"
 									type="monotone"
 									dataKey="reasoning"
 									name="Reasoning"
@@ -494,6 +557,7 @@ export function RightPanel({
 									activeDot={false}
 								/>
 								<Line
+									yAxisId="tokens"
 									type="monotone"
 									dataKey="cached"
 									name="Cached"
@@ -512,6 +576,7 @@ export function RightPanel({
 									activeDot={false}
 								/>
 								<Line
+									yAxisId="tokens"
 									type="monotone"
 									dataKey="total"
 									name="Total"
@@ -522,6 +587,26 @@ export function RightPanel({
 										<TokenChartDot
 											{...props}
 											series="total"
+											radius={3}
+											selected={selectedTokenIndices.has(props.payload?.index)}
+											onSelect={onTokenLogClick}
+										/>
+									)}
+									activeDot={false}
+								/>
+								<Line
+									yAxisId="context"
+									type="monotone"
+									dataKey="contextUsage"
+									name="Context Usage (%)"
+									stroke="var(--node-warning-text)"
+									style={{ stroke: "var(--node-warning-text)" }}
+									strokeWidth={2}
+									connectNulls={false}
+									dot={(props) => (
+										<TokenChartDot
+											{...props}
+											series="context"
 											radius={3}
 											selected={selectedTokenIndices.has(props.payload?.index)}
 											onSelect={onTokenLogClick}
