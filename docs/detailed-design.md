@@ -76,13 +76,14 @@ TokenBreakdownに加えて、キャッシュされた入力トークン数（Cac
 
 #### 2.1.6 トークンカウントエントリ（TokenCountEntry）
 
-| フィールド      | 型          | 説明                          |
-| --------------- | ----------- | ----------------------------- |
-| Index           | 整数        | token_countの通しインデックス |
-| TurnIndex       | 整数        | 属するターンのインデックス    |
-| BoundToNodeID   | 文字列      | 紐付け先ノードのID            |
-| LastTokenUsage  | TokenDetail | 直近のトークン使用量          |
-| TotalTokenUsage | TokenDetail | 累計トークン使用量            |
+| フィールド         | 型          | 説明 |
+| ------------------ | ----------- | ---- |
+| Index              | 整数        | token_countの通しインデックス |
+| TurnIndex          | 整数        | 属するターンのインデックス |
+| BoundToNodeID      | 文字列      | 紐付け先ノードのID |
+| ModelContextWindow | 整数        | 正の `token_count.info.model_context_window`。無効時は所属ターンの正の `task_started.model_context_window`、どちらもなければ0 |
+| LastTokenUsage     | TokenDetail | 直近のトークン使用量 |
+| TotalTokenUsage    | TokenDetail | 累計トークン使用量 |
 
 #### 2.1.7 セッションタイムライン
 
@@ -959,7 +960,7 @@ Wailsの起動・ビルドプロセス（`wails dev` または `wails build`）�
 | TokenDetail           | TokenBreakdown + cached_input_tokens                                                                                                               |
 | TurnStatistics        | index, collaboration_mode_kind, duration_ms, time_to_first_token_ms, token_count_count, consumed_tokens（TokenBreakdown）                          |
 | Statistics            | duration_ms, total_tokens, tool_call_count, token_count_count, context_window_size, turn_count, turns（TurnStatisticsの配列）                      |
-| TokenCountEntry       | index, turn_index, bound_to_node_id, last_token_usage（TokenDetail）, total_token_usage（TokenDetail）                                             |
+| TokenCountEntry       | index, turn_index, bound_to_node_id, model_context_window, last_token_usage（TokenDetail）, total_token_usage（TokenDetail）                       |
 | ConversationTimelineItem | selection_id, node_id, node_ids, token_count_indices, kind, label, role, body, timestamp, record_count, collapsible, details, last_token_usage, token_count_count, total_token_usage |
 | ConversationTimelineTurn | index, turn_id, pseudo, duration_ms, consumed_tokens, items |
 | SessionDetailResponse | id, cache_schema_version, parsed_at, nodes, edges, statistics, token_counts, timeline（ConversationTimelineTurnの配列） |
@@ -1474,7 +1475,13 @@ SessionListPage
    - 横軸をターン番号、縦軸をツール呼び出し回数（`function_call` の件数）とした棒グラフまたは折れ線グラフを表示する。
 3. **token_count ごとの直近消費量グラフ**:
    - `Last Token Consumption per Index` として LastTokenUsage の推移を表示する。
-   - Total / Input / Output / Reasoning / Cached の全系列について、
+   - Total / Input / Output / Reasoning / Cached は左Y軸のトークン数系列として表示する。
+   - `Context Usage (%)` は右Y軸へ表示し、
+     `last_token_usage.input_tokens / model_context_window * 100` で導出する。
+     `cached_input_tokens` は差し引かず、100%超過値もクランプしない。
+   - 入力トークン数または `model_context_window` が0以下の場合は使用率を
+     `undefined` として点を描画せず、固定項目ツールチップでは `N/A` と表示する。
+   - 全系列について、
      BoundToNodeID が現在の nodes に存在するデータ点だけを操作可能な点として表示する。
    - 操作時はtoken_countインデックスからタイムライン表示単位を解決し、関連する全系列の点と
      TOKEN COUNT LOG行、タイムライン項目、代表ノードを共通選択する。
@@ -1857,8 +1864,8 @@ IPCエラーは `AppError` 構造体（§4.1参照）で返す。
 
 ファイルの中身は `GetSessionDetail` の戻り値と同一形式。
 
-共通選択情報追加後の現行 `cache_schema_version` は5とする。バージョン4以前は
-`selection_id`, `node_id`, `node_ids`, `token_count_indices` を持たないため再パースする。
+token_count単位の `model_context_window` 追加後の現行 `cache_schema_version` は6とする。
+バージョン5以前はこの値を持たないため再パースする。
 
 ### 7.2 再パース判定ロジック
 
