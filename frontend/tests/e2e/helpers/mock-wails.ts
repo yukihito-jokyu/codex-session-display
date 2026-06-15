@@ -854,6 +854,7 @@ export async function mockWailsAPI(
 						index: 0,
 						turn_index: 0,
 						bound_to_node_id: "node-user-msg",
+						model_context_window: 10000,
 						last_token_usage: {
 							total_tokens: 20000,
 							input_tokens: 15000,
@@ -873,6 +874,7 @@ export async function mockWailsAPI(
 						index: 1,
 						turn_index: 0,
 						bound_to_node_id: "node-user-msg",
+						model_context_window: 100000,
 						last_token_usage: {
 							total_tokens: 30000,
 							input_tokens: 25000,
@@ -892,6 +894,7 @@ export async function mockWailsAPI(
 						index: 2,
 						turn_index: 1,
 						bound_to_node_id: "node-orphan-event",
+						model_context_window: 100000,
 						last_token_usage: {
 							total_tokens: 100000,
 							input_tokens: 80000,
@@ -911,6 +914,7 @@ export async function mockWailsAPI(
 						index: 3,
 						turn_index: 1,
 						bound_to_node_id: "node-user-api-msg",
+						model_context_window: 100000,
 						last_token_usage: undefined,
 						total_token_usage: undefined,
 					},
@@ -918,6 +922,7 @@ export async function mockWailsAPI(
 						index: 4,
 						turn_index: 2,
 						bound_to_node_id: "node-missing",
+						model_context_window: 100000,
 						last_token_usage: {
 							total_tokens: 1200,
 							input_tokens: 900,
@@ -937,6 +942,7 @@ export async function mockWailsAPI(
 						index: 5,
 						turn_index: 2,
 						bound_to_node_id: undefined,
+						model_context_window: 100000,
 						last_token_usage: {
 							total_tokens: 800,
 							input_tokens: 600,
