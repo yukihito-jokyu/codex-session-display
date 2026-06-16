@@ -13,6 +13,7 @@ type ConversationTimelineProps = {
 	scrollTarget: { selectionId: string; timestamp: number } | null;
 	onSelect: (item: dto.ConversationTimelineItem) => void;
 	onShowFullText: (item: dto.ConversationTimelineItem) => void;
+	onSubagentClick?: (threadId: string) => void;
 };
 
 type TimelineCategory =
@@ -51,6 +52,8 @@ function getTimelineCategory(kind: string): TimelineCategory {
 		case "instructions":
 		case "reference":
 			return "reference";
+		case "collab":
+			return "system";
 		default:
 			return "system";
 	}
@@ -119,6 +122,7 @@ export function ConversationTimeline({
 	scrollTarget,
 	onSelect,
 	onShowFullText,
+	onSubagentClick,
 }: ConversationTimelineProps) {
 	const [searchQuery, setSearchQuery] = useState("");
 	const [measuredOnly, setMeasuredOnly] = useState(false);
@@ -366,6 +370,26 @@ export function ConversationTimeline({
 																		)
 																		.join("\n\n")}
 																</pre>
+															)}
+															{item.kind === "collab" && (
+																<button
+																	type="button"
+																	className={styles.subagentButton}
+																	onClick={(event) => {
+																		stopPropagation(event);
+																		const threadIdDetail = item.details?.find(
+																			(d) => d.label === "Thread ID",
+																		);
+																		if (
+																			threadIdDetail?.value &&
+																			onSubagentClick
+																		) {
+																			onSubagentClick(threadIdDetail.value);
+																		}
+																	}}
+																>
+																	サブエージェントを表示
+																</button>
 															)}
 														</>
 													)}

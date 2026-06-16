@@ -213,3 +213,23 @@
 .tokenMetrics strong {
 	color: var(--text-primary);
 }
+
+.subagentButton {
+	margin-top: 8px;
+	padding: 4px 8px;
+	background-color: var(--accent-badge-bg);
+	border: 1px solid var(--accent-badge-border);
+	color: var(--color-accent);
+	border-radius: 4px;
+	font-size: 10px;
+	cursor: pointer;
+	align-self: flex-start;
+	transition:
+		background-color 0.2s,
+		border-color 0.2s;
+}
+
+.subagentButton:hover {
+	background-color: var(--color-accent);
+	color: var(--bg-card);
+}
