@@ -57,7 +57,12 @@ func (r *CacheFSRepository) GetSessionSummary(ctx context.Context, sessionID str
 	}
 
 	if metaNode == nil {
-		return nil, ErrSessionMetaNotFound
+		summary := &dto.SessionSummary{
+			ID:     sessionID,
+			Parsed: true,
+		}
+		logger.Info("cache read successful without sessionMeta", "session_id", sessionID)
+		return summary, nil
 	}
 
 	m := metaNode.Data.Meta
@@ -70,15 +75,17 @@ func (r *CacheFSRepository) GetSessionSummary(ctx context.Context, sessionID str
 	timestamp := getStringPtr(m, "timestamp")
 
 	summary := &dto.SessionSummary{
-		ID:            sessionID,
-		Cwd:           cwd,
-		CliVersion:    cliVer,
-		Originator:    orig,
-		ModelProvider: provider,
-		Branch:        branch,
-		Source:        source,
-		Timestamp:     timestamp,
-		Parsed:        true,
+		ID:              sessionID,
+		Cwd:             cwd,
+		CliVersion:      cliVer,
+		Originator:      orig,
+		ModelProvider:   provider,
+		Branch:          branch,
+		Source:          source,
+		Timestamp:       timestamp,
+		Parsed:          true,
+		ParentSessionID: detail.ParentSessionID,
+		ChildSessionIDs: detail.ChildSessionIDs,
 	}
 
 	logger.Info("cache read successful", "session_id", sessionID)

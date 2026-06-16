@@ -150,7 +150,18 @@ func TestCacheFSRepository_GetSessionSummary(t *testing.T) {
 		{
 			name:      "missing sessionMeta node",
 			sessionID: sessionID + "_no_meta",
-			wantErr:   true,
+			wantErr:   false,
+			verify: func(t *testing.T, s *dto.SessionSummary) {
+				if s.ID != sessionID+"_no_meta" {
+					t.Errorf("expected ID %s, got %s", sessionID+"_no_meta", s.ID)
+				}
+				if !s.Parsed {
+					t.Errorf("expected Parsed true, got false")
+				}
+				if s.Cwd != nil {
+					t.Errorf("expected Cwd to be nil, got %v", *s.Cwd)
+				}
+			},
 		},
 		{
 			name:      "legacy cache schema",
