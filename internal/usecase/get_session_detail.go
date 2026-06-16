@@ -5,6 +5,7 @@ import (
 	"codex-session-display/internal/domain/model"
 	"codex-session-display/internal/utils/logger"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io/fs"
@@ -237,6 +238,40 @@ func batchTimelineUnit(batch *model.Batch) (conversationDisplayUnit, bool) {
 		StartLine: batch.CallRecords[0].LineNumber,
 		Timestamp: fmt.Sprint(batch.CallRecords[0].Envelope.Timestamp),
 	}
+
+	// spawn_agent ツール呼び出しの場合、collab タイプのタイムラインユニットを生成する
+	if batch.CallRecords[0].ResponseItem != nil && batch.CallRecords[0].ResponseItem.Name == "spawn_agent" {
+		unit.Kind = "collab"
+		unit.Label = "サブエージェント起動"
+		agentID := ""
+		nickname := ""
+		role := ""
+		if batch.CallRecords[0].ResponseItem.Arguments != "" {
+			var args struct {
+				AgentType string `json:"agent_type"`
+			}
+			if jsonErr := json.Unmarshal([]byte(batch.CallRecords[0].ResponseItem.Arguments), &args); jsonErr == nil {
+				role = args.AgentType
+			}
+		}
+		if len(batch.OutputRecords) > 0 && batch.OutputRecords[0] != nil && batch.OutputRecords[0].ResponseItem != nil {
+			var out struct {
+				AgentID  string `json:"agent_id"`
+				Nickname string `json:"nickname"`
+			}
+			if jsonErr := json.Unmarshal([]byte(batch.OutputRecords[0].ResponseItem.Output), &out); jsonErr == nil {
+				agentID = out.AgentID
+				nickname = out.Nickname
+			}
+		}
+		unit.Body = fmt.Sprintf("Nickname: %s, Role: %s, Thread ID: %s", nickname, role, agentID)
+		unit.Details = []dto.TimelineItemDetail{
+			{Label: "Nickname", Value: nickname},
+			{Label: "Role", Value: role},
+			{Label: "Thread ID", Value: agentID},
+		}
+		return unit, true
+	}
 	names := make([]string, 0, len(batch.CallRecords))
 	for index, call := range batch.CallRecords {
 		if call == nil || call.ResponseItem == nil {
@@ -454,6 +489,19 @@ func metadataTimelineUnits(turn *model.Turn) []conversationDisplayUnit {
 					unit.Body = record.EventMsg.Item.Text
 					if unit.Body == "" {
 						unit.Body = record.EventMsg.Item.Type
+					}
+				}
+				units = append(units, unit)
+			case "collab_agent_spawn_end":
+				unit := base
+				unit.Kind = "collab"
+				unit.Label = "サブエージェント起動"
+				if record.EventMsg != nil {
+					unit.Body = fmt.Sprintf("Nickname: %s, Role: %s, Thread ID: %s", record.EventMsg.NewAgentNickname, record.EventMsg.NewAgentRole, record.EventMsg.NewThreadID)
+					unit.Details = []dto.TimelineItemDetail{
+						{Label: "Nickname", Value: record.EventMsg.NewAgentNickname},
+						{Label: "Role", Value: record.EventMsg.NewAgentRole},
+						{Label: "Thread ID", Value: record.EventMsg.NewThreadID},
 					}
 				}
 				units = append(units, unit)
@@ -1340,7 +1388,46 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 						callNodeID := fmt.Sprintf("node-%d", call.LineNumber)
 						callNodeIDs = append(callNodeIDs, callNodeID)
 						xPos := BranchOffsetX + float64(i)*(NodeWidth+BranchNodeGapX)
-						addBranchNode(callNodeID, "action", "action", call.ResponseItem.Name, "🛠️", call.ResponseItem.Arguments, call.ResponseItem.Arguments, nil, turn.Index, xPos, harnessTopY)
+
+						nodeType := "action"
+						category := "action"
+						icon := "🛠️"
+						var meta map[string]interface{}
+						label := call.ResponseItem.Name
+
+						if call.ResponseItem.Name == "spawn_agent" {
+							nodeType = "collabAgent"
+							icon = "🤖"
+							label = "Subagent Spawned"
+							agentID := ""
+							nickname := ""
+							role := ""
+							if call.ResponseItem.Arguments != "" {
+								var args struct {
+									AgentType string `json:"agent_type"`
+								}
+								if jsonErr := json.Unmarshal([]byte(call.ResponseItem.Arguments), &args); jsonErr == nil {
+									role = args.AgentType
+								}
+							}
+							if i < len(batch.OutputRecords) && batch.OutputRecords[i] != nil && batch.OutputRecords[i].ResponseItem != nil {
+								var outData struct {
+									AgentID  string `json:"agent_id"`
+									Nickname string `json:"nickname"`
+								}
+								if jsonErr := json.Unmarshal([]byte(batch.OutputRecords[i].ResponseItem.Output), &outData); jsonErr == nil {
+									agentID = outData.AgentID
+									nickname = outData.Nickname
+								}
+							}
+							meta = map[string]interface{}{
+								"new_thread_id":      agentID,
+								"new_agent_nickname": nickname,
+								"new_agent_role":     role,
+							}
+						}
+
+						addBranchNode(callNodeID, nodeType, category, label, icon, call.ResponseItem.Arguments, call.ResponseItem.Arguments, meta, turn.Index, xPos, harnessTopY)
 						RecordToNodeID[call.LineNumber] = callNodeID
 						callIDToNodeID[call.ResponseItem.CallID] = callNodeID
 
@@ -1490,7 +1577,17 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 				case displayUnitGeneric:
 					record := unit.Records[0]
 					nodeID := fmt.Sprintf("node-%d", record.LineNumber)
-					pushHarnessNode(nodeID, "generic", "generic", "System Event", "⚙️", "Type: "+record.Type+" / Subtype: "+record.SubType, "", nil, turn.Index, NodeHeight)
+					if record.Type == "event_msg" && record.SubType == "collab_agent_spawn_end" && record.EventMsg != nil {
+						meta := map[string]interface{}{
+							"new_thread_id":      record.EventMsg.NewThreadID,
+							"new_agent_nickname": record.EventMsg.NewAgentNickname,
+							"new_agent_role":     record.EventMsg.NewAgentRole,
+						}
+						summary := fmt.Sprintf("Nickname: %s / Role: %s", record.EventMsg.NewAgentNickname, record.EventMsg.NewAgentRole)
+						pushHarnessNode(nodeID, "collabAgent", "action", "Subagent Spawned", "🤖", summary, "", meta, turn.Index, NodeHeight)
+					} else {
+						pushHarnessNode(nodeID, "generic", "generic", "System Event", "⚙️", "Type: "+record.Type+" / Subtype: "+record.SubType, "", nil, turn.Index, NodeHeight)
+					}
 					RecordToNodeID[record.LineNumber] = nodeID
 				}
 			}
@@ -1775,6 +1872,76 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 		Turns:             turnStats,
 	}
 
+	var parentSessionID *string
+	// 1. session_meta レコードの parent_thread_id から親IDを優先取得
+	for _, r := range records {
+		if r.Type == "session_meta" && r.SessionMeta != nil && r.SessionMeta.ParentThreadID != "" {
+			pID := r.SessionMeta.ParentThreadID
+			parentSessionID = &pID
+			break
+		}
+	}
+
+	var childSessionIDs []string
+	seenChildSessionIDs := make(map[string]bool)
+
+	// 2. 他のセッションの一覧を取得し、親子関係を逆引きで解決
+	allSessions, err := uc.sessionRepo.ListSessions(ctx, 0, 0, "")
+	if err == nil {
+		// リスト走査により、自身を親とする子セッションIDを検索
+		for i := range allSessions {
+			if allSessions[i].ParentSessionID != nil && *allSessions[i].ParentSessionID == sessionID {
+				tid := allSessions[i].ID
+				if !seenChildSessionIDs[tid] {
+					seenChildSessionIDs[tid] = true
+					childSessionIDs = append(childSessionIDs, tid)
+				}
+			}
+		}
+		// 逆引きで親IDが見つからない場合のフォールバック（従来のキャッシュ解決）
+		if parentSessionID == nil {
+			for i := range allSessions {
+				for _, cid := range allSessions[i].ChildSessionIDs {
+					if cid == sessionID {
+						pID := allSessions[i].ID
+						parentSessionID = &pID
+						break
+					}
+				}
+				if parentSessionID != nil {
+					break
+				}
+			}
+		}
+	}
+
+	// 3. レコード内の collab_agent_spawn_end レコードも念のためパース（後方互換性）
+	for _, r := range records {
+		if r.Type == "event_msg" && r.SubType == "collab_agent_spawn_end" && r.EventMsg != nil && r.EventMsg.NewThreadID != "" {
+			tid := r.EventMsg.NewThreadID
+			if !seenChildSessionIDs[tid] {
+				seenChildSessionIDs[tid] = true
+				childSessionIDs = append(childSessionIDs, tid)
+			}
+		}
+	}
+
+	// 4. 親のレコード内の spawn_agent ツール呼び出しとその結果から抽出
+	for _, r := range records {
+		if r.Type == "response_item" && r.SubType == "function_call_output" && r.ResponseItem != nil && r.ResponseItem.Output != "" {
+			var outData struct {
+				AgentID string `json:"agent_id"`
+			}
+			if jsonErr := json.Unmarshal([]byte(r.ResponseItem.Output), &outData); jsonErr == nil && outData.AgentID != "" {
+				tid := outData.AgentID
+				if !seenChildSessionIDs[tid] {
+					seenChildSessionIDs[tid] = true
+					childSessionIDs = append(childSessionIDs, tid)
+				}
+			}
+		}
+	}
+
 	res := &dto.SessionDetailResponse{
 		ID:                 sessionID,
 		CacheSchemaVersion: dto.CurrentSessionDetailCacheSchemaVersion,
@@ -1789,6 +1956,8 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 			RecordToNodeID,
 			tokenCountIndexByRecordLine,
 		),
+		ParentSessionID: parentSessionID,
+		ChildSessionIDs: childSessionIDs,
 	}
 
 	// 9. キャッシュへの保存

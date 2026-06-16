@@ -41,6 +41,7 @@ func (m *mockSessionRepository) ListSessions(ctx context.Context, year, month in
 				if cached.Timestamp != nil {
 					sSummary.Timestamp = cached.Timestamp
 				}
+				sSummary.ChildSessionIDs = cached.ChildSessionIDs
 				sSummary.Parsed = true
 			} else {
 				sSummary.Parsed = false
@@ -48,6 +49,21 @@ func (m *mockSessionRepository) ListSessions(ctx context.Context, year, month in
 		}
 
 		results = append(results, sSummary)
+	}
+
+	// 親子関係を解決
+	childToParent := make(map[string]string)
+	for i := range results {
+		for _, childID := range results[i].ChildSessionIDs {
+			childToParent[childID] = results[i].ID
+		}
+	}
+
+	for i := range results {
+		if parentID, ok := childToParent[results[i].ID]; ok {
+			pID := parentID
+			results[i].ParentSessionID = &pID
+		}
 	}
 
 	return results, nil
@@ -223,6 +239,49 @@ func TestListSessionsUseCase_Execute(t *testing.T) {
 				}
 				if results[0].Parsed {
 					t.Errorf("expected Parsed to be false due to cache error")
+				}
+			},
+		},
+		{
+			name: "resolve parent-child relationships correctly",
+			sessionSessions: []dto.SessionSummary{
+				{ID: "parent_session", Timestamp: &t13},
+				{ID: "child_session", Timestamp: &t12},
+			},
+			cacheMap: map[string]*dto.SessionSummary{
+				"parent_session": {
+					ID:              "parent_session",
+					ChildSessionIDs: []string{"child_session"},
+				},
+				"child_session": {
+					ID: "child_session",
+				},
+			},
+			wantErr: false,
+			verify: func(t *testing.T, results []dto.SessionSummary) {
+				if len(results) != 2 {
+					t.Fatalf("expected 2 results, got %d", len(results))
+				}
+
+				resMap := make(map[string]dto.SessionSummary)
+				for _, r := range results {
+					resMap[r.ID] = r
+				}
+
+				p, ok := resMap["parent_session"]
+				if !ok {
+					t.Fatal("parent_session not found")
+				}
+				if len(p.ChildSessionIDs) != 1 || p.ChildSessionIDs[0] != "child_session" {
+					t.Errorf("expected parent_session child_session_ids to contain 'child_session', got %v", p.ChildSessionIDs)
+				}
+
+				c, ok := resMap["child_session"]
+				if !ok {
+					t.Fatal("child_session not found")
+				}
+				if c.ParentSessionID == nil || *c.ParentSessionID != "parent_session" {
+					t.Errorf("expected child_session parent_session_id to be 'parent_session', got %v", c.ParentSessionID)
 				}
 			},
 		},
