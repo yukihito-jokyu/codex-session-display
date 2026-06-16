@@ -16,6 +16,7 @@ export const dummySessions: dto.SessionSummary[] = [
 		file_size: 1024,
 		file_modified_at: "2026-05-20T10:00:00Z",
 		parsed: true,
+		child_session_ids: ["sess-002-uuid-long-name"],
 	},
 	{
 		id: "sess-002-uuid-long-name",
@@ -30,6 +31,7 @@ export const dummySessions: dto.SessionSummary[] = [
 		file_size: 2048,
 		file_modified_at: "2026-05-20T12:00:00Z",
 		parsed: true,
+		parent_session_id: "sess-001-uuid-long-name",
 	},
 	{
 		id: "sess-003-uuid-long-name",
@@ -356,6 +358,7 @@ export async function mockWailsAPI(
 							total_token_usage: undefined,
 						},
 					],
+					parent_session_id: "sess-001-uuid-long-name",
 				};
 			}
 
@@ -507,7 +510,23 @@ export async function mockWailsAPI(
 				id: id,
 				cache_schema_version: 3,
 				parsed_at: "2026-05-20T10:00:00Z",
+				child_session_ids: ["sess-002-uuid-long-name"],
 				nodes: [
+					{
+						id: "node-collab-agent-test",
+						type: "collabAgent",
+						position: { x: 200, y: -120 },
+						data: {
+							category: "agent",
+							label: "Subagent Spawn",
+							icon: "🤖",
+							summary: "Spawned a subagent thread",
+							turnIndex: 0,
+							meta: {
+								new_thread_id: "sess-002-uuid-long-name",
+							},
+						},
+					},
 					{
 						id: "node-meta",
 						type: "sessionMeta",
@@ -1008,6 +1027,29 @@ export async function mockWailsAPI(
 							reasoning_output_tokens: 2000,
 						},
 						items: [
+							{
+								kind: "collab",
+								label: "Subagent Activity",
+								role: "",
+								body: "Subagent session initiated",
+								timestamp: "2026-05-20T10:00:04Z",
+								record_count: 1,
+								collapsible: true,
+								details: [
+									{
+										label: "Thread ID",
+										value: "sess-002-uuid-long-name",
+									},
+								],
+								last_token_usage: {
+									total_tokens: 0,
+									input_tokens: 0,
+									output_tokens: 0,
+									reasoning_output_tokens: 0,
+								},
+								token_count_count: 0,
+								total_token_usage: undefined,
+							},
 							{
 								kind: "conversation",
 								label: "",

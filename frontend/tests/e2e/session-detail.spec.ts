@@ -104,7 +104,7 @@ test.describe("セッション詳細画面 E2E テスト", () => {
 		await expect(timeline.getByText("50K tokens")).toHaveCount(2);
 		await expect(timeline.getByText("2件", { exact: true })).toBeVisible();
 		await expect(timeline.getByText("累計 50K")).toBeVisible();
-		await expect(timeline.getByText("計測なし")).toHaveCount(2);
+		await expect(timeline.getByText("計測なし")).toHaveCount(3);
 		await expect(
 			timeline.getByText("Hello, agent, please help me."),
 		).toBeVisible();
@@ -1421,7 +1421,7 @@ test.describe("セッション詳細画面 E2E テスト", () => {
 		page,
 	}) => {
 		// nodes/edges 等が undefined を返す sess-002 へ遷移
-		await page.locator("text=sess-002").click();
+		await page.goto("/#/sessions/sess-002-uuid-long-name");
 
 		// エラーにはならず、詳細画面が表示されていることを確認
 		await expect(
@@ -1517,10 +1517,13 @@ test.describe("セッション詳細画面 E2E テスト", () => {
 	test("ノードラベルが空の場合にノードIDが詳細パネルのタイトルにフォールバック表示されること", async ({
 		page,
 	}) => {
-		await page.locator("text=sess-001").click();
+		await page.goto("/#/sessions/sess-001-uuid-long-name");
 
 		// labelを持たない generic ノードをクリック
-		await page.locator(".react-flow__node-generic").first().click();
+		await page
+			.locator(".react-flow__node-generic")
+			.first()
+			.click({ force: true });
 
 		// 詳細パネルにIDである「node-generic」が表示されていることを確認
 		await expect(page.locator("text=Node Detail: node-generic")).toBeVisible();
@@ -1533,7 +1536,7 @@ test.describe("セッション詳細画面 E2E テスト", () => {
 		page,
 	}) => {
 		// nodesがundefinedの sess-002 に遷移
-		await page.locator("text=sess-002").click();
+		await page.goto("/#/sessions/sess-002-uuid-long-name");
 
 		const tokenRow = page.locator("tbody tr").first();
 		await expect(tokenRow).not.toHaveAttribute("role", "button");
@@ -1574,5 +1577,52 @@ test.describe("セッション詳細画面 E2E テスト", () => {
 			page.locator("text=Turn Duration (seconds)"),
 		).not.toBeVisible();
 		await expect(page.locator("text=Turn #1")).not.toBeVisible();
+	});
+
+	test("サブエージェント親子セッション間の遷移（キャンバス、タイムライン、戻る）が動作すること", async ({
+		page,
+	}) => {
+		// 1. 親セッション詳細へ遷移
+		await page.goto("/#/sessions/sess-001-uuid-long-name");
+		await expect(page.locator("text=sess-001-uuid-long-name")).toBeVisible();
+
+		// 2. キャンバスの collabAgent ノードから「サブエージェントを表示」をクリックして子セッション詳細へ遷移
+		const collabNode = page.locator(".react-flow__node-collabAgent");
+		await expect(collabNode).toBeVisible();
+		await collabNode
+			.locator("button:has-text('サブエージェントを表示')")
+			.click();
+
+		// 子セッション詳細へ遷移したことを確認
+		await expect(page).toHaveURL(/.*#\/sessions\/sess-002-uuid-long-name/);
+		await expect(page.locator("text=sess-002-uuid-long-name")).toBeVisible();
+
+		// 3. 「← Back to Parent」ボタンで親セッション詳細に戻る
+		const backToParentBtn = page.locator("button:has-text('← Back to Parent')");
+		await expect(backToParentBtn).toBeVisible();
+		await backToParentBtn.click();
+
+		// 親セッション詳細に戻ったことを確認
+		await expect(page).toHaveURL(/.*#\/sessions\/sess-001-uuid-long-name/);
+		await expect(page.locator("text=sess-001-uuid-long-name")).toBeVisible();
+
+		// 4. タイムライン上の collab イベントから「サブエージェントを表示」をクリックして子セッション詳細へ遷移
+		const timeline = page.getByTestId("conversation-timeline");
+		const collabTimelineItem = timeline
+			.locator("article")
+			.filter({ hasText: "Subagent Activity" });
+		await expect(collabTimelineItem).toBeVisible();
+		// アコーディオンのトグルをクリックして展開
+		await collabTimelineItem
+			.getByRole("button", { name: "Subagent Activity" })
+			.click();
+		// 「サブエージェントを表示」をクリック
+		await collabTimelineItem
+			.locator("button:has-text('サブエージェントを表示')")
+			.click();
+
+		// 再び子セッション詳細へ遷移したことを確認
+		await expect(page).toHaveURL(/.*#\/sessions\/sess-002-uuid-long-name/);
+		await expect(page.locator("text=sess-002-uuid-long-name")).toBeVisible();
 	});
 });
