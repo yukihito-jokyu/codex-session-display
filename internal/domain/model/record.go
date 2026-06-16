@@ -19,6 +19,7 @@ type SessionMetaPayload struct {
 	Originator       string        `json:"originator"`
 	Source           string        `json:"source"`
 	ThreadSource     string        `json:"thread_source"`
+	ParentThreadID   string        `json:"parent_thread_id,omitempty"`
 	ModelProvider    string        `json:"model_provider"`
 	BaseInstructions *Instructions `json:"base_instructions"` // システム指示
 	Git              *GitInfo      `json:"git"`

@@ -1,15 +1,19 @@
 package repository
 
 import (
+	"bufio"
 	"codex-session-display/internal/domain/dto"
 	"codex-session-display/internal/usecase"
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"regexp"
+	"sort"
 	"strings"
 	"time"
 )
@@ -144,6 +148,10 @@ func (r *SessionFSRepository) ListSessions(ctx context.Context, year, month int,
 				ID:     id,
 				Parsed: false,
 			}
+			// 未解析の場合、ファイルから親セッションIDをすばやく読み取る
+			if parentID, readErr := readParentThreadIDFromFile(path); readErr == nil && parentID != "" {
+				sSummary.ParentSessionID = &parentID
+			}
 		}
 
 		// ファイルスキャン側のメタデータを設定（キャッシュデータがなければこれを優先、あれば補完）
@@ -181,6 +189,50 @@ func (r *SessionFSRepository) ListSessions(ctx context.Context, year, month int,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to scan session directory: %w", err)
+	}
+
+	// 親子関係を解決
+	childToParent := make(map[string]string)
+	for i := range sessions {
+		// キャッシュから読み込まれた ChildSessionIDs
+		for _, childID := range sessions[i].ChildSessionIDs {
+			childToParent[childID] = sessions[i].ID
+		}
+		// ファイルまたはキャッシュから読み込まれた ParentSessionID
+		if sessions[i].ParentSessionID != nil {
+			childToParent[sessions[i].ID] = *sessions[i].ParentSessionID
+		}
+	}
+
+	parentToChildren := make(map[string]map[string]bool)
+	for i := range sessions {
+		parentToChildren[sessions[i].ID] = make(map[string]bool)
+		for _, cid := range sessions[i].ChildSessionIDs {
+			parentToChildren[sessions[i].ID][cid] = true
+		}
+	}
+
+	for cid, pid := range childToParent {
+		if parentToChildren[pid] == nil {
+			parentToChildren[pid] = make(map[string]bool)
+		}
+		parentToChildren[pid][cid] = true
+	}
+
+	// 抽出された親子関係を双方向にマージして設定
+	for i := range sessions {
+		if parentID, ok := childToParent[sessions[i].ID]; ok {
+			pID := parentID
+			sessions[i].ParentSessionID = &pID
+		}
+		if children, ok := parentToChildren[sessions[i].ID]; ok && len(children) > 0 {
+			var childIDs []string
+			for cid := range children {
+				childIDs = append(childIDs, cid)
+			}
+			sort.Strings(childIDs)
+			sessions[i].ChildSessionIDs = childIDs
+		}
 	}
 
 	return sessions, nil
@@ -296,4 +348,39 @@ func parseSessionFilename(filename string) (id, timestamp string, err error) {
 
 	utcTimeStr := t.UTC().Format(time.RFC3339)
 	return uuidPart, utcTimeStr, nil
+}
+
+// readParentThreadIDFromFile はセッションファイルの最初の行（session_meta レコード）を高速に読み込み、
+// 親セッションID（parent_thread_id）が存在すればそれを返します。
+func readParentThreadIDFromFile(filePath string) (string, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	reader := bufio.NewReader(file)
+	line, err := reader.ReadString('\n')
+	if err != nil && err != io.EOF {
+		return "", err
+	}
+
+	var env struct {
+		Type    string          `json:"type"`
+		Payload json.RawMessage `json:"payload"`
+	}
+	if err := json.Unmarshal([]byte(line), &env); err != nil {
+		return "", err
+	}
+
+	if env.Type == "session_meta" {
+		var meta struct {
+			ParentThreadID string `json:"parent_thread_id"`
+		}
+		if err := json.Unmarshal(env.Payload, &meta); err == nil {
+			return meta.ParentThreadID, nil
+		}
+	}
+
+	return "", nil
 }

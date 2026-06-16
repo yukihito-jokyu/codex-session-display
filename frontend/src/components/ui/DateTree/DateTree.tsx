@@ -48,10 +48,27 @@ const getGroupingDate = (session: SessionSummary) => {
 export const DateTree: React.FC<DateTreeProps> = ({ sessions }) => {
 	const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
 
+	// sessionsMap を作成
+	const sessionsMap = useMemo(() => {
+		const map = new Map<string, SessionSummary>();
+		for (const s of sessions) {
+			map.set(s.id, s);
+		}
+		return map;
+	}, [sessions]);
+
+	// 親が sessions リストの中にいる子セッションを日付ツリーのルートから除外
+	const rootSessions = useMemo(() => {
+		return sessions.filter((s) => {
+			if (!s.parent_session_id) return true;
+			return !sessionsMap.has(s.parent_session_id);
+		});
+	}, [sessions, sessionsMap]);
+
 	// セッションをグループ化
 	const grouped = useMemo(() => {
 		const result: GroupedData = {};
-		sessions.forEach((s) => {
+		rootSessions.forEach((s) => {
 			const date = getGroupingDate(s);
 			if (!date) return;
 
@@ -76,7 +93,7 @@ export const DateTree: React.FC<DateTreeProps> = ({ sessions }) => {
 			result[y].months[m].days[d].sessions.push({ session: s, sortKey });
 		});
 		return result;
-	}, [sessions]);
+	}, [rootSessions]);
 
 	// 初回ロード時に最新の年、月、日をデフォルトで展開する
 	useEffect(() => {
@@ -242,6 +259,7 @@ export const DateTree: React.FC<DateTreeProps> = ({ sessions }) => {
 																			<SessionRow
 																				key={session.id}
 																				session={session}
+																				sessionsMap={sessionsMap}
 																			/>
 																		))}
 																	</div>

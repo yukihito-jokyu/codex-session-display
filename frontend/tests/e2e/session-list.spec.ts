@@ -15,12 +15,38 @@ test.describe("セッション一覧画面 E2E テスト", () => {
 		// 月ナビゲーターの初期表示が「2026年 5月」であることを確認
 		await expect(page.locator("span:has-text('2026年 5月')")).toBeVisible();
 
-		// セッション1とセッション2が表示されていることを確認
-		// SessionRowでは IDの先頭8文字が表示される (sess-001-uuid-long-name -> sess-001)
+		// セッション1が表示されていることを確認
 		await expect(page.locator("text=sess-001")).toBeVisible();
-		await expect(page.locator("text=sess-002")).toBeVisible();
+		// 子セッションであるセッション2は初期状態で非表示であることを確認
+		await expect(page.locator("text=sess-002")).not.toBeVisible();
 		// 4月のセッション3は表示されていないことを確認
 		await expect(page.locator("text=sess-003")).not.toBeVisible();
+	});
+
+	test("サブエージェントセッションが親セッションの下にネストして表示され、展開・折りたたみ可能であること", async ({
+		page,
+	}) => {
+		// 初期状態では親セッションのみが表示され、子セッションは非表示
+		await expect(page.locator("text=sess-001")).toBeVisible();
+		await expect(page.locator("text=sess-002")).not.toBeVisible();
+
+		// 展開ボタン（▶）が存在することを確認
+		const expandBtn = page.locator('button[aria-label="Expand subagents"]');
+		await expect(expandBtn).toBeVisible();
+
+		// 展開ボタンをクリック
+		await expandBtn.click();
+
+		// 子セッションが表示されることを確認
+		await expect(page.locator("text=sess-002")).toBeVisible();
+
+		// 折りたたみボタン（▼）をクリック
+		const collapseBtn = page.locator('button[aria-label="Collapse subagents"]');
+		await expect(collapseBtn).toBeVisible();
+		await collapseBtn.click();
+
+		// 再び非表示になることを確認
+		await expect(page.locator("text=sess-002")).not.toBeVisible();
 	});
 
 	test("月のナビゲーションが正しく機能すること", async ({ page }) => {
@@ -44,7 +70,7 @@ test.describe("セッション一覧画面 E2E テスト", () => {
 		// 5月に戻ることを確認
 		await expect(page.locator("span:has-text('2026年 5月')")).toBeVisible();
 		await expect(page.locator("text=sess-001")).toBeVisible();
-		await expect(page.locator("text=sess-002")).toBeVisible();
+		await expect(page.locator("text=sess-002")).not.toBeVisible();
 	});
 
 	test("検索バーによるフィルタリングが正しく機能すること", async ({ page }) => {

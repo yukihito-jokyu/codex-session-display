@@ -142,3 +142,43 @@
 		padding-top: 6px;
 	}
 }
+
+.container {
+	display: flex;
+	flex-direction: column;
+	width: 100%;
+}
+
+.toggleBtn {
+	background: transparent;
+	border: none;
+	color: var(--text-secondary);
+	cursor: pointer;
+	padding: 4px;
+	margin-right: -4px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	font-size: 10px;
+	transition: transform 0.2s ease;
+	flex-shrink: 0;
+}
+
+.toggleBtn:hover {
+	color: var(--color-accent);
+}
+
+.toggleBtn.open {
+	transform: rotate(90deg);
+}
+
+.childRows {
+	display: flex;
+	flex-direction: column;
+	margin-left: 20px;
+	padding-left: 10px;
+	border-left: 1px dashed var(--border-color);
+	margin-top: 4px;
+	margin-bottom: 8px;
+	gap: 4px;
+}

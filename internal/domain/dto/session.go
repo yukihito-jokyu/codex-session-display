@@ -4,18 +4,20 @@ import "codex-session-display/internal/domain/model"
 
 // SessionSummary はセッション一覧内の単一のセッションエントリーを表します。
 type SessionSummary struct {
-	ID             string  `json:"id"`
-	FilePath       string  `json:"file_path"`
-	Cwd            *string `json:"cwd"`
-	CliVersion     *string `json:"cli_version"`
-	Originator     *string `json:"originator"`
-	ModelProvider  *string `json:"model_provider"`
-	Branch         *string `json:"branch"`
-	Source         *string `json:"source"`
-	Timestamp      *string `json:"timestamp"`
-	FileSize       int64   `json:"file_size"`
-	FileModifiedAt *string `json:"file_modified_at"`
-	Parsed         bool    `json:"parsed"`
+	ID              string   `json:"id"`
+	FilePath        string   `json:"file_path"`
+	Cwd             *string  `json:"cwd"`
+	CliVersion      *string  `json:"cli_version"`
+	Originator      *string  `json:"originator"`
+	ModelProvider   *string  `json:"model_provider"`
+	Branch          *string  `json:"branch"`
+	Source          *string  `json:"source"`
+	Timestamp       *string  `json:"timestamp"`
+	FileSize        int64    `json:"file_size"`
+	FileModifiedAt  *string  `json:"file_modified_at"`
+	Parsed          bool     `json:"parsed"`
+	ParentSessionID *string  `json:"parent_session_id,omitempty"`
+	ChildSessionIDs []string `json:"child_session_ids,omitempty"`
 }
 
 // TokenBadgeData は React Flow のノード上に表示するトークンバッジのデータを表します。
@@ -139,7 +141,7 @@ type ConversationTimelineTurn struct {
 }
 
 // CurrentSessionDetailCacheSchemaVersion は現行のセッション詳細キャッシュ形式を表します。
-const CurrentSessionDetailCacheSchemaVersion = 6
+const CurrentSessionDetailCacheSchemaVersion = 7
 
 // SessionDetailResponse はフロントエンドに返され、ディスクにキャッシュされるセッション詳細を表します。
 type SessionDetailResponse struct {
@@ -151,4 +153,6 @@ type SessionDetailResponse struct {
 	Statistics         Statistics                 `json:"statistics"`
 	TokenCounts        []TokenCountEntry          `json:"token_counts"`
 	Timeline           []ConversationTimelineTurn `json:"timeline"`
+	ParentSessionID    *string                    `json:"parent_session_id,omitempty"`
+	ChildSessionIDs    []string                   `json:"child_session_ids,omitempty"`
 }

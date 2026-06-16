@@ -71,9 +71,13 @@ type mockSessionRepositoryForDetail struct {
 	filePathErr error
 	modTimeErr  error
 	modTimes    map[string]time.Time
+	sessions    []dto.SessionSummary
 }
 
 func (m *mockSessionRepositoryForDetail) ListSessions(ctx context.Context, year, month int, query string) ([]dto.SessionSummary, error) {
+	if m.sessions != nil {
+		return m.sessions, nil
+	}
 	return nil, errors.New("not implemented")
 }
 
@@ -698,6 +702,250 @@ func TestGetSessionDetailUseCase_Execute(t *testing.T) {
 					if n.ID == "" {
 						t.Error("found node with empty ID")
 					}
+				}
+			},
+		},
+		{
+			name: "extract child_session_ids from collab_agent_spawn_end",
+			setup: func(t *testing.T, tmpDir string) (string, usecase.SessionRepository, usecase.CacheRepository, usecase.SessionParser, func()) {
+				sessionID := "parent-session-1"
+				filePath := filepath.Join(tmpDir, "rollout-parent.jsonl")
+				sessionRepo := &mockSessionRepositoryForDetail{
+					paths: map[string]string{sessionID: filePath},
+				}
+				cacheRepo := &mockCacheRepositoryForDetail{}
+				parser := &mockSessionParser{
+					records: []*model.TypedRecord{
+						{
+							LineNumber:  1,
+							Type:        "session_meta",
+							SessionMeta: &model.SessionMetaPayload{ID: sessionID, CliVersion: "v0.131.0"},
+						},
+						{
+							LineNumber: 2,
+							Type:       "event_msg",
+							SubType:    "task_started",
+							EventMsg: &model.EventMsgPayload{
+								TurnID: "turn-1",
+							},
+						},
+						{
+							LineNumber: 3,
+							Type:       "event_msg",
+							SubType:    "collab_agent_spawn_end",
+							EventMsg: &model.EventMsgPayload{
+								NewThreadID:      "sub-session-uuid-1234",
+								NewAgentNickname: "SubBot",
+								NewAgentRole:     "Coder",
+							},
+						},
+						{
+							LineNumber: 4,
+							Type:       "event_msg",
+							SubType:    "task_complete",
+							EventMsg:   &model.EventMsgPayload{TurnID: "turn-1"},
+						},
+					},
+				}
+				return sessionID, sessionRepo, cacheRepo, parser, nil
+			},
+			wantErr: false,
+			verify: func(t *testing.T, res *dto.SessionDetailResponse, err error) {
+				if err != nil {
+					t.Fatalf("expected no error, got %v", err)
+				}
+				if len(res.ChildSessionIDs) != 1 || res.ChildSessionIDs[0] != "sub-session-uuid-1234" {
+					t.Errorf("ChildSessionIDs = %v, want ['sub-session-uuid-1234']", res.ChildSessionIDs)
+				}
+
+				// ノードが collabAgent 型として生成されているか確認
+				var collabNode *dto.FlowNode
+				for i := range res.Nodes {
+					if res.Nodes[i].Type == "collabAgent" {
+						collabNode = &res.Nodes[i]
+						break
+					}
+				}
+				if collabNode == nil {
+					t.Fatal("expected a node of type 'collabAgent'")
+				}
+				if collabNode.Data.Meta["new_thread_id"] != "sub-session-uuid-1234" {
+					t.Errorf("expected meta new_thread_id 'sub-session-uuid-1234', got %v", collabNode.Data.Meta["new_thread_id"])
+				}
+				if collabNode.Data.Meta["new_agent_nickname"] != "SubBot" {
+					t.Errorf("expected nickname 'SubBot', got %v", collabNode.Data.Meta["new_agent_nickname"])
+				}
+
+				// タイムライン項目が collab 型として生成されているか確認
+				var collabTimelineItem *dto.ConversationTimelineItem
+				for _, turn := range res.Timeline {
+					for i := range turn.Items {
+						if turn.Items[i].Kind == "collab" {
+							collabTimelineItem = &turn.Items[i]
+							break
+						}
+					}
+				}
+				if collabTimelineItem == nil {
+					t.Fatal("expected a timeline item of kind 'collab'")
+				}
+				if collabTimelineItem.Label != "サブエージェント起動" {
+					t.Errorf("expected label 'サブエージェント起動', got %s", collabTimelineItem.Label)
+				}
+			},
+		},
+		{
+			name: "extract child_session_ids and generate collabNode from spawn_agent tool call",
+			setup: func(t *testing.T, tmpDir string) (string, usecase.SessionRepository, usecase.CacheRepository, usecase.SessionParser, func()) {
+				sessionID := "parent-session-2"
+				filePath := filepath.Join(tmpDir, "rollout-parent2.jsonl")
+				sessionRepo := &mockSessionRepositoryForDetail{
+					paths: map[string]string{sessionID: filePath},
+				}
+				cacheRepo := &mockCacheRepositoryForDetail{}
+				parser := &mockSessionParser{
+					records: []*model.TypedRecord{
+						{
+							LineNumber:  1,
+							Type:        "session_meta",
+							SessionMeta: &model.SessionMetaPayload{ID: sessionID, CliVersion: "v0.131.0"},
+						},
+						{
+							LineNumber: 2,
+							Type:       "event_msg",
+							SubType:    "task_started",
+							EventMsg: &model.EventMsgPayload{
+								TurnID: "turn-1",
+							},
+						},
+						{
+							LineNumber: 3,
+							Type:       "response_item",
+							SubType:    "function_call",
+							ResponseItem: &model.ResponseItemPayload{
+								CallID:    "call-1",
+								Name:      "spawn_agent",
+								Arguments: `{"agent_type": "Coder"}`,
+							},
+						},
+						{
+							LineNumber: 4,
+							Type:       "response_item",
+							SubType:    "function_call_output",
+							ResponseItem: &model.ResponseItemPayload{
+								CallID: "call-1",
+								Name:   "spawn_agent",
+								Output: `{"agent_id": "sub-session-uuid-5678", "nickname": "SubBot2"}`,
+							},
+						},
+						{
+							LineNumber: 5,
+							Type:       "event_msg",
+							SubType:    "task_complete",
+							EventMsg:   &model.EventMsgPayload{TurnID: "turn-1"},
+						},
+					},
+				}
+				return sessionID, sessionRepo, cacheRepo, parser, nil
+			},
+			wantErr: false,
+			verify: func(t *testing.T, res *dto.SessionDetailResponse, err error) {
+				if err != nil {
+					t.Fatalf("expected no error, got %v", err)
+				}
+				if len(res.ChildSessionIDs) != 1 || res.ChildSessionIDs[0] != "sub-session-uuid-5678" {
+					t.Errorf("ChildSessionIDs = %v, want ['sub-session-uuid-5678']", res.ChildSessionIDs)
+				}
+
+				// ノードが collabAgent 型として生成されているか確認
+				var collabNode *dto.FlowNode
+				for i := range res.Nodes {
+					if res.Nodes[i].Type == "collabAgent" {
+						collabNode = &res.Nodes[i]
+						break
+					}
+				}
+				if collabNode == nil {
+					t.Fatal("expected a node of type 'collabAgent'")
+				}
+				if collabNode.Data.Meta["new_thread_id"] != "sub-session-uuid-5678" {
+					t.Errorf("expected meta new_thread_id 'sub-session-uuid-5678', got %v", collabNode.Data.Meta["new_thread_id"])
+				}
+				if collabNode.Data.Meta["new_agent_nickname"] != "SubBot2" {
+					t.Errorf("expected nickname 'SubBot2', got %v", collabNode.Data.Meta["new_agent_nickname"])
+				}
+				if collabNode.Data.Meta["new_agent_role"] != "Coder" {
+					t.Errorf("expected role 'Coder', got %v", collabNode.Data.Meta["new_agent_role"])
+				}
+
+				// タイムライン項目が collab 型として生成されているか確認
+				var collabTimelineItem *dto.ConversationTimelineItem
+				for _, turn := range res.Timeline {
+					for i := range turn.Items {
+						if turn.Items[i].Kind == "collab" {
+							collabTimelineItem = &turn.Items[i]
+							break
+						}
+					}
+				}
+				if collabTimelineItem == nil {
+					t.Fatal("expected a timeline item of kind 'collab'")
+				}
+				if collabTimelineItem.Label != "サブエージェント起動" {
+					t.Errorf("expected label 'サブエージェント起動', got %s", collabTimelineItem.Label)
+				}
+				if !strings.Contains(collabTimelineItem.Body, "sub-session-uuid-5678") {
+					t.Errorf("expected body to contain thread ID, got %s", collabTimelineItem.Body)
+				}
+			},
+		},
+		{
+			name: "link parent session ID when current session is child",
+			setup: func(t *testing.T, tmpDir string) (string, usecase.SessionRepository, usecase.CacheRepository, usecase.SessionParser, func()) {
+				sessionID := "child-session-1"
+				filePath := filepath.Join(tmpDir, "rollout-child.jsonl")
+				sessionRepo := &mockSessionRepositoryForDetail{
+					paths: map[string]string{sessionID: filePath},
+					sessions: []dto.SessionSummary{
+						{
+							ID:              "parent-session-123",
+							ChildSessionIDs: []string{sessionID},
+						},
+					},
+				}
+				cacheRepo := &mockCacheRepositoryForDetail{}
+				parser := &mockSessionParser{
+					records: []*model.TypedRecord{
+						{
+							LineNumber:  1,
+							Type:        "session_meta",
+							SessionMeta: &model.SessionMetaPayload{ID: sessionID, CliVersion: "v0.131.0"},
+						},
+						{
+							LineNumber: 2,
+							Type:       "event_msg",
+							SubType:    "task_started",
+							EventMsg: &model.EventMsgPayload{
+								TurnID: "turn-1",
+							},
+						},
+						{
+							LineNumber: 3,
+							Type:       "event_msg",
+							SubType:    "task_complete",
+							EventMsg:   &model.EventMsgPayload{TurnID: "turn-1"},
+						},
+					},
+				}
+				return sessionID, sessionRepo, cacheRepo, parser, nil
+			},
+			wantErr: false,
+			verify: func(t *testing.T, res *dto.SessionDetailResponse, err error) {
+				if err != nil {
+					t.Fatalf("expected no error, got %v", err)
+				}
+				if res.ParentSessionID == nil || *res.ParentSessionID != "parent-session-123" {
+					t.Errorf("ParentSessionID = %v, want 'parent-session-123'", res.ParentSessionID)
 				}
 			},
 		},

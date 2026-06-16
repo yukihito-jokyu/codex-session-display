@@ -424,6 +424,67 @@ func TestSessionFSRepository_ListSessions(t *testing.T) {
 				}
 			},
 		},
+		{
+			name: "resolve parent-child relationships from raw session files",
+			setup: func(t *testing.T, tmpDir string) (string, usecase.CacheRepository, func()) {
+				rawDir := filepath.Join(tmpDir, "raw_parent_child")
+				if err := os.Mkdir(rawDir, 0o755); err != nil {
+					t.Fatal(err)
+				}
+				// 親セッションファイル (ID: 00000000-0000-0000-0000-000000000001)
+				pFilename := "rollout-2026-05-25T12-00-00-00000000-0000-0000-0000-000000000001.jsonl"
+				pContent := `{"type":"session_meta", "payload":{"id":"00000000-0000-0000-0000-000000000001", "cli_version":"v0.131.0"}}` + "\n"
+				if err := os.WriteFile(filepath.Join(rawDir, pFilename), []byte(pContent), 0o644); err != nil {
+					t.Fatal(err)
+				}
+
+				// 子セッションファイル (ID: 00000000-0000-0000-0000-000000000002)
+				cFilename := "rollout-2026-05-25T12-00-00-00000000-0000-0000-0000-000000000002.jsonl"
+				cContent := `{"type":"session_meta", "payload":{"id":"00000000-0000-0000-0000-000000000002", "parent_thread_id":"00000000-0000-0000-0000-000000000001", "cli_version":"v0.131.0"}}` + "\n"
+				if err := os.WriteFile(filepath.Join(rawDir, cFilename), []byte(cContent), 0o644); err != nil {
+					t.Fatal(err)
+				}
+
+				cleanup := func() {
+					_ = os.RemoveAll(rawDir)
+				}
+				return rawDir, &mockCacheRepository{}, cleanup
+			},
+			year:    2026,
+			month:   5,
+			query:   "",
+			wantErr: false,
+			verify: func(t *testing.T, repo *SessionFSRepository, sessions []dto.SessionSummary) {
+				if len(sessions) != 2 {
+					t.Fatalf("expected 2 sessions, got %d", len(sessions))
+				}
+
+				var parent, child *dto.SessionSummary
+				for i := range sessions {
+					switch sessions[i].ID {
+					case "00000000-0000-0000-0000-000000000001":
+						parent = &sessions[i]
+					case "00000000-0000-0000-0000-000000000002":
+						child = &sessions[i]
+					}
+				}
+
+				if parent == nil {
+					t.Fatal("parent session not found")
+				}
+				if child == nil {
+					t.Fatal("child session not found")
+				}
+
+				if child.ParentSessionID == nil || *child.ParentSessionID != "00000000-0000-0000-0000-000000000001" {
+					t.Errorf("expected child's ParentSessionID to be '00000000-0000-0000-0000-000000000001', got %v", child.ParentSessionID)
+				}
+
+				if len(parent.ChildSessionIDs) != 1 || parent.ChildSessionIDs[0] != "00000000-0000-0000-0000-000000000002" {
+					t.Errorf("expected parent's ChildSessionIDs to contain '00000000-0000-0000-0000-000000000002', got %v", parent.ChildSessionIDs)
+				}
+			},
+		},
 	}
 
 	for _, tt := range tests {

@@ -67,9 +67,24 @@ export function SessionDetailPage() {
 		);
 	}
 
+	const parentSessionId = sessionData?.parent_session_id ?? null;
+	const handleBackToParent = () => {
+		if (parentSessionId) {
+			navigate(`/sessions/${parentSessionId}`);
+		}
+	};
+	const handleSubagentClick = (subagentId: string) => {
+		navigate(`/sessions/${subagentId}`);
+	};
+
 	return (
 		<div className={styles.detailPage}>
-			<SessionDetailHeader sessionId={id ?? ""} onBack={handleBack} />
+			<SessionDetailHeader
+				sessionId={id ?? ""}
+				parentSessionId={parentSessionId}
+				onBack={handleBack}
+				onBackToParent={handleBackToParent}
+			/>
 			<SessionDetailMainContent
 				sessionData={sessionData}
 				selectedNode={selectedNode}
@@ -95,6 +110,7 @@ export function SessionDetailPage() {
 				onTimelineFullText={handleTimelineFullText}
 				onStartResize={startResize}
 				onResizerKeyDown={handleResizerKeyDown}
+				onSubagentClick={handleSubagentClick}
 			/>
 		</div>
 	);

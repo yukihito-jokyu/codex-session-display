@@ -42,6 +42,7 @@ type SessionDetailMainContentProps = {
 	onTimelineFullText: (item: dto.ConversationTimelineItem) => void;
 	onStartResize: PointerEventHandler<HTMLDivElement>;
 	onResizerKeyDown: KeyboardEventHandler<HTMLDivElement>;
+	onSubagentClick?: (threadId: string) => void;
 };
 
 export function SessionDetailMainContent({
@@ -69,6 +70,7 @@ export function SessionDetailMainContent({
 	onTimelineFullText,
 	onStartResize,
 	onResizerKeyDown,
+	onSubagentClick,
 }: SessionDetailMainContentProps) {
 	const timelineDetailSelected = selectedNode?.data?.category === "timeline";
 	const selectedFlowNode = sessionData?.nodes?.find(
@@ -86,6 +88,7 @@ export function SessionDetailMainContent({
 							scrollTarget={timelineScrollTarget}
 							onSelect={onTimelineSelect}
 							onShowFullText={onTimelineFullText}
+							onSubagentClick={onSubagentClick}
 						/>
 					</div>
 					<div
@@ -111,6 +114,7 @@ export function SessionDetailMainContent({
 							edges={sessionData.edges || []}
 							onNodeSelect={onCanvasNodeSelect}
 							onTokenBadgeClick={onTokenBadgeClick}
+							onSubagentClick={onSubagentClick}
 							interactionLocked={Boolean(
 								selectedFlowNodeId && !timelineDetailSelected,
 							)}

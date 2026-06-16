@@ -21,6 +21,7 @@ export type CustomNodeProps = NodeProps & {
 			boundCount: number;
 		};
 		onTokenBadgeClick?: (nodeId: string) => void;
+		onSubagentClick?: (threadId: string) => void;
 	};
 };
 
@@ -59,6 +60,8 @@ const getCategoryClass = (type: string, data: CustomNodeProps["data"]) => {
 			return styles.nodeTurnStart;
 		case "itemCompleted":
 			return styles.nodeItemCompleted;
+		case "collabAgent":
+			return styles.nodeCollabAgent;
 		default:
 			return styles.nodeGeneric;
 	}
@@ -136,6 +139,18 @@ const BaseCustomNodeComponent = ({
 			</div>
 
 			<div className={styles.nodeBody}>{data.summary}</div>
+			{type === "collabAgent" && data.meta?.new_thread_id ? (
+				<button
+					type="button"
+					className={styles.subagentButton}
+					onClick={(e) => {
+						e.stopPropagation();
+						data.onSubagentClick?.(data.meta?.new_thread_id as string);
+					}}
+				>
+					サブエージェントを表示
+				</button>
+			) : null}
 
 			<Handle type="source" position={Position.Bottom} id="b" />
 			<Handle type="source" position={Position.Right} id="r" />
@@ -252,4 +267,5 @@ export const nodeTypes = {
 	externalEvent: BaseCustomNode,
 	itemCompleted: BaseCustomNode,
 	generic: BaseCustomNode,
+	collabAgent: BaseCustomNode,
 };

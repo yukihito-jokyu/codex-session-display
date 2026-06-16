@@ -7,7 +7,14 @@
 	border-bottom: 1px solid var(--border-color);
 }
 
-.backBtn {
+.leftActions {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+}
+
+.backBtn,
+.parentBtn {
 	padding: 6px 12px;
 	font-size: 12px;
 	font-weight: 500;
@@ -19,7 +26,8 @@
 	transition: all 0.2s;
 }
 
-.backBtn:hover {
+.backBtn:hover,
+.parentBtn:hover {
 	background: var(--bg-btn-hover);
 	border-color: var(--text-secondary);
 }

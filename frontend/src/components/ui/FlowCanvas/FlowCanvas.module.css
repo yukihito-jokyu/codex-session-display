@@ -228,3 +228,30 @@
 	color: var(--text-primary);
 	border: 1px solid var(--border-color);
 }
+
+.nodeCollabAgent {
+	background-color: var(--node-output-bg);
+	border: 1px solid var(--node-output-border);
+	--node-accent: var(--node-output-text);
+	--node-icon-bg: var(--node-output-icon-bg);
+}
+
+.subagentButton {
+	margin-top: 6px;
+	padding: 4px 8px;
+	background-color: var(--accent-badge-bg);
+	border: 1px solid var(--accent-badge-border);
+	color: var(--color-accent);
+	border-radius: 4px;
+	font-size: 10px;
+	cursor: pointer;
+	align-self: flex-start;
+	transition:
+		background-color 0.2s,
+		border-color 0.2s;
+}
+
+.subagentButton:hover {
+	background-color: var(--color-accent);
+	color: var(--bg-card);
+}
