@@ -401,6 +401,8 @@ export namespace dto {
 	    statistics: Statistics;
 	    token_counts: TokenCountEntry[];
 	    timeline: ConversationTimelineTurn[];
+	    parent_session_id?: string;
+	    child_session_ids?: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new SessionDetailResponse(source);
@@ -416,6 +418,8 @@ export namespace dto {
 	        this.statistics = this.convertValues(source["statistics"], Statistics);
 	        this.token_counts = this.convertValues(source["token_counts"], TokenCountEntry);
 	        this.timeline = this.convertValues(source["timeline"], ConversationTimelineTurn);
+	        this.parent_session_id = source["parent_session_id"];
+	        this.child_session_ids = source["child_session_ids"];
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -449,6 +453,8 @@ export namespace dto {
 	    file_size: number;
 	    file_modified_at?: string;
 	    parsed: boolean;
+	    parent_session_id?: string;
+	    child_session_ids?: string[];
 	
 	    static createFrom(source: any = {}) {
 	        return new SessionSummary(source);
@@ -468,6 +474,8 @@ export namespace dto {
 	        this.file_size = source["file_size"];
 	        this.file_modified_at = source["file_modified_at"];
 	        this.parsed = source["parsed"];
+	        this.parent_session_id = source["parent_session_id"];
+	        this.child_session_ids = source["child_session_ids"];
 	    }
 	}
 	
