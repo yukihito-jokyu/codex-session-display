@@ -52,6 +52,7 @@ interface FlowCanvasProps {
 	edges: dto.FlowEdge[];
 	onNodeSelect: (node: dto.FlowNode | null) => void;
 	onTokenBadgeClick?: (node: dto.FlowNode) => void;
+	onSubagentClick?: (threadId: string) => void;
 	interactionLocked?: boolean;
 	selectedNodeId?: string;
 	selectedNodeType?: string;
@@ -63,6 +64,7 @@ function FlowCanvasInner({
 	edges,
 	onNodeSelect,
 	onTokenBadgeClick,
+	onSubagentClick,
 	interactionLocked,
 	selectedNodeId,
 	selectedNodeType,
@@ -87,10 +89,11 @@ function FlowCanvasInner({
 				{
 					...node.data,
 					onTokenBadgeClick: handleTokenBadgeClick,
+					onSubagentClick: onSubagentClick,
 				},
 			]),
 		);
-	}, [handleTokenBadgeClick, nodes]);
+	}, [handleTokenBadgeClick, nodes, onSubagentClick]);
 
 	// React Flowのノード表現に合わせ、選択状態をマッピング
 	const flowNodes = useMemo(() => {
