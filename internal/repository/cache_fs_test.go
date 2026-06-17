@@ -280,6 +280,21 @@ func TestCacheFSRepository_SaveAndGetSessionDetail(t *testing.T) {
 		t.Fatalf("failed to save session detail: %v", err)
 	}
 
+	// 1.5 Verify summary file was created
+	summaryPath := filepath.Join(tmpDir, sessionID+".summary.json")
+	if _, err := os.Stat(summaryPath); os.IsNotExist(err) {
+		t.Errorf("expected summary cache file to exist: %s", summaryPath)
+	}
+
+	// GetSessionSummary should work using summary file
+	summary, err := repo.GetSessionSummary(context.Background(), sessionID)
+	if err != nil {
+		t.Fatalf("failed to get session summary: %v", err)
+	}
+	if summary.ID != sessionID {
+		t.Errorf("expected summary ID '%s', got '%s'", sessionID, summary.ID)
+	}
+
 	// 2. Get detail
 	got, err := repo.GetSessionDetail(context.Background(), sessionID)
 	if err != nil {
@@ -343,5 +358,60 @@ func TestCacheFSRepository_SaveAndGetSessionDetail(t *testing.T) {
 	err = badRepo.SaveSessionDetail(context.Background(), "any-session", detail)
 	if err == nil {
 		t.Error("expected write file error, got nil")
+	}
+}
+
+func TestCacheFSRepository_SummaryPriorityAndFallback(t *testing.T) {
+	tmpDir := t.TempDir()
+	repo := NewCacheFSRepository(tmpDir)
+
+	sessionID := "test-priority-session"
+
+	// 1. summary.json のみ存在し、detail.json が存在しない場合
+	summaryData := dto.SessionSummary{
+		ID:     sessionID,
+		Parsed: true,
+	}
+	d, _ := json.Marshal(summaryData)
+	_ = os.WriteFile(filepath.Join(tmpDir, sessionID+".summary.json"), d, 0o644)
+
+	summary, err := repo.GetSessionSummary(context.Background(), sessionID)
+	if err != nil {
+		t.Fatalf("expected no error with summary.json only, got: %v", err)
+	}
+	if summary.ID != sessionID || !summary.Parsed {
+		t.Errorf("unexpected summary content: %+v", summary)
+	}
+
+	// 2. summary.json が壊れていて、detail.json が正常な場合（フォールバック）
+	sessionIDFallback := "test-fallback-session"
+	_ = os.WriteFile(filepath.Join(tmpDir, sessionIDFallback+".summary.json"), []byte("{broken}"), 0o644)
+
+	detail := &dto.SessionDetailResponse{
+		ID:                 sessionIDFallback,
+		CacheSchemaVersion: dto.CurrentSessionDetailCacheSchemaVersion,
+		Nodes: []dto.FlowNode{
+			{
+				ID:   "meta-node-1",
+				Type: "sessionMeta",
+				Data: dto.NodeData{
+					Category: "meta",
+					Label:    "Meta",
+					Meta: map[string]interface{}{
+						"cwd": "/fallback/cwd",
+					},
+				},
+			},
+		},
+	}
+	detailData, _ := json.Marshal(detail)
+	_ = os.WriteFile(filepath.Join(tmpDir, sessionIDFallback+".json"), detailData, 0o644)
+
+	summaryFallback, err := repo.GetSessionSummary(context.Background(), sessionIDFallback)
+	if err != nil {
+		t.Fatalf("expected no error with broken summary.json due to fallback, got: %v", err)
+	}
+	if summaryFallback.Cwd == nil || *summaryFallback.Cwd != "/fallback/cwd" {
+		t.Errorf("expected fallback to detail to successfully load Cwd, got %v", summaryFallback.Cwd)
 	}
 }

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ListSessions } from "wailsjs/go/main/App";
 import type { SessionSummary } from "../../../components/ui/DateTree/SessionRow";
 
@@ -6,14 +6,40 @@ export function useSessions() {
 	const [sessions, setSessions] = useState<SessionSummary[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
-	const [searchQuery, setSearchQuery] = useState("");
-	const [currentYear, setCurrentYear] = useState<number | null>(null);
-	const [currentMonth, setCurrentMonth] = useState<number | null>(null);
+
+	const [searchQuery, setSearchQuery] = useState(() => {
+		return sessionStorage.getItem("session_list_query") || "";
+	});
+	const [currentYear, setCurrentYear] = useState<number | null>(() => {
+		const y = sessionStorage.getItem("session_list_year");
+		return y ? parseInt(y, 10) : null;
+	});
+	const [currentMonth, setCurrentMonth] = useState<number | null>(() => {
+		const m = sessionStorage.getItem("session_list_month");
+		return m ? parseInt(m, 10) : null;
+	});
+
+	const prevYearMonthRef = useRef<{
+		year: number | null;
+		month: number | null;
+	}>({
+		year: currentYear,
+		month: currentMonth,
+	});
+
+	// 直近で実際にフェッチされた（またはフェッチによって解決された）パラメータを保持して重複リクエストを防止する
+	const lastFetchedRef = useRef<{
+		query: string;
+		year: number;
+		month: number;
+	} | null>(null);
 
 	const fetchSessions = useCallback(
 		(query: string, year: number, month: number) => {
 			setLoading(true);
 			setError(null);
+			lastFetchedRef.current = { query, year, month };
+
 			ListSessions(query, year, month)
 				.then((data) => {
 					setSessions(data || []);
@@ -21,18 +47,31 @@ export function useSessions() {
 
 					// 初回起動時（year=0, month=0）の場合は、返ってきたデータのタイムスタンプから年月を割り出して同期する
 					if (year === 0 && month === 0) {
+						let resolvedYear = 0;
+						let resolvedMonth = 0;
 						if (data && data.length > 0 && data[0].timestamp) {
 							const date = new Date(data[0].timestamp);
 							if (!Number.isNaN(date.getTime())) {
-								setCurrentYear(date.getFullYear());
-								setCurrentMonth(date.getMonth() + 1);
-								return;
+								resolvedYear = date.getFullYear();
+								resolvedMonth = date.getMonth() + 1;
 							}
 						}
-						// セッションが全くない場合は現在の年月をデフォルトにする
-						const now = new Date();
-						setCurrentYear(now.getFullYear());
-						setCurrentMonth(now.getMonth() + 1);
+						if (resolvedYear === 0) {
+							const now = new Date();
+							resolvedYear = now.getFullYear();
+							resolvedMonth = now.getMonth() + 1;
+						}
+
+						// 解決された年月で lastFetchedRef.current を更新し、直後の useEffect トリガーによる
+						// 重複フェッチ（同一クエリ、同一の解決後年月）をスキップできるようにする
+						lastFetchedRef.current = {
+							query,
+							year: resolvedYear,
+							month: resolvedMonth,
+						};
+
+						setCurrentYear(resolvedYear);
+						setCurrentMonth(resolvedMonth);
 					}
 				})
 				.catch((err) => {
@@ -45,12 +84,54 @@ export function useSessions() {
 	);
 
 	useEffect(() => {
-		if (currentYear === null || currentMonth === null) {
-			fetchSessions(searchQuery, 0, 0);
-		} else {
-			fetchSessions(searchQuery, currentYear, currentMonth);
+		const targetYear = currentYear === null ? 0 : currentYear;
+		const targetMonth = currentMonth === null ? 0 : currentMonth;
+
+		// すでに同じパラメータでフェッチが完了または実行中の場合はスキップ
+		if (
+			lastFetchedRef.current &&
+			lastFetchedRef.current.query === searchQuery &&
+			lastFetchedRef.current.year === targetYear &&
+			lastFetchedRef.current.month === targetMonth
+		) {
+			return;
 		}
+
+		fetchSessions(searchQuery, targetYear, targetMonth);
 	}, [searchQuery, currentYear, currentMonth, fetchSessions]);
+
+	// 状態が変更されたら sessionStorage を更新する
+	useEffect(() => {
+		if (searchQuery) {
+			sessionStorage.setItem("session_list_query", searchQuery);
+		} else {
+			sessionStorage.removeItem("session_list_query");
+		}
+	}, [searchQuery]);
+
+	useEffect(() => {
+		if (currentYear !== null) {
+			sessionStorage.setItem("session_list_year", currentYear.toString());
+		} else {
+			sessionStorage.removeItem("session_list_year");
+		}
+		if (currentMonth !== null) {
+			sessionStorage.setItem("session_list_month", currentMonth.toString());
+		} else {
+			sessionStorage.removeItem("session_list_month");
+		}
+
+		// 有効な年月から別の有効な年月へ明示的に「変更」されたときのみ、アコーディオンの展開キャッシュをクリアする
+		if (
+			prevYearMonthRef.current.year !== null &&
+			prevYearMonthRef.current.month !== null &&
+			(prevYearMonthRef.current.year !== currentYear ||
+				prevYearMonthRef.current.month !== currentMonth)
+		) {
+			sessionStorage.removeItem("session_list_expanded_paths");
+		}
+		prevYearMonthRef.current = { year: currentYear, month: currentMonth };
+	}, [currentYear, currentMonth]);
 
 	const handleSearch = useCallback((query: string) => {
 		setSearchQuery(query);
@@ -77,6 +158,8 @@ export function useSessions() {
 	}, [currentYear, currentMonth]);
 
 	const retry = useCallback(() => {
+		// リトライ時はキャッシュを無視して強制的に最新化するため、lastFetchedRef をクリアしてフェッチする
+		lastFetchedRef.current = null;
 		fetchSessions(searchQuery, currentYear || 0, currentMonth || 0);
 	}, [fetchSessions, searchQuery, currentYear, currentMonth]);
 

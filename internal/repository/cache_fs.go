@@ -31,9 +31,22 @@ func NewCacheFSRepository(cacheDir string) *CacheFSRepository {
 }
 
 // GetSessionSummary はキャッシュファイルを読み込み、解析されたメタデータを含む SessionSummary を返します。
+// まず軽量な .summary.json の読み込みを試み、なければ .json から読み込んで summary を抽出します。
 func (r *CacheFSRepository) GetSessionSummary(ctx context.Context, sessionID string) (*dto.SessionSummary, error) {
-	cachePath := filepath.Join(r.cacheDir, sessionID+".json")
+	summaryPath := filepath.Join(r.cacheDir, sessionID+".summary.json")
 
+	if data, err := os.ReadFile(summaryPath); err == nil {
+		var summary dto.SessionSummary
+		if unmarshalErr := json.Unmarshal(data, &summary); unmarshalErr == nil {
+			summary.Parsed = true
+			logger.Info("cache read successful (summary)", "session_id", sessionID)
+			return &summary, nil
+		} else {
+			logger.Warn("failed to decode summary cache JSON, falling back to detail cache", "session_id", sessionID, "error", unmarshalErr)
+		}
+	}
+
+	cachePath := r.cachePath(sessionID)
 	data, err := os.ReadFile(cachePath)
 	if err != nil {
 		return nil, err
@@ -88,7 +101,7 @@ func (r *CacheFSRepository) GetSessionSummary(ctx context.Context, sessionID str
 		ChildSessionIDs: detail.ChildSessionIDs,
 	}
 
-	logger.Info("cache read successful", "session_id", sessionID)
+	logger.Info("cache read successful (fallback to detail)", "session_id", sessionID)
 
 	return summary, nil
 }
@@ -135,6 +148,7 @@ func (r *CacheFSRepository) GetSessionDetail(ctx context.Context, sessionID stri
 }
 
 // SaveSessionDetail は SessionDetailResponse をキャッシュファイルに書き込みます。
+// 同時に、軽量な .summary.json も保存します。
 func (r *CacheFSRepository) SaveSessionDetail(ctx context.Context, sessionID string, detail *dto.SessionDetailResponse) error {
 	cachePath := r.cachePath(sessionID)
 
@@ -145,6 +159,48 @@ func (r *CacheFSRepository) SaveSessionDetail(ctx context.Context, sessionID str
 
 	if err := os.WriteFile(cachePath, data, 0o644); err != nil {
 		return fmt.Errorf("failed to write cache file: %w", err)
+	}
+
+	// summary も保存する
+	var metaNode *dto.FlowNode
+	for i := range detail.Nodes {
+		if detail.Nodes[i].Type == "sessionMeta" {
+			metaNode = &detail.Nodes[i]
+			break
+		}
+	}
+
+	var summary dto.SessionSummary
+	if metaNode == nil {
+		summary = dto.SessionSummary{
+			ID:     sessionID,
+			Parsed: true,
+		}
+	} else {
+		m := metaNode.Data.Meta
+		summary = dto.SessionSummary{
+			ID:              sessionID,
+			Cwd:             getStringPtr(m, "cwd"),
+			CliVersion:      getStringPtr(m, "cli_version"),
+			Originator:      getStringPtr(m, "originator"),
+			ModelProvider:   getStringPtr(m, "model_provider"),
+			Branch:          getStringPtr(m, "git_branch"),
+			Source:          getStringPtr(m, "source"),
+			Timestamp:       getStringPtr(m, "timestamp"),
+			Parsed:          true,
+			ParentSessionID: detail.ParentSessionID,
+			ChildSessionIDs: detail.ChildSessionIDs,
+		}
+	}
+
+	summaryData, err := json.Marshal(summary)
+	if err != nil {
+		return fmt.Errorf("failed to marshal summary cache JSON: %w", err)
+	}
+
+	summaryPath := filepath.Join(r.cacheDir, sessionID+".summary.json")
+	if err := os.WriteFile(summaryPath, summaryData, 0o644); err != nil {
+		return fmt.Errorf("failed to write summary cache file: %w", err)
 	}
 
 	logger.Info("cache write successful", "session_id", sessionID)

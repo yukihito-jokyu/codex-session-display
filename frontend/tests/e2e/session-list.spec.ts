@@ -96,7 +96,7 @@ test.describe("セッション一覧画面 E2E テスト", () => {
 		await expect(page.locator("text=解析前").first()).toBeVisible();
 	});
 
-	test("アコーディオン（年・月・日ノード）の開閉動作が正しく機能すること", async ({
+	test("アコーディオン（日ノード）の開閉動作が正しく機能すること", async ({
 		page,
 	}) => {
 		// 初期ロード時にはセッション1が表示されていることを確認
@@ -114,13 +114,6 @@ test.describe("セッション一覧画面 E2E テスト", () => {
 
 		// セッション1が再び表示されることを確認
 		await expect(page.locator("text=sess-001")).toBeVisible();
-
-		// 「5月」のヘッダー（月ノード）をクリックして折りたたむ
-		const monthHeader = page.locator("div[role='button']:has-text('5月')");
-		await monthHeader.click();
-
-		// 日ノード「20日」が非表示になることを確認
-		await expect(page.locator("text=20日")).not.toBeVisible();
 	});
 
 	test("エラー発生時のエラー表示とクエリクリアによる復帰が正しく機能すること", async ({
@@ -225,7 +218,7 @@ test.describe("セッション一覧画面 E2E テスト", () => {
 		await expect(page.locator("text=1999-05-20T10:00:00Z")).toBeVisible();
 	});
 
-	test("年・月・日ノード、セッション行のキーボード操作（Enter/Space）検証", async ({
+	test("日ノード、セッション行のキーボード操作（Enter/Space）検証", async ({
 		page,
 	}) => {
 		// 初期状態ではセッションが表示されている
@@ -240,34 +233,6 @@ test.describe("セッション一覧画面 E2E テスト", () => {
 		// 再度スペースキーを押して展開する
 		await page.keyboard.press("Space");
 		await expect(page.locator("text=sess-001")).toBeVisible();
-
-		// 月ノード「5月」のヘッダーにフォーカスを当てて、Enterキーを押して閉じる
-		const monthHeader = page.locator("div[role='button']:has-text('5月')");
-		await monthHeader.focus();
-		await page.keyboard.press("Enter");
-		await expect(page.locator("text=20日")).not.toBeVisible();
-
-		// 再度スペースキーを押して展開する
-		await page.keyboard.press("Space");
-		await expect(page.locator("text=20日")).toBeVisible();
-
-		// 年ノード「2026年」のヘッダーにフォーカスを当てて、Enterキーを押して閉じる
-		const yearHeader = page.locator("div[role='button']:has-text('2026年')");
-		await yearHeader.focus();
-		await page.keyboard.press("Enter");
-		await expect(page.locator("div[class*='monthNode']")).not.toBeVisible();
-
-		// クリックして再展開する (onClick / line 127 coverage)
-		await yearHeader.click();
-		await expect(page.locator("div[class*='monthNode']")).toBeVisible();
-
-		// クリックしてもう一度閉じる (onClick / line 127 coverage)
-		await yearHeader.click();
-		await expect(page.locator("div[class*='monthNode']")).not.toBeVisible();
-
-		// 再度スペースキーを押して展開する
-		await page.keyboard.press("Space");
-		await expect(page.locator("div[class*='monthNode']")).toBeVisible();
 
 		// セッション行にフォーカスを当てて、Spaceキーを押して詳細画面に遷移することを確認 (Space key / line 68 coverage)
 		const sessionRow = page
@@ -321,28 +286,14 @@ test.describe("セッション一覧画面 E2E テスト", () => {
 		await expect(page).toHaveURL(/.*#\/sessions\/sess-001-uuid-long-name/);
 	});
 
-	test("複数日付・複数年月にまたがるセッション表示とソートの検証", async ({
-		page,
-	}) => {
+	test("複数日付にまたがるセッション表示とソートの検証", async ({ page }) => {
 		// multi-date を検索して全セッションを表示させる
 		const searchInput = page.getByPlaceholder(
 			"Filter by ID, CWD, branch, provider...",
 		);
 		await searchInput.fill("multi-date");
 
-		// 複数年、複数月、複数日、および同一日の複数セッションが表示されていることを検証
-		await expect(
-			page.locator("div[class*='yearNode'] >> text=2026年"),
-		).toBeVisible();
-		await expect(
-			page.locator("div[class*='yearNode'] >> text=1999年"),
-		).toBeVisible();
-		await expect(
-			page.locator("div[class*='monthNode'] >> text=5月"),
-		).toBeVisible();
-		await expect(
-			page.locator("div[class*='monthNode'] >> text=4月"),
-		).toBeVisible();
+		// 複数日、および同一日の複数セッションが表示されていることを検証
 		await expect(
 			page.locator("div[class*='dayNode'] >> text=20日"),
 		).toBeVisible();
