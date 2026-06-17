@@ -102,31 +102,31 @@ func buildConversationTimeline(
 				Records:   []*model.TypedRecord{record},
 			})
 		}
-		for _, pair := range turn.AgentReasonings {
-			unit, ok := reasoningTimelineUnit(pair)
-			if ok {
-				units = append(units, unit)
-			}
-		}
 		for _, batch := range turn.Batches {
-			unit, ok := batchTimelineUnit(batch)
-			if ok {
-				units = append(units, unit)
-			}
-		}
-		for _, record := range turn.WebSearchRecords {
-			unit, ok := webTimelineUnit(record)
-			if ok {
-				units = append(units, unit)
+			if len(batch.CallRecords) > 0 && batch.CallRecords[0].ResponseItem != nil {
+				name := batch.CallRecords[0].ResponseItem.Name
+				if name == "spawn_agent" || name == "run_command" || name == "exec_command" {
+					unit, ok := batchTimelineUnit(batch)
+					if ok {
+						units = append(units, unit)
+					}
+				}
 			}
 		}
 		for _, record := range turn.ExternalEventRecords {
-			unit, ok := externalTimelineUnit(record)
-			if ok {
-				units = append(units, unit)
+			if record.SubType == "exec_command_end" {
+				unit, ok := externalTimelineUnit(record)
+				if ok {
+					units = append(units, unit)
+				}
 			}
 		}
-		units = append(units, metadataTimelineUnits(turn)...)
+		metaUnits := metadataTimelineUnits(turn)
+		for i := range metaUnits {
+			if metaUnits[i].Kind == "collab" {
+				units = append(units, metaUnits[i])
+			}
+		}
 		if len(units) == 0 {
 			continue
 		}
@@ -187,45 +187,28 @@ func buildConversationTimeline(
 	return timeline
 }
 
-func reasoningTimelineUnit(pair *model.ReasoningPair) (conversationDisplayUnit, bool) {
-	if pair == nil {
-		return conversationDisplayUnit{}, false
+func parseCommandFromArgs(argsJSON string) string {
+	var args struct {
+		CommandLine string   `json:"CommandLine"`
+		Cmd         string   `json:"cmd"`
+		Command     string   `json:"command"`
+		Cmds        []string `json:"cmds"`
 	}
-
-	unit := conversationDisplayUnit{
-		Kind:      "reasoning",
-		Label:     "推論",
-		StartLine: reasoningPairStartLine(pair),
-	}
-	if pair.AgentReasoning != nil {
-		unit.Records = append(unit.Records, pair.AgentReasoning)
-		unit.Timestamp = fmt.Sprint(pair.AgentReasoning.Envelope.Timestamp)
-		if pair.AgentReasoning.EventMsg != nil {
-			unit.Body = pair.AgentReasoning.EventMsg.Text
+	if err := json.Unmarshal([]byte(argsJSON), &args); err == nil {
+		if args.CommandLine != "" {
+			return args.CommandLine
+		}
+		if args.Cmd != "" {
+			return args.Cmd
+		}
+		if args.Command != "" {
+			return args.Command
+		}
+		if len(args.Cmds) > 0 {
+			return strings.Join(args.Cmds, " ")
 		}
 	}
-	if pair.Reasoning != nil {
-		unit.Records = append(unit.Records, pair.Reasoning)
-		if unit.Timestamp == "" {
-			unit.Timestamp = fmt.Sprint(pair.Reasoning.Envelope.Timestamp)
-		}
-		if pair.Reasoning.ResponseItem != nil {
-			var summary strings.Builder
-			for _, content := range pair.Reasoning.ResponseItem.Summary {
-				summary.WriteString(content.Text)
-			}
-			if summary.Len() > 0 {
-				unit.Details = append(unit.Details, dto.TimelineItemDetail{
-					Label: "要約",
-					Value: summary.String(),
-				})
-			}
-		}
-	}
-	if unit.Body == "" && len(unit.Details) > 0 {
-		unit.Body = unit.Details[0].Value
-	}
-	return unit, len(unit.Records) > 0
+	return ""
 }
 
 func batchTimelineUnit(batch *model.Batch) (conversationDisplayUnit, bool) {
@@ -272,6 +255,51 @@ func batchTimelineUnit(batch *model.Batch) (conversationDisplayUnit, bool) {
 		}
 		return unit, true
 	}
+
+	firstCall := batch.CallRecords[0]
+	if firstCall.ResponseItem != nil && (firstCall.ResponseItem.Name == "run_command" || firstCall.ResponseItem.Name == "exec_command") {
+		unit.Kind = "tool"
+		unit.Label = "コマンド実行"
+
+		var cmdLines []string
+		for _, call := range batch.CallRecords {
+			if call != nil && call.ResponseItem != nil && (call.ResponseItem.Name == "run_command" || call.ResponseItem.Name == "exec_command") {
+				arguments := call.ResponseItem.Arguments
+				if arguments == "" {
+					arguments = call.ResponseItem.Input
+				}
+				cmdLine := parseCommandFromArgs(arguments)
+				if cmdLine != "" {
+					cmdLines = append(cmdLines, cmdLine)
+				} else {
+					cmdLines = append(cmdLines, call.ResponseItem.Name)
+				}
+			}
+		}
+
+		if len(cmdLines) > 0 {
+			unit.Body = strings.Join(cmdLines, "\n")
+		} else {
+			unit.Body = firstCall.ResponseItem.Name
+		}
+
+		unit.Details = nil
+
+		for _, call := range batch.CallRecords {
+			if call != nil {
+				unit.Records = append(unit.Records, call)
+			}
+		}
+		for _, output := range batch.OutputRecords {
+			if output != nil {
+				unit.Records = append(unit.Records, output)
+			}
+		}
+		unit.Records = append(unit.Records, batch.MiddleMessage...)
+
+		return unit, true
+	}
+
 	names := make([]string, 0, len(batch.CallRecords))
 	for index, call := range batch.CallRecords {
 		if call == nil || call.ResponseItem == nil {
@@ -316,45 +344,6 @@ func batchTimelineUnit(batch *model.Batch) (conversationDisplayUnit, bool) {
 	return unit, true
 }
 
-func webTimelineUnit(record *model.TypedRecord) (conversationDisplayUnit, bool) {
-	if record == nil {
-		return conversationDisplayUnit{}, false
-	}
-	unit := conversationDisplayUnit{
-		Kind:      "web",
-		Label:     "Web",
-		StartLine: record.LineNumber,
-		Timestamp: fmt.Sprint(record.Envelope.Timestamp),
-		Records:   []*model.TypedRecord{record},
-	}
-	var action *model.SearchAction
-	if record.ResponseItem != nil {
-		action = record.ResponseItem.Action
-	}
-	if record.EventMsg != nil {
-		action = record.EventMsg.Action
-		if action == nil && record.EventMsg.Query != "" {
-			action = &model.SearchAction{Type: "search", Query: record.EventMsg.Query}
-		}
-	}
-	if action == nil {
-		unit.Body = record.SubType
-		return unit, true
-	}
-	value := action.Query
-	if value == "" && len(action.Queries) > 0 {
-		value = strings.Join(action.Queries, "\n")
-	}
-	label := "検索クエリ"
-	if action.Type != "" && action.Type != "search" {
-		label = "閲覧対象"
-	}
-	unit.Label = "Web " + action.Type
-	unit.Body = value
-	unit.Details = append(unit.Details, dto.TimelineItemDetail{Label: label, Value: value})
-	return unit, true
-}
-
 func externalTimelineUnit(record *model.TypedRecord) (conversationDisplayUnit, bool) {
 	if record == nil || record.EventMsg == nil {
 		return conversationDisplayUnit{}, false
@@ -368,15 +357,7 @@ func externalTimelineUnit(record *model.TypedRecord) (conversationDisplayUnit, b
 			StartLine: record.LineNumber,
 			Timestamp: fmt.Sprint(record.Envelope.Timestamp),
 			Records:   []*model.TypedRecord{record},
-		}
-		if len(event.Command) > 0 {
-			unit.Details = append(unit.Details, dto.TimelineItemDetail{Label: "コマンド", Value: strings.Join(event.Command, " ")})
-		}
-		if event.ExitCode != nil {
-			unit.Details = append(unit.Details, dto.TimelineItemDetail{Label: "終了コード", Value: fmt.Sprint(*event.ExitCode)})
-		}
-		if event.AggregatedOutput != "" {
-			unit.Details = append(unit.Details, dto.TimelineItemDetail{Label: "出力", Value: event.AggregatedOutput})
+			Details:   nil,
 		}
 		return unit, true
 	}

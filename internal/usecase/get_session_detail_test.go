@@ -12,7 +12,6 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -2763,14 +2762,14 @@ func TestGetSessionDetailUseCase_ExecuteBuildsConversationTimelineInRecordOrder(
 	if turn.DurationMs != 30000 {
 		t.Errorf("DurationMs = %d, want 30000", turn.DurationMs)
 	}
-	if len(turn.Items) != 4 {
-		t.Fatalf("len(Timeline[0].Items) = %d, want 4", len(turn.Items))
+	if len(turn.Items) != 2 {
+		t.Fatalf("len(Timeline[0].Items) = %d, want 2", len(turn.Items))
 	}
-	if turn.Items[1].Role != "user" || turn.Items[1].Body != "テストを追加してください" {
-		t.Errorf("Items[1] = %+v, want user message", turn.Items[1])
+	if turn.Items[0].Role != "user" || turn.Items[0].Body != "テストを追加してください" {
+		t.Errorf("Items[0] = %+v, want user message", turn.Items[0])
 	}
-	if turn.Items[2].Role != "assistant" || turn.Items[2].Body != "実装します" {
-		t.Errorf("Items[2] = %+v, want assistant message", turn.Items[2])
+	if turn.Items[1].Role != "assistant" || turn.Items[1].Body != "実装します" {
+		t.Errorf("Items[1] = %+v, want assistant message", turn.Items[1])
 	}
 }
 
@@ -2855,38 +2854,19 @@ func TestGetSessionDetailUseCase_ExecuteAddsReasoningToTimelineInRecordOrder(t *
 	}
 
 	items := res.Timeline[0].Items
-	if len(items) != 5 {
-		t.Fatalf("len(Timeline[0].Items) = %d, want 5", len(items))
+	if len(items) != 2 {
+		t.Fatalf("len(Timeline[0].Items) = %d, want 2", len(items))
 	}
-	if items[1].Kind != "conversation" || items[1].Role != "user" {
-		t.Errorf("Items[1] = %+v, want user conversation", items[1])
+	if items[0].Kind != "conversation" || items[0].Role != "user" {
+		t.Errorf("Items[0] = %+v, want user conversation", items[0])
 	}
-	if items[2].Kind != "reasoning" || items[2].Label != "推論" || !items[2].Collapsible {
-		t.Errorf("Items[2] = %+v, want collapsible reasoning", items[2])
+	if items[1].Kind != "conversation" || items[1].Role != "assistant" {
+		t.Errorf("Items[1] = %+v, want assistant conversation", items[1])
 	}
-	if items[2].Body != "関連する実装を確認する" {
-		t.Errorf("Items[2].Body = %q, want reasoning body", items[2].Body)
-	}
-	if len(items[2].Details) != 1 || items[2].Details[0].Label != "要約" || items[2].Details[0].Value != "実装確認" {
-		t.Errorf("Items[2].Details = %+v, want reasoning summary", items[2].Details)
-	}
-	if items[2].RecordCount != 2 || items[2].TokenCountCount != 1 || items[2].LastTokenUsage.TotalTokens != 12 {
-		t.Errorf("Items[2] counts = %+v, want 2 records and 1 token count totaling 12", items[2])
-	}
-	if items[2].SelectionID == "" {
-		t.Error("Items[2].SelectionID is empty")
-	}
-	if items[2].NodeID == "" || len(items[2].NodeIDs) == 0 || items[2].NodeIDs[0] != items[2].NodeID {
-		t.Errorf("Items[2] node selection = %+v, want representative node first", items[2])
-	}
-	if len(items[2].TokenCountIndices) != 1 || items[2].TokenCountIndices[0] != 0 {
-		t.Errorf("Items[2].TokenCountIndices = %v, want [0]", items[2].TokenCountIndices)
-	}
-	if items[2].NodeID != res.TokenCounts[0].BoundToNodeID {
-		t.Errorf("Items[2].NodeID = %q, token count node = %q", items[2].NodeID, res.TokenCounts[0].BoundToNodeID)
-	}
-	if items[3].Kind != "conversation" || items[3].Role != "assistant" {
-		t.Errorf("Items[3] = %+v, want assistant conversation", items[3])
+	for _, item := range items {
+		if item.Kind == "reasoning" {
+			t.Errorf("expected no reasoning item in timeline, but found one: %+v", item)
+		}
 	}
 }
 
@@ -2906,7 +2886,7 @@ func TestGetSessionDetailUseCase_ExecuteAddsToolBatchToTimeline(t *testing.T) {
 				Type:       "response_item",
 				SubType:    "function_call",
 				ResponseItem: &model.ResponseItemPayload{
-					Name: "read_file", Arguments: `{"path":"a.go"}`, CallID: "call-1",
+					Name: "run_command", Arguments: `{"CommandLine":"go test ./..."}`, CallID: "call-1",
 				},
 			},
 			{
@@ -2914,11 +2894,11 @@ func TestGetSessionDetailUseCase_ExecuteAddsToolBatchToTimeline(t *testing.T) {
 				Type:       "response_item",
 				SubType:    "function_call",
 				ResponseItem: &model.ResponseItemPayload{
-					Name: "read_file", Arguments: `{"path":"b.go"}`, CallID: "call-2",
+					Name: "run_command", Arguments: `{"CommandLine":"go build"}`, CallID: "call-2",
 				},
 			},
-			{LineNumber: 5, Type: "response_item", SubType: "function_call_output", ResponseItem: &model.ResponseItemPayload{CallID: "call-2", Output: "b contents"}},
-			{LineNumber: 6, Type: "response_item", SubType: "function_call_output", ResponseItem: &model.ResponseItemPayload{CallID: "call-1", Output: "a contents"}},
+			{LineNumber: 5, Type: "response_item", SubType: "function_call_output", ResponseItem: &model.ResponseItemPayload{CallID: "call-2", Output: "build ok"}},
+			{LineNumber: 6, Type: "response_item", SubType: "function_call_output", ResponseItem: &model.ResponseItemPayload{CallID: "call-1", Output: "test ok"}},
 			{LineNumber: 7, Type: "event_msg", SubType: "task_complete", EventMsg: &model.EventMsgPayload{TurnID: "turn-1"}},
 		},
 	}
@@ -2930,21 +2910,15 @@ func TestGetSessionDetailUseCase_ExecuteAddsToolBatchToTimeline(t *testing.T) {
 	}
 
 	items := res.Timeline[0].Items
-	if len(items) != 3 {
-		t.Fatalf("len(Timeline[0].Items) = %d, want 3", len(items))
+	if len(items) != 1 {
+		t.Fatalf("len(Timeline[0].Items) = %d, want 1", len(items))
 	}
-	item := items[1]
-	if item.Kind != "tool" || item.Label != "ツール read_file ×2" || item.RecordCount != 4 {
+	item := items[0]
+	if item.Kind != "tool" || item.Label != "コマンド実行" || item.Body != "go test ./...\ngo build" || item.RecordCount != 4 {
 		t.Fatalf("tool item = %+v, want one batch containing four records", item)
 	}
-	wantDetails := []dto.TimelineItemDetail{
-		{Label: "read_file 引数", Value: `{"path":"a.go"}`},
-		{Label: "read_file 結果", Value: "a contents"},
-		{Label: "read_file 引数", Value: `{"path":"b.go"}`},
-		{Label: "read_file 結果", Value: "b contents"},
-	}
-	if !reflect.DeepEqual(item.Details, wantDetails) {
-		t.Errorf("Details = %#v, want %#v", item.Details, wantDetails)
+	if len(item.Details) != 0 {
+		t.Errorf("expected no details for command execution, but got %+v", item.Details)
 	}
 }
 
@@ -2997,23 +2971,8 @@ func TestGetSessionDetailUseCase_ExecuteAddsWebAndMCPEventsToTimeline(t *testing
 		t.Fatalf("Execute() error = %v", err)
 	}
 
-	items := res.Timeline[0].Items
-	if len(items) != 5 {
-		t.Fatalf("len(Timeline[0].Items) = %d, want 5", len(items))
-	}
-	if items[1].Kind != "web" || items[1].Details[0].Value != "Go stable release" {
-		t.Errorf("Items[1] = %+v, want web search query", items[1])
-	}
-	if items[2].Kind != "web" || items[2].Details[0].Value != "https://go.dev/doc/devel/release" {
-		t.Errorf("Items[2] = %+v, want visited target", items[2])
-	}
-	wantMCPDetails := []dto.TimelineItemDetail{
-		{Label: "サーバー", Value: "figma"},
-		{Label: "引数", Value: `{"verbose":true}`},
-		{Label: "結果", Value: `{"user":"codex"}`},
-	}
-	if items[3].Kind != "mcp" || items[3].Label != "MCP whoami" || !reflect.DeepEqual(items[3].Details, wantMCPDetails) {
-		t.Errorf("Items[3] = %+v, want MCP invocation details %#v", items[3], wantMCPDetails)
+	if len(res.Timeline) != 0 {
+		t.Fatalf("len(Timeline) = %d, want 0", len(res.Timeline))
 	}
 }
 
@@ -3054,31 +3013,8 @@ func TestGetSessionDetailUseCase_ExecuteAddsInstructionsAndSystemEventsToTimelin
 		t.Fatalf("Execute() error = %v", err)
 	}
 
-	if len(res.Timeline) != 2 {
-		t.Fatalf("len(Timeline) = %d, want pseudo and normal turn", len(res.Timeline))
-	}
-	if got := res.Timeline[0].Items; len(got) != 1 || got[0].Kind != "instructions" || got[0].Label != "Base instructions" || got[0].Body != "base rules" {
-		t.Errorf("pseudo turn items = %+v, want base instructions", got)
-	}
-	items := res.Timeline[1].Items
-	want := []struct {
-		kind  string
-		label string
-		body  string
-	}{
-		{kind: "instructions", label: "Developer instructions", body: "developer rules"},
-		{kind: "instructions", label: "User instructions", body: "user rules"},
-		{kind: "system", label: "タスク開始"},
-		{kind: "system", label: "custom_notice", body: "unknown event"},
-		{kind: "system", label: "タスク完了"},
-	}
-	if len(items) != len(want) {
-		t.Fatalf("len(normal turn items) = %d, want %d: %+v", len(items), len(want), items)
-	}
-	for index, expected := range want {
-		if items[index].Kind != expected.kind || items[index].Label != expected.label || items[index].Body != expected.body {
-			t.Errorf("Items[%d] = %+v, want %+v", index, items[index], expected)
-		}
+	if len(res.Timeline) != 0 {
+		t.Fatalf("len(Timeline) = %d, want 0", len(res.Timeline))
 	}
 }
 
@@ -3119,21 +3055,15 @@ func TestGetSessionDetailUseCase_ExecuteAddsCommandAndReferenceEventsToTimeline(
 	}
 
 	items := res.Timeline[0].Items
-	if len(items) != 4 {
-		t.Fatalf("len(Timeline[0].Items) = %d, want start, command, reference, complete: %+v", len(items), items)
+	if len(items) != 1 {
+		t.Fatalf("len(Timeline[0].Items) = %d, want 1 (command): %+v", len(items), items)
 	}
-	command := items[1]
-	wantCommandDetails := []dto.TimelineItemDetail{
-		{Label: "コマンド", Value: "go test ./..."},
-		{Label: "終了コード", Value: "0"},
-		{Label: "出力", Value: "ok packages"},
+	command := items[0]
+	if command.Kind != "tool" || command.Label != "コマンド完了" || command.Body != "go test ./..." {
+		t.Errorf("command item = %+v, want Kind: tool, Label: コマンド完了, Body: go test ./...", command)
 	}
-	if command.Kind != "tool" || command.Label != "コマンド完了" || !reflect.DeepEqual(command.Details, wantCommandDetails) {
-		t.Errorf("command item = %+v, want details %#v", command, wantCommandDetails)
-	}
-	reference := items[2]
-	if reference.Kind != "reference" || reference.Label != "画像参照" || len(reference.Details) != 1 || reference.Details[0].Value != "/tmp/screenshot.png" {
-		t.Errorf("reference item = %+v, want image path", reference)
+	if len(command.Details) != 0 {
+		t.Errorf("expected no details for command complete event, but got %+v", command.Details)
 	}
 }
 
@@ -3172,21 +3102,8 @@ func TestGetSessionDetailUseCase_ExecuteKeepsOtherSystemEventsInTimeline(t *test
 		t.Fatalf("Execute() error = %v", err)
 	}
 
-	if len(res.Timeline) != 2 {
-		t.Fatalf("len(Timeline) = %d, want pseudo and normal turn", len(res.Timeline))
-	}
-	if got := res.Timeline[0].Items; len(got) != 1 || got[0].Label != "thread_name_updated" || got[0].Body != "Issue 176" {
-		t.Errorf("pseudo system items = %+v, want thread name update", got)
-	}
-	items := res.Timeline[1].Items
-	wantLabels := []string{"タスク開始", "item_completed", "unknown_response", "collab_waiting_end", "タスク完了"}
-	if len(items) != len(wantLabels) {
-		t.Fatalf("len(normal items) = %d, want %d: %+v", len(items), len(wantLabels), items)
-	}
-	for index, label := range wantLabels {
-		if items[index].Kind != "system" || items[index].Label != label {
-			t.Errorf("Items[%d] = %+v, want system %q", index, items[index], label)
-		}
+	if len(res.Timeline) != 0 {
+		t.Fatalf("len(Timeline) = %d, want 0", len(res.Timeline))
 	}
 }
 
@@ -3252,8 +3169,8 @@ func TestGetSessionDetailUseCase_ExecuteDeduplicatesConversationMessages(t *test
 	if len(res.Timeline) != 1 {
 		t.Fatalf("len(Timeline) = %d, want 1", len(res.Timeline))
 	}
-	if len(res.Timeline[0].Items) != 3 {
-		t.Fatalf("len(Timeline[0].Items) = %d, want 3", len(res.Timeline[0].Items))
+	if len(res.Timeline[0].Items) != 1 {
+		t.Fatalf("len(Timeline[0].Items) = %d, want 1", len(res.Timeline[0].Items))
 	}
 }
 
@@ -3334,7 +3251,7 @@ func TestGetSessionDetailUseCase_ExecuteAggregatesConversationTokenUsage(t *test
 		t.Fatalf("Execute() error = %v", err)
 	}
 
-	item := res.Timeline[0].Items[1]
+	item := res.Timeline[0].Items[0]
 	if item.TokenCountCount != 2 {
 		t.Errorf("TokenCountCount = %d, want 2", item.TokenCountCount)
 	}
@@ -3413,7 +3330,7 @@ func TestGetSessionDetailUseCase_ExecuteBuildsPseudoConversationTurn(t *testing.
 	if res.Timeline[0].Items[0].Body != "ターン外の発言" {
 		t.Errorf("Timeline[0].Items[0].Body = %q", res.Timeline[0].Items[0].Body)
 	}
-	if res.Timeline[1].Pseudo || res.Timeline[1].Items[1].Body != "通常ターンの発言" {
+	if res.Timeline[1].Pseudo || res.Timeline[1].Items[0].Body != "通常ターンの発言" {
 		t.Errorf("Timeline[1] = %+v, want normal turn", res.Timeline[1])
 	}
 }
