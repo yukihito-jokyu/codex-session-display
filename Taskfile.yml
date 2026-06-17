@@ -25,6 +25,40 @@ tasks:
       - wails build
       - cp -R build/bin/codex-session-display.app /Applications/
 
+  package:dmg:
+    desc: DMG形式のインストーラーを作成します
+    deps:
+      - build
+    cmds:
+      - which create-dmg > /dev/null || brew install create-dmg
+      - rm -rf build/dmg-temp
+      - rm -f build/bin/codex-session-display.dmg
+      - mkdir -p build/dmg-temp
+      - cp -R build/bin/codex-session-display.app build/dmg-temp/
+      - |
+        create-dmg \
+          --volname "codex-session-display" \
+          --volicon "build/dmg-temp/codex-session-display.app/Contents/Resources/iconfile.icns" \
+          --window-pos 200 120 \
+          --window-size 600 400 \
+          --icon-size 100 \
+          --icon "codex-session-display.app" 150 200 \
+          --hide-extension "codex-session-display.app" \
+          --app-drop-link 450 200 \
+          "build/bin/codex-session-display.dmg" \
+          "build/dmg-temp/" || {
+            echo "AppleScript execution failed (common in sandboxed or headless environments)."
+            echo "Retrying with --skip-jenkins (skipping Finder customization)..."
+            rm -f "build/bin/codex-session-display.dmg"
+            create-dmg \
+              --volname "codex-session-display" \
+              --volicon "build/dmg-temp/codex-session-display.app/Contents/Resources/iconfile.icns" \
+              --skip-jenkins \
+              "build/bin/codex-session-display.dmg" \
+              "build/dmg-temp/"
+          }
+      - rm -rf build/dmg-temp
+
   test:
     desc: バックエンドのテストを実行します
     cmds:
