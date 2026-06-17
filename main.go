@@ -6,6 +6,7 @@ import (
 	"context"
 	"embed"
 	"errors"
+	"fmt"
 	"os"
 
 	"github.com/wailsapp/wails/v2"
@@ -17,6 +18,9 @@ import (
 
 //go:embed all:frontend/dist
 var assets embed.FS
+
+// Version はアプリケーションのバージョン情報です。ビルド時に -ldflags で上書きされます。
+var Version = "0.0.0-dev"
 
 func main() {
 	// ロガーの初期化とクリーンアップ設定
@@ -80,7 +84,7 @@ func main() {
 			WindowIsTranslucent:  true,
 			About: &mac.AboutInfo{
 				Title:   "codex-session-display",
-				Message: "Codex Session Display",
+				Message: fmt.Sprintf("Codex Session Display\nVersion: %s", Version),
 			},
 		},
 		// Windows 固有設定 (Mica & Translucent)
