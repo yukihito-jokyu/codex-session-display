@@ -210,8 +210,53 @@
 	font-size: 12px;
 }
 
-.tokenMetrics strong {
-	color: var(--text-primary);
+.headerLeft {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	flex-wrap: wrap;
+}
+
+.timestamp {
+	color: var(--text-secondary);
+	font-size: 10px;
+	white-space: nowrap;
+}
+
+.toggleIcon {
+	margin-right: 4px;
+	font-size: 10px;
+	color: var(--text-secondary);
+	display: inline-block;
+}
+
+.tokenBadge {
+	display: inline-flex;
+	align-items: center;
+	padding: 2px 8px;
+	border-radius: 12px;
+	background: var(--accent-badge-bg);
+	border: 1px solid var(--accent-badge-border);
+	color: var(--color-accent);
+	font-size: 10px;
+	font-weight: 600;
+	white-space: nowrap;
+}
+
+.tokenSubMetrics {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin-top: 8px;
+	padding-top: 6px;
+	border-top: 1px dashed var(--border-color);
+	color: var(--text-secondary);
+	font-size: 10px;
+}
+
+.cumulativeTokens {
+	margin-left: auto;
+	color: var(--text-muted);
 }
 
 .subagentButton {
