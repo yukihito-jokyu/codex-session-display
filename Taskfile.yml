@@ -16,19 +16,24 @@ tasks:
   build:
     desc: 本番用バイナリをビルドします
     cmds:
-      - wails build
+      - wails build -ldflags "-X main.Version={{.VERSION | default "0.0.0-dev"}}"
+
+  build:universal:
+    desc: macOSユニバーサル本番用バイナリをビルドします
+    cmds:
+      - wails build -platform darwin/universal -ldflags "-X main.Version={{.VERSION | default "0.0.0-dev"}}"
 
   install:mac:
-    desc: 既存の /Applications 内アプリを置き換えて再配置します
+    desc: 既存 of /Applications 内アプリを置き換えて再配置します
     cmds:
       - rm -rf /Applications/codex-session-display.app
-      - wails build
+      - task build
       - cp -R build/bin/codex-session-display.app /Applications/
 
   package:dmg:
     desc: DMG形式のインストーラーを作成します
     deps:
-      - build
+      - build:universal
     cmds:
       - which create-dmg > /dev/null || brew install create-dmg
       - rm -rf build/dmg-temp
@@ -58,6 +63,12 @@ tasks:
               "build/dmg-temp/"
           }
       - rm -rf build/dmg-temp
+
+  package:zip:
+    desc: 自動アップデート用のZIPファイルを作成します
+    cmds:
+      - rm -f build/bin/codex-session-display.zip
+      - cd build/bin && zip -r codex-session-display.zip codex-session-display.app
 
   test:
     desc: バックエンドのテストを実行します
