@@ -125,6 +125,7 @@ export async function mockWailsAPI(
 ) {
 	// Wails APIのモックをブラウザコンテキストに注入
 	await page.addInitScript((sessionsArg) => {
+		window.sessionStorage.clear();
 		const dummySessions = sessionsArg as dto.SessionSummary[];
 
 		const clipboard = {

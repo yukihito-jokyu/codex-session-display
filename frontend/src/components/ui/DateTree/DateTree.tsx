@@ -19,20 +19,6 @@ interface GroupedDays {
 	};
 }
 
-interface GroupedMonths {
-	[month: string]: {
-		count: number;
-		days: GroupedDays;
-	};
-}
-
-interface GroupedData {
-	[year: string]: {
-		count: number;
-		months: GroupedMonths;
-	};
-}
-
 const getGroupingDate = (session: SessionSummary) => {
 	const candidates = [session.timestamp, session.file_modified_at];
 	for (const candidate of candidates) {
@@ -46,7 +32,20 @@ const getGroupingDate = (session: SessionSummary) => {
 };
 
 export const DateTree: React.FC<DateTreeProps> = ({ sessions }) => {
-	const [expandedPaths, setExpandedPaths] = useState<Set<string>>(new Set());
+	const [expandedPaths, setExpandedPaths] = useState<Set<string>>(() => {
+		const saved = sessionStorage.getItem("session_list_expanded_paths");
+		if (saved) {
+			try {
+				const paths = JSON.parse(saved);
+				if (Array.isArray(paths)) {
+					return new Set(paths);
+				}
+			} catch (e) {
+				console.error("Failed to parse expanded paths", e);
+			}
+		}
+		return new Set();
+	});
 
 	// sessionsMap を作成
 	const sessionsMap = useMemo(() => {
@@ -65,60 +64,52 @@ export const DateTree: React.FC<DateTreeProps> = ({ sessions }) => {
 		});
 	}, [sessions, sessionsMap]);
 
-	// セッションをグループ化
-	const grouped = useMemo(() => {
-		const result: GroupedData = {};
+	// セッションを日ごとにグループ化
+	const groupedDays = useMemo(() => {
+		const result: GroupedDays = {};
 		rootSessions.forEach((s) => {
 			const date = getGroupingDate(s);
 			if (!date) return;
 
-			const y = date.getFullYear().toString();
-			const m = (date.getMonth() + 1).toString().padStart(2, "0");
 			const d = date.getDate().toString().padStart(2, "0");
 			const sortKey = date.toISOString();
 
-			if (!result[y]) {
-				result[y] = { count: 0, months: {} };
-			}
-			if (!result[y].months[m]) {
-				result[y].months[m] = { count: 0, days: {} };
-			}
-			if (!result[y].months[m].days[d]) {
-				result[y].months[m].days[d] = { count: 0, sessions: [] };
+			if (!result[d]) {
+				result[d] = { count: 0, sessions: [] };
 			}
 
-			result[y].count++;
-			result[y].months[m].count++;
-			result[y].months[m].days[d].count++;
-			result[y].months[m].days[d].sessions.push({ session: s, sortKey });
+			result[d].count++;
+			result[d].sessions.push({ session: s, sortKey });
 		});
 		return result;
 	}, [rootSessions]);
 
-	// 初回ロード時に最新の年、月、日をデフォルトで展開する
+	// 状態が変更されたら sessionStorage を更新する
+	useEffect(() => {
+		sessionStorage.setItem(
+			"session_list_expanded_paths",
+			JSON.stringify(Array.from(expandedPaths)),
+		);
+	}, [expandedPaths]);
+
+	// 初回ロード時に最新の「日」をデフォルトで展開する
 	useEffect(() => {
 		if (sessions.length === 0) return;
 
-		const years = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
-		if (years.length === 0) return;
-		const latestYear = years[0];
+		// すでに sessionStorage に保存されていた場合はデフォルト展開をスキップ
+		const saved = sessionStorage.getItem("session_list_expanded_paths");
+		if (saved) {
+			return;
+		}
 
-		const months = Object.keys(grouped[latestYear].months).sort((a, b) =>
-			b.localeCompare(a),
-		);
-		const latestMonth = months[0];
-
-		const days = Object.keys(grouped[latestYear].months[latestMonth].days).sort(
-			(a, b) => b.localeCompare(a),
-		);
+		const days = Object.keys(groupedDays).sort((a, b) => b.localeCompare(a));
+		if (days.length === 0) return;
 		const latestDay = days[0];
 
 		const initialExpanded = new Set<string>();
-		initialExpanded.add(latestYear);
-		initialExpanded.add(`${latestYear}/${latestMonth}`);
-		initialExpanded.add(`${latestYear}/${latestMonth}/${latestDay}`);
+		initialExpanded.add(latestDay);
 		setExpandedPaths(initialExpanded);
-	}, [sessions, grouped]);
+	}, [sessions, groupedDays]);
 
 	const togglePath = (path: string) => {
 		const nextExpanded = new Set(expandedPaths);
@@ -130,9 +121,11 @@ export const DateTree: React.FC<DateTreeProps> = ({ sessions }) => {
 		setExpandedPaths(nextExpanded);
 	};
 
-	const sortedYears = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
+	const sortedDays = Object.keys(groupedDays).sort((a, b) =>
+		b.localeCompare(a),
+	);
 
-	if (sessions.length === 0 || sortedYears.length === 0) {
+	if (sessions.length === 0 || sortedDays.length === 0) {
 		return (
 			<div className={styles.empty}>
 				<div className={styles.emptyIcon}>📂</div>
@@ -145,133 +138,49 @@ export const DateTree: React.FC<DateTreeProps> = ({ sessions }) => {
 
 	return (
 		<div className={styles.tree}>
-			{sortedYears.map((year) => {
-				const yearExpanded = expandedPaths.has(year);
-				const yearMonths = grouped[year].months;
-				const sortedMonths = Object.keys(yearMonths).sort((a, b) =>
-					b.localeCompare(a),
-				);
+			{sortedDays.map((day) => {
+				const dayExpanded = expandedPaths.has(day);
+				const daySessions = groupedDays[day].sessions;
+
+				// 念のため、日のセッションをタイムスタンプの降順でソートする
+				const sortedSessions = [...daySessions].sort((a, b) => {
+					return b.sortKey.localeCompare(a.sortKey);
+				});
 
 				return (
-					<div key={year} className={styles.yearNode}>
+					<div key={day} className={styles.dayNode}>
 						<div
 							className={styles.header}
-							onClick={() => togglePath(year)}
+							onClick={() => togglePath(day)}
 							onKeyDown={(e) => {
 								if (e.key === "Enter" || e.key === " ") {
 									e.preventDefault();
-									togglePath(year);
+									togglePath(day);
 								}
 							}}
 							role="button"
 							tabIndex={0}
 						>
 							<span
-								className={`${styles.arrow} ${yearExpanded ? styles.open : ""}`}
+								className={`${styles.arrow} ${dayExpanded ? styles.open : ""}`}
 							>
 								▶
 							</span>
-							<span className={styles.label}>{year}年</span>
-							<span className={styles.countBadge}>{grouped[year].count}</span>
+							<span className={styles.label}>{parseInt(day, 10)}日</span>
+							<span className={styles.countBadge}>
+								{groupedDays[day].count}
+							</span>
 						</div>
 
-						{yearExpanded && (
-							<div className={styles.children}>
-								{sortedMonths.map((month) => {
-									const monthPath = `${year}/${month}`;
-									const monthExpanded = expandedPaths.has(monthPath);
-									const monthDays = yearMonths[month].days;
-									const sortedDays = Object.keys(monthDays).sort((a, b) =>
-										b.localeCompare(a),
-									);
-
-									return (
-										<div key={month} className={styles.monthNode}>
-											<div
-												className={styles.header}
-												onClick={() => togglePath(monthPath)}
-												onKeyDown={(e) => {
-													if (e.key === "Enter" || e.key === " ") {
-														e.preventDefault();
-														togglePath(monthPath);
-													}
-												}}
-												role="button"
-												tabIndex={0}
-											>
-												<span
-													className={`${styles.arrow} ${monthExpanded ? styles.open : ""}`}
-												>
-													▶
-												</span>
-												<span className={styles.label}>
-													{parseInt(month, 10)}月
-												</span>
-												<span className={styles.countBadge}>
-													{yearMonths[month].count}
-												</span>
-											</div>
-
-											{monthExpanded && (
-												<div className={styles.children}>
-													{sortedDays.map((day) => {
-														const dayPath = `${monthPath}/${day}`;
-														const dayExpanded = expandedPaths.has(dayPath);
-														const daySessions = monthDays[day].sessions;
-
-														// 念のため、日のセッションをタイムスタンプの降順でソートする
-														const sortedSessions = [...daySessions].sort(
-															(a, b) => {
-																return b.sortKey.localeCompare(a.sortKey);
-															},
-														);
-
-														return (
-															<div key={day} className={styles.dayNode}>
-																<div
-																	className={styles.header}
-																	onClick={() => togglePath(dayPath)}
-																	onKeyDown={(e) => {
-																		if (e.key === "Enter" || e.key === " ") {
-																			e.preventDefault();
-																			togglePath(dayPath);
-																		}
-																	}}
-																	role="button"
-																	tabIndex={0}
-																>
-																	<span
-																		className={`${styles.arrow} ${dayExpanded ? styles.open : ""}`}
-																	>
-																		▶
-																	</span>
-																	<span className={styles.label}>
-																		{parseInt(day, 10)}日
-																	</span>
-																	<span className={styles.countBadge}>
-																		{monthDays[day].count}
-																	</span>
-																</div>
-
-																{dayExpanded && (
-																	<div className={styles.sessionsList}>
-																		{sortedSessions.map(({ session }) => (
-																			<SessionRow
-																				key={session.id}
-																				session={session}
-																				sessionsMap={sessionsMap}
-																			/>
-																		))}
-																	</div>
-																)}
-															</div>
-														);
-													})}
-												</div>
-											)}
-										</div>
-									);
-								})}
+						{dayExpanded && (
+							<div className={styles.sessionsList}>
+								{sortedSessions.map(({ session }) => (
+									<SessionRow
+										key={session.id}
+										session={session}
+										sessionsMap={sessionsMap}
+									/>
+								))}
 							</div>
 						)}
 					</div>
