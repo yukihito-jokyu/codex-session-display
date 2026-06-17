@@ -483,6 +483,27 @@ export namespace dto {
 	
 	
 	
+	
+	export class UpdateResult {
+	    hasUpdate: boolean;
+	    current: string;
+	    latest: string;
+	    releaseUrl: string;
+	    downloadUrl: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new UpdateResult(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.hasUpdate = source["hasUpdate"];
+	        this.current = source["current"];
+	        this.latest = source["latest"];
+	        this.releaseUrl = source["releaseUrl"];
+	        this.downloadUrl = source["downloadUrl"];
+	    }
+	}
 
 }
 

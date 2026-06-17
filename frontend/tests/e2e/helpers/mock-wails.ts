@@ -304,6 +304,70 @@ export async function mockWailsAPI(
 			return filtered;
 		};
 
+		go.main.App.CheckUpdate = async () => {
+			(window as any).__checkUpdateCalls =
+				((window as any).__checkUpdateCalls || 0) + 1;
+			return (
+				(window as any).__mockUpdateResult || {
+					hasUpdate: false,
+					current: "1.0.0",
+					latest: "1.0.0",
+					releaseUrl: "",
+					downloadUrl: "",
+				}
+			);
+		};
+
+		go.main.App.ApplyUpdate = async (downloadUrl: string) => {
+			(window as any).__applyUpdateCalls =
+				(window as any).__applyUpdateCalls || [];
+			(window as any).__applyUpdateCalls.push(downloadUrl);
+
+			console.log(
+				"[Mock] ApplyUpdate called, triggerMockProgress:",
+				(window as any).__triggerMockProgress,
+			);
+			if ((window as any).__triggerMockProgress) {
+				const emit = (window as any).__emitWailsEvent;
+				console.log("[Mock] emit function exists:", !!emit);
+				if (emit) {
+					setTimeout(
+						() =>
+							emit("update-progress", {
+								status: "downloading",
+								progress: 50.0,
+							}),
+						200,
+					);
+					setTimeout(
+						() =>
+							emit("update-progress", {
+								status: "download_complete",
+								progress: 100.0,
+							}),
+						400,
+					);
+					setTimeout(
+						() =>
+							emit("update-progress", {
+								status: "extracting",
+								progress: 100.0,
+							}),
+						600,
+					);
+					setTimeout(
+						() =>
+							emit("update-progress", {
+								status: "restarting",
+								progress: 100.0,
+							}),
+						800,
+					);
+				}
+			}
+			return null;
+		};
+
 		go.main.App.ResolveSessionIDFromPath = async (filePath: string) => {
 			(window as any).__resolveSessionIDCalls =
 				(window as any).__resolveSessionIDCalls || [];

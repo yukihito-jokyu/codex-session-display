@@ -1584,7 +1584,9 @@ test.describe("セッション詳細画面 E2E テスト", () => {
 	}) => {
 		// 1. 親セッション詳細へ遷移
 		await page.goto("/#/sessions/sess-001-uuid-long-name");
-		await expect(page.locator("text=sess-001-uuid-long-name")).toBeVisible();
+		await expect(
+			page.locator("text=Session Detail: sess-001-uuid-long-name"),
+		).toBeVisible();
 
 		// 2. キャンバスの collabAgent ノードから「サブエージェントを表示」をクリックして子セッション詳細へ遷移
 		const collabNode = page.locator(".react-flow__node-collabAgent");
@@ -1595,7 +1597,9 @@ test.describe("セッション詳細画面 E2E テスト", () => {
 
 		// 子セッション詳細へ遷移したことを確認
 		await expect(page).toHaveURL(/.*#\/sessions\/sess-002-uuid-long-name/);
-		await expect(page.locator("text=sess-002-uuid-long-name")).toBeVisible();
+		await expect(
+			page.locator("text=Session Detail: sess-002-uuid-long-name"),
+		).toBeVisible();
 
 		// 3. 「← Back to Parent」ボタンで親セッション詳細に戻る
 		const backToParentBtn = page.locator("button:has-text('← Back to Parent')");
@@ -1604,7 +1608,9 @@ test.describe("セッション詳細画面 E2E テスト", () => {
 
 		// 親セッション詳細に戻ったことを確認
 		await expect(page).toHaveURL(/.*#\/sessions\/sess-001-uuid-long-name/);
-		await expect(page.locator("text=sess-001-uuid-long-name")).toBeVisible();
+		await expect(
+			page.locator("text=Session Detail: sess-001-uuid-long-name"),
+		).toBeVisible();
 
 		// 4. タイムライン上の collab イベントから「サブエージェントを表示」をクリックして子セッション詳細へ遷移
 		const timeline = page.getByTestId("conversation-timeline");
@@ -1623,6 +1629,8 @@ test.describe("セッション詳細画面 E2E テスト", () => {
 
 		// 再び子セッション詳細へ遷移したことを確認
 		await expect(page).toHaveURL(/.*#\/sessions\/sess-002-uuid-long-name/);
-		await expect(page.locator("text=sess-002-uuid-long-name")).toBeVisible();
+		await expect(
+			page.locator("text=Session Detail: sess-002-uuid-long-name"),
+		).toBeVisible();
 	});
 });

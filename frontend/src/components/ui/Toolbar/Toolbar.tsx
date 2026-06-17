@@ -6,12 +6,18 @@ interface ToolbarProps {
 	totalCount: number;
 	sourcePath: string;
 	onSearch: (query: string) => void;
+	hasUpdate?: boolean;
+	latestVersion?: string;
+	onUpdateClick?: () => void;
 }
 
 export const Toolbar: React.FC<ToolbarProps> = ({
 	totalCount,
 	sourcePath,
 	onSearch,
+	hasUpdate,
+	latestVersion,
+	onUpdateClick,
 }) => {
 	const [inputValue, setInputValue] = useState("");
 	const timeoutRef = useRef<number | null>(null);
@@ -53,6 +59,15 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 						{sourcePath}
 					</span>
 				</div>
+				{hasUpdate && latestVersion && (
+					<button
+						type="button"
+						className={styles.updateBadgeBtn}
+						onClick={onUpdateClick}
+					>
+						🚀 新バージョンがあります (v{latestVersion})
+					</button>
+				)}
 			</div>
 			<div className={styles.searchContainer}>
 				<span className={styles.searchIcon} aria-hidden="true">

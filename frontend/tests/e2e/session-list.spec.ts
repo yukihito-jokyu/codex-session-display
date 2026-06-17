@@ -669,4 +669,102 @@ test.describe("セッション一覧画面 E2E テスト", () => {
 		expect(maxConcurrent).toBeGreaterThan(0);
 		expect(maxConcurrent).toBeLessThanOrEqual(3);
 	});
+
+	test("アップデートがある場合にヘッダーにバッジが表示され、クリックで確認ダイアログが開き、アップデート適用と進捗推移が正しく行われること", async ({
+		page,
+	}) => {
+		// アップデートあり状態のモックを注入
+		await page.addInitScript(() => {
+			// biome-ignore lint/suspicious/noExplicitAny: mock
+			(window as any).__mockUpdateResult = {
+				hasUpdate: true,
+				current: "1.0.0",
+				latest: "1.1.0",
+				releaseUrl: "https://github.com/owner/repo/releases/tag/v1.1.0",
+				downloadUrl:
+					"https://github.com/owner/repo/releases/download/v1.1.0/codex-session-display.zip",
+			};
+			// biome-ignore lint/suspicious/noExplicitAny: mock
+			(window as any).__triggerMockProgress = false; // 自動送信は無効化
+		});
+
+		// ページ再ロード
+		await page.goto("/");
+
+		// ヘッダー（Toolbar）に「🚀 新バージョンがあります (v1.1.0)」が表示されていることを確認
+		const updateBadge = page.locator(
+			"button:has-text('🚀 新バージョンがあります')",
+		);
+		await expect(updateBadge).toBeVisible();
+
+		// バッジをクリック
+		await updateBadge.click();
+
+		// 確認ダイアログ（モーダル）が表示されていることを確認
+		await expect(page.locator("text=新しいバージョンがあります")).toBeVisible();
+		const dialog = page.locator("div[role='dialog']");
+		await expect(dialog.locator("text=v1.0.0")).toBeVisible();
+		await expect(dialog.locator("text=v1.1.0")).toBeVisible();
+
+		// 「アップデート」ボタンをクリックしてアップデートを開始
+		const updateBtn = page.locator("button:has-text('アップデート')");
+		await expect(updateBtn).toBeVisible();
+		await updateBtn.click();
+
+		// 適用中タイトルが表示されていることを確認
+		await expect(page.locator("text=アップデートを適用中")).toBeVisible();
+
+		// 1. ダウンロード初期状態（progress: 0）
+		await expect(
+			page.locator("text=最新バージョンをダウンロードしています... 0%"),
+		).toBeVisible();
+
+		// 2. downloading (progress: 50.0) を手動で送信
+		await page.evaluate(() => {
+			// biome-ignore lint/suspicious/noExplicitAny: mock
+			(window as any).__emitWailsEvent("update-progress", {
+				status: "downloading",
+				progress: 50.0,
+			});
+		});
+		await expect(
+			page.locator("text=最新バージョンをダウンロードしています... 50%"),
+		).toBeVisible();
+
+		// 3. download_complete (progress: 100.0) を手動で送信
+		await page.evaluate(() => {
+			// biome-ignore lint/suspicious/noExplicitAny: mock
+			(window as any).__emitWailsEvent("update-progress", {
+				status: "download_complete",
+				progress: 100.0,
+			});
+		});
+		await expect(
+			page.locator("text=最新バージョンをダウンロードしています... 100%"),
+		).toBeVisible();
+
+		// 4. extracting を手動で送信
+		await page.evaluate(() => {
+			// biome-ignore lint/suspicious/noExplicitAny: mock
+			(window as any).__emitWailsEvent("update-progress", {
+				status: "extracting",
+				progress: 100.0,
+			});
+		});
+		await expect(
+			page.locator("text=パッケージを展開しています..."),
+		).toBeVisible();
+
+		// 5. restarting を手動で送信
+		await page.evaluate(() => {
+			// biome-ignore lint/suspicious/noExplicitAny: mock
+			(window as any).__emitWailsEvent("update-progress", {
+				status: "restarting",
+				progress: 100.0,
+			});
+		});
+		await expect(
+			page.locator("text=システムを再起動しています..."),
+		).toBeVisible();
+	});
 });

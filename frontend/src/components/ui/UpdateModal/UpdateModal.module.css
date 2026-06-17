@@ -1,0 +1,235 @@
+.overlay {
+	position: fixed;
+	top: 0;
+	left: 0;
+	width: 100vw;
+	height: 100vh;
+	background: rgba(0, 0, 0, 0.6);
+	backdrop-filter: blur(10px);
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	z-index: 9999;
+	animation: fadeIn 0.2s ease-out;
+}
+
+.modalCard {
+	background: var(--bg-header);
+	border: 1px solid var(--border-color);
+	box-shadow: 0 20px 40px var(--panel-shadow);
+	border-radius: 12px;
+	padding: 24px;
+	width: 440px;
+	max-width: 90%;
+	display: flex;
+	flex-direction: column;
+	animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.title {
+	font-size: 1.25rem;
+	font-weight: 600;
+	color: var(--text-primary);
+	margin: 0 0 16px 0;
+	text-align: center;
+}
+
+.confirmContent {
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+}
+
+.description {
+	font-size: 0.95rem;
+	line-height: 1.5;
+	color: var(--text-secondary);
+	margin: 0;
+	text-align: center;
+}
+
+.versionCompare {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	gap: 16px;
+	background: rgba(0, 0, 0, 0.15);
+	padding: 12px;
+	border-radius: 8px;
+	border: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.versionBadge {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	background: var(--bg-btn);
+	border: 1px solid var(--border-color);
+	border-radius: 6px;
+	padding: 6px 12px;
+	min-width: 80px;
+}
+
+.versionBadge.latest {
+	border-color: var(--color-accent);
+}
+
+.badgeLabel {
+	font-size: 0.75rem;
+	color: var(--text-muted);
+	text-transform: uppercase;
+	margin-bottom: 2px;
+}
+
+.badgeValue {
+	font-family: monospace;
+	font-size: 1rem;
+	font-weight: bold;
+	color: var(--text-primary);
+}
+
+.arrow {
+	font-size: 1.25rem;
+	color: var(--text-secondary);
+}
+
+.actions {
+	display: flex;
+	justify-content: flex-end;
+	gap: 12px;
+}
+
+.cancelBtn,
+.closeBtn {
+	background: var(--bg-btn);
+	color: var(--text-primary);
+	border: 1px solid var(--border-color);
+	border-radius: 6px;
+	padding: 8px 16px;
+	font-size: 0.9rem;
+	cursor: pointer;
+	transition:
+		background 0.15s,
+		border-color 0.15s;
+}
+
+.cancelBtn:hover,
+.closeBtn:hover {
+	background: var(--bg-btn-hover);
+}
+
+.updateBtn {
+	background: var(--color-accent);
+	color: #ffffff;
+	border: none;
+	border-radius: 6px;
+	padding: 8px 20px;
+	font-size: 0.9rem;
+	font-weight: 500;
+	cursor: pointer;
+	transition: opacity 0.15s;
+}
+
+.updateBtn:hover {
+	opacity: 0.9;
+}
+
+.progressContent {
+	display: flex;
+	flex-direction: column;
+	gap: 16px;
+}
+
+.loadingContainer {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 16px;
+}
+
+.statusLabel {
+	font-size: 0.95rem;
+	color: var(--text-primary);
+	margin: 0;
+	text-align: center;
+	font-weight: 500;
+}
+
+.progressBarBg {
+	width: 100%;
+	height: 8px;
+	background: rgba(255, 255, 255, 0.08);
+	border-radius: 4px;
+	overflow: hidden;
+	position: relative;
+}
+
+.progressBarFill {
+	height: 100%;
+	background: linear-gradient(90deg, #58a6ff 0%, #bc8cff 100%);
+	border-radius: 4px;
+	transition: width 0.2s ease-out;
+}
+
+.spinner {
+	width: 32px;
+	height: 32px;
+	border: 3px solid rgba(88, 166, 255, 0.1);
+	border-top-color: var(--color-accent);
+	border-radius: 50%;
+	animation: spin 0.8s linear infinite;
+}
+
+.warningText {
+	font-size: 0.8rem;
+	color: var(--text-muted);
+	margin: 0;
+	text-align: center;
+	line-height: 1.4;
+}
+
+.errorContainer {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 16px;
+	text-align: center;
+}
+
+.errorIcon {
+	font-size: 2.5rem;
+	margin-bottom: 4px;
+}
+
+.errorText {
+	font-size: 0.95rem;
+	color: #ff7b72;
+	margin: 0 0 8px 0;
+	line-height: 1.5;
+}
+
+@keyframes fadeIn {
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
+}
+
+@keyframes slideUp {
+	from {
+		transform: translateY(20px);
+		opacity: 0;
+	}
+	to {
+		transform: translateY(0);
+		opacity: 1;
+	}
+}
+
+@keyframes spin {
+	to {
+		transform: rotate(360deg);
+	}
+}

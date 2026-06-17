@@ -1,6 +1,9 @@
+import { useState } from "react";
 import { DateTree } from "../../components/ui/DateTree/DateTree";
 import { Toolbar } from "../../components/ui/Toolbar/Toolbar";
+import { UpdateModal } from "../../components/ui/UpdateModal/UpdateModal";
 import { useSessions } from "./hooks/useSessions";
+import { useUpdate } from "./hooks/useUpdate";
 import styles from "./SessionListPage.module.css";
 
 export function SessionListPage() {
@@ -18,12 +21,18 @@ export function SessionListPage() {
 		parseSessions,
 	} = useSessions();
 
+	const { updateResult, progress, apply } = useUpdate();
+	const [isModalOpen, setIsModalOpen] = useState(false);
+
 	return (
 		<div className={styles.listPage}>
 			<Toolbar
 				totalCount={sessions.length}
 				sourcePath="~/.codex/sessions"
 				onSearch={handleSearch}
+				hasUpdate={updateResult?.hasUpdate}
+				latestVersion={updateResult?.latest}
+				onUpdateClick={() => setIsModalOpen(true)}
 			/>
 
 			<div className={styles.monthNavigator}>
@@ -68,6 +77,17 @@ export function SessionListPage() {
 					onParseSessions={parseSessions}
 				/>
 			)}
+
+			<UpdateModal
+				isOpen={isModalOpen}
+				onClose={() => setIsModalOpen(false)}
+				latestVersion={updateResult?.latest || ""}
+				currentVersion={updateResult?.current || ""}
+				status={progress.status}
+				progress={progress.progress}
+				error={progress.error}
+				onUpdate={apply}
+			/>
 		</div>
 	);
 }

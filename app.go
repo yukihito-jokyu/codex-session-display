@@ -262,3 +262,64 @@ func (a *App) emitOpenSessionFile(ctx context.Context, filePath string) {
 	windowShow(ctx)
 	eventsEmit(ctx, "open-session-file", filePath)
 }
+
+// Emit は Wails イベントをフロントエンドに送信します（usecase.AppEventsEmitter インターフェースの実装）。
+func (a *App) Emit(eventName string, optionalData ...interface{}) {
+	if a.ctx != nil {
+		eventsEmit(a.ctx, eventName, optionalData...)
+	}
+}
+
+// CheckUpdate は最新のアップデートがあるか確認します。
+func (a *App) CheckUpdate() (*dto.UpdateResult, error) {
+	logger.Info("CheckUpdate called")
+
+	owner := "yukihito-jokyu"
+	repo := "codex-session-display"
+	apiURL := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", owner, repo)
+
+	uc := usecase.NewCheckUpdateUseCase(Version, apiURL)
+	res, err := uc.Execute(a.ctx)
+	if err != nil {
+		appErr := &dto.AppError{
+			Code:    "UPDATE_CHECK_ERROR",
+			Message: "アップデートの確認に失敗しました",
+		}
+		logger.Error("CheckUpdate failed", "error", err)
+		return nil, appErr
+	}
+
+	logger.Info("CheckUpdate completed", "hasUpdate", res.HasUpdate, "latest", res.Latest)
+	return res, nil
+}
+
+// ApplyUpdate は指定されたURLからアップデートパッケージをダウンロードして適用します。
+func (a *App) ApplyUpdate(downloadURL string) error {
+	logger.Info("ApplyUpdate called", "url", downloadURL)
+	if downloadURL == "" {
+		return &dto.AppError{
+			Code:    "INVALID_URL",
+			Message: "ダウンロードURLが空です",
+		}
+	}
+
+	home, err := os.UserHomeDir()
+	if err != nil {
+		home = "."
+	}
+	tempDir := filepath.Join(home, ".codex-display", "update-temp")
+
+	uc := usecase.NewApplyUpdateUseCase(a, tempDir)
+
+	err = uc.Execute(a.ctx, downloadURL)
+	if err != nil {
+		appErr := &dto.AppError{
+			Code:    "UPDATE_APPLY_ERROR",
+			Message: fmt.Sprintf("アップデートの適用に失敗しました: %v", err),
+		}
+		logger.Error("ApplyUpdate failed", "error", err)
+		return appErr
+	}
+
+	return nil
+}
