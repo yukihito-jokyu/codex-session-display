@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ListSessions } from "wailsjs/go/main/App";
+import { GetSessionDetail, ListSessions } from "wailsjs/go/main/App";
 import type { SessionSummary } from "../../../components/ui/DateTree/SessionRow";
 
 export function useSessions() {
@@ -34,16 +34,40 @@ export function useSessions() {
 		month: number;
 	} | null>(null);
 
+	// 解析中ステータス管理用の状態と参照
+	const [parsingSessionIds, setParsingSessionIds] = useState<Set<string>>(
+		new Set(),
+	);
+	const parsingSessionIdsRef = useRef<Set<string>>(new Set());
+	const failedSessionIdsRef = useRef<Set<string>>(new Set());
+	const queueRef = useRef<string[]>([]);
+	const activeCountRef = useRef<number>(0);
+
+	const currentYearRef = useRef<number | null>(currentYear);
+	const currentMonthRef = useRef<number | null>(currentMonth);
+	currentYearRef.current = currentYear;
+	currentMonthRef.current = currentMonth;
+
 	const fetchSessions = useCallback(
-		(query: string, year: number, month: number) => {
-			setLoading(true);
+		(query: string, year: number, month: number, isSilent = false) => {
+			if (!isSilent) {
+				setLoading(true);
+				// 非サイレント更新（通常のフェッチ）の場合はキューと解析状態をクリアする
+				queueRef.current = [];
+				activeCountRef.current = 0;
+				parsingSessionIdsRef.current = new Set();
+				setParsingSessionIds(new Set());
+				failedSessionIdsRef.current = new Set();
+			}
 			setError(null);
 			lastFetchedRef.current = { query, year, month };
 
 			ListSessions(query, year, month)
 				.then((data) => {
 					setSessions(data || []);
-					setLoading(false);
+					if (!isSilent) {
+						setLoading(false);
+					}
 
 					// 初回起動時（year=0, month=0）の場合は、返ってきたデータのタイムスタンプから年月を割り出して同期する
 					if (year === 0 && month === 0) {
@@ -157,6 +181,109 @@ export function useSessions() {
 		}
 	}, [currentYear, currentMonth]);
 
+	const updateParsingIds = useCallback(
+		(updater: (prev: Set<string>) => Set<string>) => {
+			setParsingSessionIds((prev) => {
+				const next = updater(new Set(prev));
+				parsingSessionIdsRef.current = next;
+				return next;
+			});
+		},
+		[],
+	);
+
+	const processQueue = useCallback(() => {
+		const maxConcurrency = 3;
+		while (
+			activeCountRef.current < maxConcurrency &&
+			queueRef.current.length > 0
+		) {
+			const nextId = queueRef.current.shift();
+			if (!nextId) break;
+
+			activeCountRef.current++;
+
+			GetSessionDetail(nextId)
+				.then((detail) => {
+					setSessions((prevSessions) => {
+						return prevSessions.map((s) => {
+							if (s.id !== nextId) return s;
+
+							// detail.nodes から sessionMeta ノードを探してメタデータを抽出
+							const metaNode = detail.nodes?.find(
+								(n) => n.type === "sessionMeta",
+							);
+							const meta = metaNode?.data?.meta || {};
+							return {
+								...s,
+								cwd: meta.cwd || null,
+								cli_version: meta.cli_version || null,
+								originator: meta.originator || null,
+								model_provider: meta.model_provider || null,
+								branch: meta.git_branch || null,
+								source: meta.source || null,
+								timestamp: meta.timestamp || s.timestamp,
+								parsed: true,
+								parent_session_id: detail.parent_session_id || null,
+								child_session_ids: detail.child_session_ids || null,
+							};
+						});
+					});
+				})
+				.catch((err) => {
+					console.error(`Failed to parse session ${nextId}:`, err);
+					failedSessionIdsRef.current.add(nextId);
+				})
+				.finally(() => {
+					activeCountRef.current--;
+					updateParsingIds((prev) => {
+						prev.delete(nextId);
+						return prev;
+					});
+
+					// キュー内の次の処理を開始
+					processQueue();
+
+					// キューと実行中タスクの両方が空になったらサイレントリフレッシュ
+					if (activeCountRef.current === 0 && queueRef.current.length === 0) {
+						fetchSessions(
+							searchQuery,
+							currentYearRef.current || 0,
+							currentMonthRef.current || 0,
+							true,
+						);
+					}
+				});
+		}
+	}, [searchQuery, fetchSessions, updateParsingIds]);
+
+	const parseSessions = useCallback(
+		(ids: string[]) => {
+			// 未解析かつ解析中/キュー/失敗履歴にないIDのみ抽出
+			const newIds = ids.filter((id) => {
+				const session = sessions.find((s) => s.id === id);
+				const isParsed = session?.parsed;
+				const isParsing = parsingSessionIdsRef.current.has(id);
+				const isInQueue = queueRef.current.includes(id);
+				const isFailed = failedSessionIdsRef.current.has(id);
+				return !isParsed && !isParsing && !isInQueue && !isFailed;
+			});
+
+			if (newIds.length === 0) return;
+
+			queueRef.current.push(...newIds);
+			updateParsingIds((prev) => {
+				for (const id of newIds) {
+					prev.add(id);
+				}
+				return prev;
+			});
+
+			processQueue();
+		},
+		[sessions, updateParsingIds, processQueue],
+	);
+
 	const retry = useCallback(() => {
 		// リトライ時はキャッシュを無視して強制的に最新化するため、lastFetchedRef をクリアしてフェッチする
 		lastFetchedRef.current = null;
@@ -174,5 +301,7 @@ export function useSessions() {
 		handlePrevMonth,
 		handleNextMonth,
 		retry,
+		parsingSessionIds,
+		parseSessions,
 	};
 }

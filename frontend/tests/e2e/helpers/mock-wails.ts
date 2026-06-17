@@ -127,6 +127,7 @@ export async function mockWailsAPI(
 	await page.addInitScript((sessionsArg) => {
 		window.sessionStorage.clear();
 		const dummySessions = sessionsArg as dto.SessionSummary[];
+		(window as any).__dummySessions = dummySessions;
 
 		const clipboard = {
 			writeText: async (text: string) => {
@@ -332,6 +333,15 @@ export async function mockWailsAPI(
 
 			if (id === "trigger-string-error") {
 				throw "Mocked Detail String Error";
+			}
+
+			// バックエンドのキャッシュ保存をシミュレートして dummySessions 内のステータスを更新する
+			const session = dummySessions.find((s) => s.id === id);
+			if (session) {
+				if (id === "sess-004-unparsed-session") {
+					throw new Error("Simulated parse failure");
+				}
+				session.parsed = true;
 			}
 
 			if (id === "sess-002-uuid-long-name") {

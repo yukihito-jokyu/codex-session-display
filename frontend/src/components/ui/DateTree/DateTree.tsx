@@ -1,10 +1,12 @@
 import type React from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import styles from "./DateTree.module.css";
 import { SessionRow, type SessionSummary } from "./SessionRow";
 
 interface DateTreeProps {
 	sessions: SessionSummary[];
+	parsingSessionIds?: Set<string>;
+	onParseSessions?: (ids: string[]) => void;
 }
 
 interface GroupedSessionEntry {
@@ -31,7 +33,11 @@ const getGroupingDate = (session: SessionSummary) => {
 	return null;
 };
 
-export const DateTree: React.FC<DateTreeProps> = ({ sessions }) => {
+export const DateTree: React.FC<DateTreeProps> = ({
+	sessions,
+	parsingSessionIds,
+	onParseSessions,
+}) => {
 	const [expandedPaths, setExpandedPaths] = useState<Set<string>>(() => {
 		const saved = sessionStorage.getItem("session_list_expanded_paths");
 		if (saved) {
@@ -84,8 +90,14 @@ export const DateTree: React.FC<DateTreeProps> = ({ sessions }) => {
 		return result;
 	}, [rootSessions]);
 
+	const isFirstRenderRef = useRef(true);
+
 	// 状態が変更されたら sessionStorage を更新する
 	useEffect(() => {
+		if (isFirstRenderRef.current) {
+			isFirstRenderRef.current = false;
+			return;
+		}
 		sessionStorage.setItem(
 			"session_list_expanded_paths",
 			JSON.stringify(Array.from(expandedPaths)),
@@ -110,6 +122,31 @@ export const DateTree: React.FC<DateTreeProps> = ({ sessions }) => {
 		initialExpanded.add(latestDay);
 		setExpandedPaths(initialExpanded);
 	}, [sessions, groupedDays]);
+
+	// 展開された日に含まれる未解析セッションのパースをトリガー
+	useEffect(() => {
+		if (!onParseSessions) return;
+
+		const unparsedIdsToTrigger: string[] = [];
+		for (const day of expandedPaths) {
+			// 全てのセッションから、その日に属する未解析セッションを探す
+			for (const s of sessions) {
+				if (s.parsed) continue;
+
+				const date = getGroupingDate(s);
+				if (!date) continue;
+
+				const d = date.getDate().toString().padStart(2, "0");
+				if (d === day && !parsingSessionIds?.has(s.id)) {
+					unparsedIdsToTrigger.push(s.id);
+				}
+			}
+		}
+
+		if (unparsedIdsToTrigger.length > 0) {
+			onParseSessions(unparsedIdsToTrigger);
+		}
+	}, [expandedPaths, sessions, onParseSessions, parsingSessionIds]);
 
 	const togglePath = (path: string) => {
 		const nextExpanded = new Set(expandedPaths);
@@ -179,6 +216,8 @@ export const DateTree: React.FC<DateTreeProps> = ({ sessions }) => {
 										key={session.id}
 										session={session}
 										sessionsMap={sessionsMap}
+										isParsing={parsingSessionIds?.has(session.id)}
+										parsingSessionIds={parsingSessionIds}
 									/>
 								))}
 							</div>

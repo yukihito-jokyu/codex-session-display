@@ -455,4 +455,218 @@ test.describe("セッション一覧画面 E2E テスト", () => {
 		});
 		expect(callsCount).toBe(1);
 	});
+
+	test("アコーディオン展開時に、未解析セッションのパースが自動的に開始され、ステータスと情報が更新されること", async ({
+		page,
+	}) => {
+		// 初期状態では展開されてパースされてしまうため、一度折りたたんだ状態で起動する
+		await page.addInitScript(() => {
+			window.sessionStorage.setItem("session_list_expanded_paths", "[]");
+		});
+
+		// このテスト用の成功モックを設定
+		await page.addInitScript(() => {
+			// biome-ignore lint/suspicious/noExplicitAny: mock
+			const App = (window as any).go.main.App;
+			App.GetSessionDetail = async (id: string) => {
+				if (id === "sess-004-unparsed-session") {
+					// 「解析中...」の表示時間を確保するため意図的に少し遅延させる
+					await new Promise((resolve) => setTimeout(resolve, 200));
+
+					// dummySessions 内のステータスを更新
+					// biome-ignore lint/suspicious/noExplicitAny: mock
+					const session = ((window as any).__dummySessions as any[])?.find(
+						(s) => s.id === id,
+					);
+					if (session) {
+						session.parsed = true;
+						session.cwd = "/Users/test/projects/unparsed-app";
+						session.branch = "feature/unparsed";
+						session.model_provider = "anthropic";
+						session.cli_version = "1.0.0";
+					}
+
+					return {
+						id: id,
+						cache_schema_version: 3,
+						parsed_at: "2026-05-20T14:00:00Z",
+						nodes: [
+							{
+								id: "node-meta",
+								type: "sessionMeta",
+								position: { x: 0, y: 0 },
+								data: {
+									category: "meta",
+									label: "Session Meta",
+									icon: "⚙️",
+									summary: "CLI Version: 1.0.0",
+									turnIndex: -1,
+									meta: {
+										version: "1.0.0",
+										cwd: "/Users/test/projects/unparsed-app",
+										git_branch: "feature/unparsed",
+										model_provider: "anthropic",
+										cli_version: "1.0.0",
+									},
+								},
+							},
+						],
+						edges: [],
+						statistics: {
+							duration_ms: 1000,
+							total_tokens: 0,
+							tool_call_count: 0,
+							token_count_count: 0,
+							context_window_size: 0,
+							turn_count: 0,
+							turns: [],
+						},
+						token_counts: [],
+						timeline: [],
+					};
+				}
+				throw new Error("Not mocked for this ID");
+			};
+		});
+
+		await page.goto("/");
+
+		// 「20日」のヘッダーをクリックして展開する
+		const dayHeader = page.locator("div[role='button']:has-text('20日')");
+		await dayHeader.click();
+
+		// ローディングインジケータ「解析中...」または「解析中」バッジが表示されることを確認 (strict mode 回避のため first() を使用)
+		const parsingRow = page
+			.locator("div[role='button']:has-text('sess-004')")
+			.first();
+		await expect(parsingRow.locator("text=解析中...").first()).toBeVisible();
+		await expect(parsingRow.locator("text=解析中").first()).toBeVisible();
+
+		// パース完了（200ms遅延後）を待ち、CWDやブランチ名が反映されることを確認
+		await expect(parsingRow.locator("text=feature/unparsed")).toBeVisible();
+		await expect(
+			parsingRow.locator('text="/Users/test/projects/unparsed-app"'),
+		).toBeVisible();
+		await expect(
+			parsingRow.locator("text=解析中...").first(),
+		).not.toBeVisible();
+		await expect(parsingRow.locator("text=未解析").first()).not.toBeVisible();
+	});
+
+	test("パースの同時実行数が最大3件に制御されること", async ({ page }) => {
+		// 5件の未解析セッションを同じ日に用意
+		const testSessions = [
+			{
+				id: "sess-p1",
+				file_path: "/path/to/p1",
+				cwd: undefined,
+				cli_version: undefined,
+				originator: "user-1",
+				model_provider: undefined,
+				branch: undefined,
+				source: "cli",
+				timestamp: "2026-05-20T10:00:00Z",
+				file_size: 100,
+				parsed: false,
+			},
+			{
+				id: "sess-p2",
+				file_path: "/path/to/p2",
+				cwd: undefined,
+				cli_version: undefined,
+				originator: "user-1",
+				model_provider: undefined,
+				branch: undefined,
+				source: "cli",
+				timestamp: "2026-05-20T10:01:00Z",
+				file_size: 100,
+				parsed: false,
+			},
+			{
+				id: "sess-p3",
+				file_path: "/path/to/p3",
+				cwd: undefined,
+				cli_version: undefined,
+				originator: "user-1",
+				model_provider: undefined,
+				branch: undefined,
+				source: "cli",
+				timestamp: "2026-05-20T10:02:00Z",
+				file_size: 100,
+				parsed: false,
+			},
+			{
+				id: "sess-p4",
+				file_path: "/path/to/p4",
+				cwd: undefined,
+				cli_version: undefined,
+				originator: "user-1",
+				model_provider: undefined,
+				branch: undefined,
+				source: "cli",
+				timestamp: "2026-05-20T10:03:00Z",
+				file_size: 100,
+				parsed: false,
+			},
+			{
+				id: "sess-p5",
+				file_path: "/path/to/p5",
+				cwd: undefined,
+				cli_version: undefined,
+				originator: "user-1",
+				model_provider: undefined,
+				branch: undefined,
+				source: "cli",
+				timestamp: "2026-05-20T10:04:00Z",
+				file_size: 100,
+				parsed: false,
+			},
+		];
+
+		// Wails APIモックを注入し、GetSessionDetail呼び出しの同時実行数を追跡する仕組みを構築
+		await mockWailsAPI(page, testSessions);
+		await page.addInitScript(() => {
+			let activeCount = 0;
+			let maxConcurrentSeen = 0;
+
+			// GetSessionDetail をオーバーライドして同時実行数を計測
+			// biome-ignore lint/suspicious/noExplicitAny: mock
+			const originalGetSessionDetail = (window as any).go.main.App
+				.GetSessionDetail;
+			// biome-ignore lint/suspicious/noExplicitAny: mock
+			(window as any).go.main.App.GetSessionDetail = async (id: string) => {
+				activeCount++;
+				if (activeCount > maxConcurrentSeen) {
+					maxConcurrentSeen = activeCount;
+				}
+				// biome-ignore lint/suspicious/noExplicitAny: mock
+				(window as any).__maxConcurrentSeen = maxConcurrentSeen;
+
+				// 各パース呼び出しに遅延を持たせる
+				await new Promise((resolve) => setTimeout(resolve, 100));
+				activeCount--;
+
+				return originalGetSessionDetail(id);
+			};
+		});
+
+		// 画面へ遷移（20日ノードが自動展開され、全パースがトリガーされる）
+		await page.goto("/");
+
+		// 全て完了するまで待つ（100ms * 2回分以上の時間＝最大500ms程度）
+		await expect(
+			page.locator("text=sess-p1 >> text=解析中...").first(),
+		).not.toBeVisible();
+		await expect(
+			page.locator("text=sess-p5 >> text=解析中...").first(),
+		).not.toBeVisible();
+
+		// 最大同時実行数が3以下であることを検証
+		const maxConcurrent = await page.evaluate(
+			// biome-ignore lint/suspicious/noExplicitAny: mock
+			() => (window as any).__maxConcurrentSeen || 0,
+		);
+		expect(maxConcurrent).toBeGreaterThan(0);
+		expect(maxConcurrent).toBeLessThanOrEqual(3);
+	});
 });

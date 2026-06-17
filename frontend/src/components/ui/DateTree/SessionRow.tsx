@@ -24,6 +24,8 @@ interface SessionRowProps {
 	session: SessionSummary;
 	sessionsMap?: Map<string, SessionSummary>;
 	depth?: number;
+	isParsing?: boolean;
+	parsingSessionIds?: Set<string>;
 }
 
 const formatTimestamp = (isoStr: string | null | undefined) => {
@@ -58,6 +60,8 @@ export const SessionRow: React.FC<SessionRowProps> = ({
 	session,
 	sessionsMap,
 	depth = 0,
+	isParsing = false,
+	parsingSessionIds,
 }) => {
 	const navigate = useNavigate();
 	const [expanded, setExpanded] = useState(false);
@@ -109,19 +113,29 @@ export const SessionRow: React.FC<SessionRowProps> = ({
 							{session.id.slice(0, 8)}
 						</span>
 						<span className={styles.branch}>
-							{isParsed ? (
+							{isParsing ? (
+								<span className={styles.parsing}>解析中...</span>
+							) : isParsed ? (
 								session.branch || "—"
 							) : (
 								<span className={styles.beforeParse}>解析前</span>
 							)}
 						</span>
-						{!isParsed && <span className={styles.unparsedBadge}>未解析</span>}
+						{isParsing ? (
+							<span className={styles.parsingBadge}>解析中</span>
+						) : (
+							!isParsed && <span className={styles.unparsedBadge}>未解析</span>
+						)}
 					</div>
 					<div
 						className={styles.cwd}
-						title={isParsed ? session.cwd || "" : "解析前"}
+						title={
+							isParsing ? "解析中..." : isParsed ? session.cwd || "" : "解析前"
+						}
 					>
-						{isParsed ? (
+						{isParsing ? (
+							<span className={styles.parsing}>解析中...</span>
+						) : isParsed ? (
 							session.cwd || "—"
 						) : (
 							<span className={styles.beforeParse}>解析前</span>
@@ -132,14 +146,18 @@ export const SessionRow: React.FC<SessionRowProps> = ({
 				<div className={styles.metaInfo}>
 					<div className={styles.metaRow}>
 						<span className={styles.provider}>
-							{isParsed ? (
+							{isParsing ? (
+								<span className={styles.parsing}>解析中...</span>
+							) : isParsed ? (
 								session.model_provider || "—"
 							) : (
 								<span className={styles.beforeParse}>解析前</span>
 							)}
 						</span>
 						<span className={styles.version}>
-							{isParsed ? (
+							{isParsing ? (
+								<span className={styles.parsing}>解析中...</span>
+							) : isParsed ? (
 								session.cli_version ? (
 									`v${session.cli_version}`
 								) : (
@@ -168,6 +186,8 @@ export const SessionRow: React.FC<SessionRowProps> = ({
 							session={child}
 							sessionsMap={sessionsMap}
 							depth={depth + 1}
+							isParsing={parsingSessionIds?.has(child.id)}
+							parsingSessionIds={parsingSessionIds}
 						/>
 					))}
 				</div>

@@ -182,3 +182,19 @@
 	margin-bottom: 8px;
 	gap: 4px;
 }
+
+.parsingBadge {
+	font-size: 10px;
+	font-weight: 600;
+	padding: 1px 6px;
+	border-radius: 10px;
+	background: var(--badge-parsing-bg, rgba(234, 179, 8, 0.15));
+	border: 1px solid var(--badge-parsing-border, rgba(234, 179, 8, 0.3));
+	color: var(--badge-parsing-text, #eab308);
+}
+
+.parsing {
+	color: var(--badge-parsing-text, #eab308);
+	font-style: italic;
+	font-size: 11px;
+}
