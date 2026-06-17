@@ -16,48 +16,10 @@ type ConversationTimelineProps = {
 	onSubagentClick?: (threadId: string) => void;
 };
 
-type TimelineCategory =
-	| "conversation"
-	| "reasoning"
-	| "tool"
-	| "reference"
-	| "system";
-
-const CATEGORY_FILTERS: ReadonlyArray<{
-	value: TimelineCategory;
-	label: string;
-}> = [
-	{ value: "conversation", label: "会話" },
-	{ value: "reasoning", label: "推論" },
-	{ value: "tool", label: "ツール・コマンド" },
-	{ value: "reference", label: "参照情報" },
-	{ value: "system", label: "システムイベント" },
-];
-
 const compactNumber = new Intl.NumberFormat("en", {
 	notation: "compact",
 	maximumFractionDigits: 1,
 });
-
-function getTimelineCategory(kind: string): TimelineCategory {
-	switch (kind) {
-		case "conversation":
-			return "conversation";
-		case "reasoning":
-			return "reasoning";
-		case "tool":
-		case "web":
-		case "mcp":
-			return "tool";
-		case "instructions":
-		case "reference":
-			return "reference";
-		case "collab":
-			return "system";
-		default:
-			return "system";
-	}
-}
 
 function matchesSearchQuery(
 	item: dto.ConversationTimelineItem,
@@ -78,15 +40,11 @@ function matchesSearchQuery(
 
 function matchesTimelineFilters(
 	item: dto.ConversationTimelineItem,
-	selectedCategories: ReadonlySet<TimelineCategory>,
-	measuredOnly: boolean,
 	normalizedQuery: string,
 ) {
-	return (
-		selectedCategories.has(getTimelineCategory(item.kind || "system")) &&
-		(!measuredOnly || item.token_count_count > 0) &&
-		matchesSearchQuery(item, normalizedQuery)
-	);
+	const allowedKinds = ["conversation", "collab", "tool"];
+	const isAllowed = allowedKinds.includes(item.kind || "");
+	return isAllowed && matchesSearchQuery(item, normalizedQuery);
 }
 
 function getTimelineItemKey(
@@ -125,10 +83,6 @@ export function ConversationTimeline({
 	onSubagentClick,
 }: ConversationTimelineProps) {
 	const [searchQuery, setSearchQuery] = useState("");
-	const [measuredOnly, setMeasuredOnly] = useState(false);
-	const [selectedCategories, setSelectedCategories] = useState<
-		Set<TimelineCategory>
-	>(() => new Set(CATEGORY_FILTERS.map((category) => category.value)));
 	const [expandedItems, setExpandedItems] = useState<Set<string>>(
 		() => new Set(),
 	);
@@ -138,17 +92,12 @@ export function ConversationTimeline({
 
 		return turns.flatMap((turn) => {
 			const items = turn.items.filter((item) =>
-				matchesTimelineFilters(
-					item,
-					selectedCategories,
-					measuredOnly,
-					normalizedQuery,
-				),
+				matchesTimelineFilters(item, normalizedQuery),
 			);
 
 			return items.length > 0 ? [{ ...turn, items }] : [];
 		});
-	}, [measuredOnly, searchQuery, selectedCategories, turns]);
+	}, [searchQuery, turns]);
 
 	useEffect(() => {
 		if (!scrollTarget) {
@@ -158,18 +107,6 @@ export function ConversationTimeline({
 			.get(scrollTarget.selectionId)
 			?.scrollIntoView({ behavior: "smooth", block: "center" });
 	}, [scrollTarget]);
-
-	const toggleCategory = (category: TimelineCategory) => {
-		setSelectedCategories((current) => {
-			const next = new Set(current);
-			if (next.has(category)) {
-				next.delete(category);
-			} else {
-				next.add(category);
-			}
-			return next;
-		});
-	};
 
 	const toggleItem = (itemKey: string) => {
 		setExpandedItems((current) => {
@@ -203,27 +140,6 @@ export function ConversationTimeline({
 						type="search"
 						value={searchQuery}
 					/>
-				</label>
-				<fieldset className={styles.categoryFilters}>
-					<legend>種別</legend>
-					{CATEGORY_FILTERS.map((category) => (
-						<label key={category.value}>
-							<input
-								checked={selectedCategories.has(category.value)}
-								onChange={() => toggleCategory(category.value)}
-								type="checkbox"
-							/>
-							<span>{category.label}</span>
-						</label>
-					))}
-				</fieldset>
-				<label className={styles.checkboxFilter}>
-					<input
-						checked={measuredOnly}
-						onChange={(event) => setMeasuredOnly(event.target.checked)}
-						type="checkbox"
-					/>
-					<span>トークン計測あり</span>
 				</label>
 			</div>
 			<div className={styles.turnList}>
@@ -314,31 +230,46 @@ export function ConversationTimeline({
 										tabIndex={0}
 									>
 										<article>
-											{collapsible ? (
-												<button
-													aria-expanded={expanded}
-													className={styles.eventToggle}
-													onClick={(event) => {
-														stopPropagation(event);
-														toggleItem(itemKey);
-													}}
-													type="button"
-												>
-													<strong>{item.label || kind}</strong>
-													<span>{item.record_count || 1}件の記録</span>
-												</button>
-											) : (
-												<div className={styles.itemHeader}>
-													<strong>
-														{item.role === "user" ? "User" : "AI"}
-													</strong>
+											<div className={styles.itemHeader}>
+												<div className={styles.headerLeft}>
+													{collapsible ? (
+														<button
+															aria-expanded={expanded}
+															className={styles.eventToggle}
+															onClick={(event) => {
+																stopPropagation(event);
+																toggleItem(itemKey);
+															}}
+															type="button"
+														>
+															<span className={styles.toggleIcon}>
+																{expanded ? "▼" : "▶"}
+															</span>
+															<strong>{item.label || kind}</strong>
+														</button>
+													) : (
+														<strong>
+															{item.role === "user" ? "User" : "AI"}
+														</strong>
+													)}
 													{item.timestamp && (
-														<time dateTime={item.timestamp}>
+														<time
+															className={styles.timestamp}
+															dateTime={item.timestamp}
+														>
 															{item.timestamp}
 														</time>
 													)}
 												</div>
-											)}
+												{item.token_count_count > 0 &&
+													item.last_token_usage && (
+														<span className={styles.tokenBadge}>
+															{formatTokens(
+																item.last_token_usage.total_tokens || 0,
+															)}
+														</span>
+													)}
+											</div>
 											{expanded && (
 												<div className={styles.expandedContent}>
 													{truncated ? (
@@ -395,28 +326,40 @@ export function ConversationTimeline({
 													)}
 												</div>
 											)}
-											<div className={styles.tokenMetrics}>
-												{item.token_count_count > 0 ? (
-													<>
-														<strong>
-															{formatTokens(
-																item.last_token_usage?.total_tokens || 0,
-															)}
-														</strong>
-														<span>{item.token_count_count}件</span>
-														{item.total_token_usage && (
+											{item.token_count_count > 0 && (
+												<div className={styles.tokenSubMetrics}>
+													<span>
+														In:{" "}
+														{compactNumber.format(
+															item.last_token_usage?.input_tokens || 0,
+														)}
+													</span>
+													<span>
+														Out:{" "}
+														{compactNumber.format(
+															item.last_token_usage?.output_tokens || 0,
+														)}
+													</span>
+													{item.last_token_usage &&
+														item.last_token_usage.reasoning_output_tokens >
+															0 && (
 															<span>
-																累計{" "}
+																Reasoning:{" "}
 																{compactNumber.format(
-																	item.total_token_usage.total_tokens,
+																	item.last_token_usage.reasoning_output_tokens,
 																)}
 															</span>
 														)}
-													</>
-												) : (
-													<span>計測なし</span>
-												)}
-											</div>
+													{item.total_token_usage && (
+														<span className={styles.cumulativeTokens}>
+															累計:{" "}
+															{compactNumber.format(
+																item.total_token_usage.total_tokens,
+															)}
+														</span>
+													)}
+												</div>
+											)}
 										</article>
 									</div>
 								);
