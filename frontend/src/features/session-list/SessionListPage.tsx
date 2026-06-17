@@ -14,6 +14,8 @@ export function SessionListPage() {
 		handlePrevMonth,
 		handleNextMonth,
 		retry,
+		parsingSessionIds,
+		parseSessions,
 	} = useSessions();
 
 	return (
@@ -60,7 +62,11 @@ export function SessionListPage() {
 					</button>
 				</div>
 			) : (
-				<DateTree sessions={sessions} />
+				<DateTree
+					sessions={sessions}
+					parsingSessionIds={parsingSessionIds}
+					onParseSessions={parseSessions}
+				/>
 			)}
 		</div>
 	);
