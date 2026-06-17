@@ -48,40 +48,68 @@ func (r *SessionFSRepository) ListSessions(ctx context.Context, year, month int,
 		return nil, nil // 空のリストを正常に返す
 	}
 
+	type sessionFileInfo struct {
+		path      string
+		info      fs.FileInfo
+		id        string
+		timestamp string
+		time      time.Time
+	}
+
+	var allFiles []sessionFileInfo
+	var latestTime time.Time
+
+	// 1回の WalkDir でファイルを走査し、必要な情報を収集
+	err := filepath.WalkDir(r.rootDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() {
+			return nil
+		}
+
+		filename := d.Name()
+		if !strings.HasPrefix(filename, "rollout-") || !strings.HasSuffix(filename, ".jsonl") {
+			return nil
+		}
+
+		id, timestamp, err := parseSessionFilenameFn(filename)
+		if err != nil {
+			return nil
+		}
+
+		t, err := time.Parse(time.RFC3339, timestamp)
+		if err != nil {
+			return nil
+		}
+
+		info, err := d.Info()
+		if err != nil {
+			return nil // ファイル情報を読み取れない場合はスキップ
+		}
+
+		allFiles = append(allFiles, sessionFileInfo{
+			path:      path,
+			info:      info,
+			id:        id,
+			timestamp: timestamp,
+			time:      t,
+		})
+
+		if t.After(latestTime) {
+			latestTime = t
+		}
+
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan session directory: %w", err)
+	}
+
 	var targetYear int
 	var targetMonth int
 
 	if year == 0 && month == 0 {
-		// ディレクトリ内の最新のセッションログの日付を特定する
-		var latestTime time.Time
-		scanErr := filepath.WalkDir(r.rootDir, func(path string, d fs.DirEntry, err error) error {
-			if err != nil {
-				return err
-			}
-			if d.IsDir() {
-				return nil
-			}
-			filename := d.Name()
-			if !strings.HasPrefix(filename, "rollout-") || !strings.HasSuffix(filename, ".jsonl") {
-				return nil
-			}
-			_, timestamp, err := parseSessionFilenameFn(filename)
-			if err != nil {
-				return nil
-			}
-			t, err := time.Parse(time.RFC3339, timestamp)
-			if err == nil {
-				if t.After(latestTime) {
-					latestTime = t
-				}
-			}
-			return nil
-		})
-
-		if scanErr != nil {
-			return nil, scanErr
-		}
-
 		if latestTime.IsZero() {
 			return nil, nil // セッションが存在しない場合は空リストを返す
 		}
@@ -94,72 +122,43 @@ func (r *SessionFSRepository) ListSessions(ctx context.Context, year, month int,
 
 	var sessions []dto.SessionSummary
 
-	err := filepath.WalkDir(r.rootDir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			return nil
-		}
-
-		// rollout-*.jsonl ファイルのみを処理する
-		filename := d.Name()
-		if !strings.HasPrefix(filename, "rollout-") || !strings.HasSuffix(filename, ".jsonl") {
-			return nil
-		}
-
-		id, timestamp, err := parseSessionFilenameFn(filename)
-		if err != nil {
-			// 無効なファイル名はスキップ
-			return nil
-		}
-
+	for _, file := range allFiles {
 		// 年月によるフィルタリング
-		parsedTime, err := time.Parse(time.RFC3339, timestamp)
-		if err != nil {
-			return nil
-		}
-		if parsedTime.Year() != targetYear || int(parsedTime.Month()) != targetMonth {
-			return nil // 対象の年月でないためスキップ
-		}
-
-		// ファイルの詳細を取得
-		info, err := d.Info()
-		if err != nil {
-			return nil // 情報を読み取れない場合はファイルをスキップ
+		if file.time.Year() != targetYear || int(file.time.Month()) != targetMonth {
+			continue
 		}
 
 		// rootDir からの相対パスを計算
-		relPath, err := filepathRelFn(r.rootDir, path)
+		relPath, err := filepathRelFn(r.rootDir, file.path)
 		if err != nil {
-			relPath = path
+			relPath = file.path
 		}
 
-		modTimeStr := info.ModTime().UTC().Format(time.RFC3339)
+		modTimeStr := file.info.ModTime().UTC().Format(time.RFC3339)
 
 		// キャッシュから詳細情報をマージ
 		var sSummary dto.SessionSummary
-		cached, err := r.cacheRepo.GetSessionSummary(ctx, id)
+		cached, err := r.cacheRepo.GetSessionSummary(ctx, file.id)
 		if err == nil && cached != nil {
 			sSummary = *cached
 			sSummary.Parsed = true
 		} else {
 			sSummary = dto.SessionSummary{
-				ID:     id,
+				ID:     file.id,
 				Parsed: false,
 			}
 			// 未解析の場合、ファイルから親セッションIDをすばやく読み取る
-			if parentID, readErr := readParentThreadIDFromFile(path); readErr == nil && parentID != "" {
+			if parentID, readErr := readParentThreadIDFromFile(file.path); readErr == nil && parentID != "" {
 				sSummary.ParentSessionID = &parentID
 			}
 		}
 
 		// ファイルスキャン側のメタデータを設定（キャッシュデータがなければこれを優先、あれば補完）
 		sSummary.FilePath = relPath
-		sSummary.FileSize = info.Size()
+		sSummary.FileSize = file.info.Size()
 		sSummary.FileModifiedAt = &modTimeStr
 		if sSummary.Timestamp == nil {
-			sSummary.Timestamp = &timestamp
+			sSummary.Timestamp = &file.timestamp
 		}
 
 		// 検索クエリによるフィルタリング
@@ -180,15 +179,11 @@ func (r *SessionFSRepository) ListSessions(ctx context.Context, year, month int,
 			}
 
 			if !idMatch && !cwdMatch && !branchMatch && !providerMatch {
-				return nil // マッチしないのでスキップ
+				continue // マッチしないのでスキップ
 			}
 		}
 
 		sessions = append(sessions, sSummary)
-		return nil
-	})
-	if err != nil {
-		return nil, fmt.Errorf("failed to scan session directory: %w", err)
 	}
 
 	// 親子関係を解決
