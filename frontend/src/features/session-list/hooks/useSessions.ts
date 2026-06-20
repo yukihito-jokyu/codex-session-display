@@ -297,6 +297,8 @@ export function useSessions() {
 		searchQuery,
 		currentYear,
 		currentMonth,
+		setCurrentYear,
+		setCurrentMonth,
 		handleSearch,
 		handlePrevMonth,
 		handleNextMonth,
