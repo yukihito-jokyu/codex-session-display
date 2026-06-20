@@ -214,6 +214,20 @@ export function useSessions() {
 								(n) => n.type === "sessionMeta",
 							);
 							const meta = metaNode?.data?.meta || {};
+
+							// 統計情報の集計
+							let inputTokensSum = 0;
+							let outputTokensSum = 0;
+							let reasoningTokensSum = 0;
+							if (detail.statistics?.turns) {
+								for (const turn of detail.statistics.turns) {
+									inputTokensSum += turn.consumed_tokens?.input_tokens || 0;
+									outputTokensSum += turn.consumed_tokens?.output_tokens || 0;
+									reasoningTokensSum +=
+										turn.consumed_tokens?.reasoning_output_tokens || 0;
+								}
+							}
+
 							return {
 								...s,
 								cwd: meta.cwd || null,
@@ -226,6 +240,12 @@ export function useSessions() {
 								parsed: true,
 								parent_session_id: detail.parent_session_id || null,
 								child_session_ids: detail.child_session_ids || null,
+								total_tokens: detail.statistics?.total_tokens ?? 0,
+								input_tokens: inputTokensSum,
+								output_tokens: outputTokensSum,
+								reasoning_tokens: reasoningTokensSum,
+								turn_count: detail.statistics?.turn_count ?? 0,
+								step_count: detail.statistics?.tool_call_count ?? 0,
 							};
 						});
 					});
