@@ -767,4 +767,86 @@ test.describe("セッション一覧画面 E2E テスト", () => {
 			page.locator("text=システムを再起動しています..."),
 		).toBeVisible();
 	});
+
+	test("タブUIによる表示切り替えが正しく機能すること", async ({ page }) => {
+		// 初期状態（履歴ツリー）で月ナビゲーターが表示されていることを確認
+		await expect(page.locator("span:has-text('2026年 5月')")).toBeVisible();
+		// 初期状態ではカレンダーUIは表示されていないことを確認
+		await expect(page.locator("input[type='date']")).not.toBeVisible();
+
+		// 「ディレクトリ分類」タブをクリック
+		await page.locator("button:has-text('ディレクトリ分類')").click();
+
+		// 月ナビゲーターが非表示になっていることを確認
+		await expect(page.locator("span:has-text('2026年 5月')")).not.toBeVisible();
+		// カレンダーUIが表示されていることを確認
+		await expect(page.locator("input[type='date']")).toBeVisible();
+
+		// 「履歴ツリー」タブを再びクリック
+		await page.locator("button:has-text('履歴ツリー')").click();
+
+		// 再び月ナビゲーターが表示され、カレンダーUIが非表示になることを確認
+		await expect(page.locator("span:has-text('2026年 5月')")).toBeVisible();
+		await expect(page.locator("input[type='date']")).not.toBeVisible();
+	});
+
+	test("カレンダーの日付変更によるセッションのフィルタリングと年月変更連動が機能すること", async ({
+		page,
+	}) => {
+		// 「ディレクトリ分類」タブをクリック
+		await page.locator("button:has-text('ディレクトリ分類')").click();
+
+		const dateInput = page.locator("input[type='date']");
+		await expect(dateInput).toBeVisible();
+
+		// 日付を 2026-05-20 に変更
+		await dateInput.fill("2026-05-20");
+
+		// 2026年5月20日のセッション1が表示されていることを確認
+		await expect(page.locator("text=sess-001")).toBeVisible();
+		// 19日のセッション6が表示されていないことを確認
+		await expect(page.locator("text=sess-006")).not.toBeVisible();
+
+		// 日付を 2026-05-19 に変更
+		await dateInput.fill("2026-05-19");
+
+		// 19日のセッション6が表示され、20日のセッション1が非表示になることを確認
+		await expect(page.locator("text=sess-006")).toBeVisible();
+		await expect(page.locator("text=sess-001")).not.toBeVisible();
+
+		// 異なる月である 2026-04-10 に日付を変更
+		await dateInput.fill("2026-04-10");
+
+		// 2026年4月のセッション3が表示されることを確認
+		await expect(page.locator("text=sess-003")).toBeVisible();
+		// 5月のセッションは表示されないことを確認
+		await expect(page.locator("text=sess-006")).not.toBeVisible();
+		await expect(page.locator("text=sess-001")).not.toBeVisible();
+	});
+
+	test("詳細画面へ遷移して戻った際、タブとカレンダーの日付状態が維持されていること", async ({
+		page,
+	}) => {
+		// 「ディレクトリ分類」タブをクリック
+		await page.locator("button:has-text('ディレクトリ分類')").click();
+
+		const dateInput = page.locator("input[type='date']");
+		// 日付を 2026-05-19 に変更
+		await dateInput.fill("2026-05-19");
+		await expect(page.locator("text=sess-006")).toBeVisible();
+
+		// セッション行をクリックして詳細画面に遷移
+		await page.locator("text=sess-006").click();
+		await expect(page).toHaveURL(/.*#\/sessions\/sess-006/);
+
+		// 一覧に戻るボタンをクリックして戻る
+		await page.locator("button:has-text('Back to List')").click();
+
+		// 再び一覧画面で「ディレクトリ分類」タブがアクティブであることを確認
+		await expect(page.locator("input[type='date']")).toBeVisible();
+		// 選択していた日付が 2026-05-19 のままであることを確認
+		await expect(dateInput).toHaveValue("2026-05-19");
+		// その日のセッションが表示されていることを確認
+		await expect(page.locator("text=sess-006")).toBeVisible();
+	});
 });
