@@ -1,0 +1,183 @@
+.datePickerContainer {
+	position: relative;
+	display: inline-block;
+}
+
+.hiddenInput {
+	position: absolute;
+	opacity: 0;
+	pointer-events: none;
+	width: 1px;
+	height: 1px;
+	border: none;
+	padding: 0;
+	margin: 0;
+	z-index: -1;
+}
+
+.triggerButton {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	padding: 8px 16px;
+	font-size: 13px;
+	font-weight: 500;
+	color: var(--text-primary);
+	background: var(--bg-btn);
+	border: 1px solid var(--border-color);
+	border-radius: 8px;
+	cursor: pointer;
+	transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+	box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+	outline: none;
+}
+
+.triggerButton:hover {
+	background: var(--bg-btn-hover);
+	border-color: var(--text-secondary);
+	box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+}
+
+.triggerButton:focus {
+	border-color: var(--color-accent);
+	box-shadow: 0 0 0 2px var(--focus-shadow, rgba(9, 105, 218, 0.2));
+}
+
+.calendarIcon {
+	font-size: 14px;
+	color: var(--color-accent);
+}
+
+.dateText {
+	min-width: 140px;
+	text-align: left;
+}
+
+.arrow {
+	font-size: 11px;
+	color: var(--text-secondary);
+	transition: transform 0.2s ease;
+}
+
+.arrowOpen {
+	transform: rotate(180deg);
+}
+
+/* Dropdown styling */
+.dropdown {
+	position: absolute;
+	top: calc(100% + 6px);
+	left: 50%;
+	transform: translateX(-50%);
+	z-index: 1000;
+	width: 280px;
+	padding: 16px;
+	background: var(--bg-header);
+	border: 1px solid var(--border-color);
+	border-radius: 12px;
+	box-shadow:
+		0 8px 24px rgba(0, 0, 0, 0.15),
+		0 2px 4px rgba(0, 0, 0, 0.05);
+	animation: slideDown 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideDown {
+	from {
+		opacity: 0;
+		transform: translate(-50%, -4px) scale(0.98);
+	}
+	to {
+		opacity: 1;
+		transform: translate(-50%, 0) scale(1);
+	}
+}
+
+.header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 12px;
+}
+
+.currentMonth {
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--text-primary);
+}
+
+.navBtn {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 28px;
+	height: 28px;
+	font-size: 10px;
+	color: var(--text-secondary);
+	background: var(--bg-btn);
+	border: 1px solid var(--border-color);
+	border-radius: 6px;
+	cursor: pointer;
+	transition: all 0.2s ease;
+}
+
+.navBtn:hover {
+	color: var(--text-primary);
+	background: var(--bg-btn-hover);
+	border-color: var(--text-secondary);
+}
+
+.weekdays {
+	display: grid;
+	grid-template-columns: repeat(7, 1fr);
+	text-align: center;
+	margin-bottom: 8px;
+}
+
+.weekdays span {
+	font-size: 11px;
+	font-weight: 500;
+	color: var(--text-secondary);
+	padding: 4px 0;
+}
+
+.daysGrid {
+	display: grid;
+	grid-template-columns: repeat(7, 1fr);
+	gap: 4px;
+}
+
+.dayCell {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	height: 32px;
+	font-size: 12px;
+	font-weight: 500;
+	color: var(--text-primary);
+	background: transparent;
+	border: none;
+	border-radius: 6px;
+	cursor: pointer;
+	transition: all 0.2s ease;
+	outline: none;
+}
+
+.dayCell:hover {
+	background: var(--bg-btn-hover);
+}
+
+.otherMonth {
+	color: var(--text-muted, #767d84);
+	opacity: 0.5;
+}
+
+.today {
+	border: 1px solid var(--color-accent);
+	color: var(--color-accent);
+}
+
+.dayCell.selected {
+	background: var(--color-accent);
+	color: #fff;
+	font-weight: 600;
+}
