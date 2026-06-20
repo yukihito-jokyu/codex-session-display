@@ -18,6 +18,12 @@ type SessionSummary struct {
 	Parsed          bool     `json:"parsed"`
 	ParentSessionID *string  `json:"parent_session_id,omitempty"`
 	ChildSessionIDs []string `json:"child_session_ids,omitempty"`
+	TotalTokens     *int64   `json:"total_tokens,omitempty"`
+	InputTokens     *int64   `json:"input_tokens,omitempty"`
+	OutputTokens    *int64   `json:"output_tokens,omitempty"`
+	ReasoningTokens *int64   `json:"reasoning_tokens,omitempty"`
+	TurnCount       *int     `json:"turn_count,omitempty"`
+	StepCount       *int     `json:"step_count,omitempty"`
 }
 
 // TokenBadgeData は React Flow のノード上に表示するトークンバッジのデータを表します。

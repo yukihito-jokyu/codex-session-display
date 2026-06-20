@@ -455,6 +455,12 @@ export namespace dto {
 	    parsed: boolean;
 	    parent_session_id?: string;
 	    child_session_ids?: string[];
+	    total_tokens?: number;
+	    input_tokens?: number;
+	    output_tokens?: number;
+	    reasoning_tokens?: number;
+	    turn_count?: number;
+	    step_count?: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new SessionSummary(source);
@@ -476,6 +482,12 @@ export namespace dto {
 	        this.parsed = source["parsed"];
 	        this.parent_session_id = source["parent_session_id"];
 	        this.child_session_ids = source["child_session_ids"];
+	        this.total_tokens = source["total_tokens"];
+	        this.input_tokens = source["input_tokens"];
+	        this.output_tokens = source["output_tokens"];
+	        this.reasoning_tokens = source["reasoning_tokens"];
+	        this.turn_count = source["turn_count"];
+	        this.step_count = source["step_count"];
 	    }
 	}
 	
