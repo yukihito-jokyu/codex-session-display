@@ -40,6 +40,47 @@ func (r *CacheFSRepository) GetSessionSummary(ctx context.Context, sessionID str
 		if unmarshalErr := json.Unmarshal(data, &summary); unmarshalErr == nil {
 			summary.Parsed = true
 			logger.Info("cache read successful (summary)", "session_id", sessionID)
+
+			// 統計情報が不足している場合、詳細キャッシュから集計してマージする
+			if summary.TotalTokens == nil ||
+				summary.InputTokens == nil ||
+				summary.OutputTokens == nil ||
+				summary.ReasoningTokens == nil ||
+				summary.TurnCount == nil ||
+				summary.StepCount == nil {
+				logger.Info("statistics missing in summary cache, falling back to detail cache for merge", "session_id", sessionID)
+				if detail, err := r.GetSessionDetail(ctx, sessionID); err == nil {
+					var inputTokensSum int64
+					var outputTokensSum int64
+					var reasoningTokensSum int64
+					for i := range detail.Statistics.Turns {
+						inputTokensSum += detail.Statistics.Turns[i].ConsumedTokens.InputTokens
+						outputTokensSum += detail.Statistics.Turns[i].ConsumedTokens.OutputTokens
+						reasoningTokensSum += detail.Statistics.Turns[i].ConsumedTokens.ReasoningOutputTokens
+					}
+
+					totalTokensVal := detail.Statistics.TotalTokens
+					turnCountVal := detail.Statistics.TurnCount
+					stepCountVal := detail.Statistics.ToolCallCount
+
+					summary.TotalTokens = &totalTokensVal
+					summary.InputTokens = &inputTokensSum
+					summary.OutputTokens = &outputTokensSum
+					summary.ReasoningTokens = &reasoningTokensSum
+					summary.TurnCount = &turnCountVal
+					summary.StepCount = &stepCountVal
+
+					// 更新されたサマリーを再度キャッシュに保存して以降の読み込みを高速化する（失敗しても処理は続行）
+					if summaryData, err := json.Marshal(summary); err == nil {
+						if writeErr := os.WriteFile(summaryPath, summaryData, 0o644); writeErr != nil {
+							logger.Warn("failed to update summary cache with merged statistics", "session_id", sessionID, "error", writeErr)
+						}
+					}
+				} else {
+					logger.Warn("failed to load detail cache for merging statistics", "session_id", sessionID, "error", err)
+				}
+			}
+
 			return &summary, nil
 		} else {
 			logger.Warn("failed to decode summary cache JSON, falling back to detail cache", "session_id", sessionID, "error", unmarshalErr)
@@ -192,6 +233,27 @@ func (r *CacheFSRepository) SaveSessionDetail(ctx context.Context, sessionID str
 			ChildSessionIDs: detail.ChildSessionIDs,
 		}
 	}
+
+	// 統計情報の集計
+	var inputTokensSum int64
+	var outputTokensSum int64
+	var reasoningTokensSum int64
+	for i := range detail.Statistics.Turns {
+		inputTokensSum += detail.Statistics.Turns[i].ConsumedTokens.InputTokens
+		outputTokensSum += detail.Statistics.Turns[i].ConsumedTokens.OutputTokens
+		reasoningTokensSum += detail.Statistics.Turns[i].ConsumedTokens.ReasoningOutputTokens
+	}
+
+	totalTokensVal := detail.Statistics.TotalTokens
+	turnCountVal := detail.Statistics.TurnCount
+	stepCountVal := detail.Statistics.ToolCallCount
+
+	summary.TotalTokens = &totalTokensVal
+	summary.InputTokens = &inputTokensSum
+	summary.OutputTokens = &outputTokensSum
+	summary.ReasoningTokens = &reasoningTokensSum
+	summary.TurnCount = &turnCountVal
+	summary.StepCount = &stepCountVal
 
 	summaryData, err := json.Marshal(summary)
 	if err != nil {
