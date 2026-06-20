@@ -471,7 +471,7 @@ test.describe("セッション一覧画面 E2E テスト", () => {
 			App.GetSessionDetail = async (id: string) => {
 				if (id === "sess-004-unparsed-session") {
 					// 「解析中...」の表示時間を確保するため意図的に少し遅延させる
-					await new Promise((resolve) => setTimeout(resolve, 200));
+					await new Promise((resolve) => setTimeout(resolve, 1000));
 
 					// dummySessions 内のステータスを更新
 					// biome-ignore lint/suspicious/noExplicitAny: mock
@@ -848,5 +848,121 @@ test.describe("セッション一覧画面 E2E テスト", () => {
 		await expect(dateInput).toHaveValue("2026-05-19");
 		// その日のセッションが表示されていることを確認
 		await expect(page.locator("text=sess-006")).toBeVisible();
+	});
+
+	test("セッション行に統計バーが正しく表示されること (トレーサー弾)", async ({
+		page,
+	}) => {
+		// sess-001 に対応する行の下部の統計バーが表示されていることを検証
+		// 表示例: トークン: 12,345 (入力: 8,123 / 出力: 3,022 / 推論: 1,200) | ターン数: 5 | ステップ数: 12
+		const statsBar = page
+			.locator("div[role='button']:has-text('sess-001')")
+			.first();
+		await expect(statsBar).toBeVisible();
+
+		// トークン情報が含まれていること
+		await expect(statsBar.locator("text=12,345")).toBeVisible();
+		await expect(statsBar.locator("text=8,123")).toBeVisible();
+		await expect(statsBar.locator("text=3,022")).toBeVisible();
+		await expect(statsBar.locator("text=1,200")).toBeVisible();
+
+		// ターン数とステップ数が含まれていること
+		await expect(statsBar.locator("text=ターン数: 5")).toBeVisible();
+		await expect(statsBar.locator("text=ステップ数: 12")).toBeVisible();
+	});
+
+	test("未解析および解析中のセッション行で統計バーが適切なプレースホルダーを示すこと", async ({
+		page,
+	}) => {
+		// 1. 未解析セッション sess-004
+		const unparsedRow = page
+			.locator("div[role='button']:has-text('sess-004')")
+			.first();
+		await expect(unparsedRow).toBeVisible();
+		// 統計バーの部分に「解析前」と表示されていることを検証
+		const unparsedStats = unparsedRow.locator("div[class*='statsBar']");
+		await expect(unparsedStats.locator("text=解析前")).toBeVisible();
+
+		// 2. 解析中のセッションの挙動を検証するため、アコーディオン展開テストと同様のモックと遅延を設定
+		await page.addInitScript(() => {
+			window.sessionStorage.setItem("session_list_expanded_paths", "[]");
+		});
+
+		await page.addInitScript(() => {
+			// biome-ignore lint/suspicious/noExplicitAny: mock
+			const App = (window as any).go.main.App;
+			App.GetSessionDetail = async (id: string) => {
+				if (id === "sess-004-unparsed-session") {
+					// 「解析中...」の表示時間を確保するため意図的に少し遅延させる
+					await new Promise((resolve) => setTimeout(resolve, 1000));
+
+					// dummySessions 内のステータスと統計情報を更新
+					// biome-ignore lint/suspicious/noExplicitAny: mock
+					const session = ((window as any).__dummySessions as any[])?.find(
+						(s) => s.id === id,
+					);
+					if (session) {
+						session.parsed = true;
+						session.total_tokens = 100;
+						session.input_tokens = 60;
+						session.output_tokens = 30;
+						session.reasoning_tokens = 10;
+						session.turn_count = 1;
+						session.step_count = 2;
+					}
+
+					return {
+						id: id,
+						cache_schema_version: 3,
+						parsed_at: "2026-05-20T14:00:00Z",
+						nodes: [],
+						edges: [],
+						statistics: {
+							duration_ms: 1000,
+							total_tokens: 100,
+							tool_call_count: 2,
+							token_count_count: 0,
+							context_window_size: 0,
+							turn_count: 1,
+							turns: [
+								{
+									index: 0,
+									consumed_tokens: {
+										total_tokens: 100,
+										input_tokens: 60,
+										output_tokens: 30,
+										reasoning_output_tokens: 10,
+									},
+								},
+							],
+						},
+						token_counts: [],
+						timeline: [],
+					};
+				}
+				throw new Error("Not mocked for this ID");
+			};
+		});
+
+		await page.goto("/");
+
+		// 日ノード「20日」を展開
+		const dayHeader = page.locator("div[role='button']:has-text('20日')");
+		await dayHeader.click();
+
+		// 「解析中...」が表示されることを検証
+		const parsingRow = page
+			.locator("div[role='button']:has-text('sess-004')")
+			.first();
+		const parsingStats = parsingRow.locator("div[class*='statsBar']");
+		await expect(parsingStats.locator("text=解析中...")).toBeVisible();
+
+		// 少し待って（1000msの遅延後）、統計情報が表示に切り替わることを検証
+		await expect(parsingStats.locator("text=解析中...")).not.toBeVisible();
+		await expect(parsingStats.getByText("100", { exact: true })).toBeVisible();
+		await expect(parsingStats.getByText("60", { exact: true })).toBeVisible();
+		await expect(parsingStats.getByText("30", { exact: true })).toBeVisible();
+		await expect(parsingStats.getByText("10", { exact: true })).toBeVisible();
+		await expect(parsingStats.locator("text=ターン数: 1")).toBeVisible();
 	});
 });

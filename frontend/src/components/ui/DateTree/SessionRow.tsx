@@ -18,6 +18,12 @@ export interface SessionSummary {
 	parsed: boolean;
 	parent_session_id?: string | null;
 	child_session_ids?: string[] | null;
+	total_tokens?: number | null;
+	input_tokens?: number | null;
+	output_tokens?: number | null;
+	reasoning_tokens?: number | null;
+	turn_count?: number | null;
+	step_count?: number | null;
 }
 
 interface SessionRowProps {
@@ -94,88 +100,145 @@ export const SessionRow: React.FC<SessionRowProps> = ({
 				}}
 				style={{ paddingLeft: "12px" }}
 			>
-				{children.length > 0 && (
-					<button
-						type="button"
-						className={`${styles.toggleBtn} ${expanded ? styles.open : ""}`}
-						onClick={(e) => {
-							e.stopPropagation();
-							setExpanded(!expanded);
-						}}
-						aria-label={expanded ? "Collapse subagents" : "Expand subagents"}
-					>
-						▶
-					</button>
-				)}
-				<div className={styles.mainInfo}>
-					<div className={styles.header}>
-						<span className={styles.sessionId} title={session.id}>
-							{session.id.slice(0, 8)}
-						</span>
-						<span className={styles.branch}>
+				<div className={styles.topContent}>
+					{children.length > 0 && (
+						<button
+							type="button"
+							className={`${styles.toggleBtn} ${expanded ? styles.open : ""}`}
+							onClick={(e) => {
+								e.stopPropagation();
+								setExpanded(!expanded);
+							}}
+							aria-label={expanded ? "Collapse subagents" : "Expand subagents"}
+						>
+							▶
+						</button>
+					)}
+					<div className={styles.mainInfo}>
+						<div className={styles.header}>
+							<span className={styles.sessionId} title={session.id}>
+								{session.id.slice(0, 8)}
+							</span>
+							<span className={styles.branch}>
+								{isParsing ? (
+									<span className={styles.parsing}>解析中...</span>
+								) : isParsed ? (
+									session.branch || "—"
+								) : (
+									<span className={styles.beforeParse}>解析前</span>
+								)}
+							</span>
+							{isParsing ? (
+								<span className={styles.parsingBadge}>解析中</span>
+							) : (
+								!isParsed && (
+									<span className={styles.unparsedBadge}>未解析</span>
+								)
+							)}
+						</div>
+						<div
+							className={styles.cwd}
+							title={
+								isParsing
+									? "解析中..."
+									: isParsed
+										? session.cwd || ""
+										: "解析前"
+							}
+						>
 							{isParsing ? (
 								<span className={styles.parsing}>解析中...</span>
 							) : isParsed ? (
-								session.branch || "—"
+								session.cwd || "—"
 							) : (
 								<span className={styles.beforeParse}>解析前</span>
 							)}
-						</span>
-						{isParsing ? (
-							<span className={styles.parsingBadge}>解析中</span>
-						) : (
-							!isParsed && <span className={styles.unparsedBadge}>未解析</span>
-						)}
+						</div>
 					</div>
-					<div
-						className={styles.cwd}
-						title={
-							isParsing ? "解析中..." : isParsed ? session.cwd || "" : "解析前"
-						}
-					>
-						{isParsing ? (
-							<span className={styles.parsing}>解析中...</span>
-						) : isParsed ? (
-							session.cwd || "—"
-						) : (
-							<span className={styles.beforeParse}>解析前</span>
-						)}
+
+					<div className={styles.metaInfo}>
+						<div className={styles.metaRow}>
+							<span className={styles.provider}>
+								{isParsing ? (
+									<span className={styles.parsing}>解析中...</span>
+								) : isParsed ? (
+									session.model_provider || "—"
+								) : (
+									<span className={styles.beforeParse}>解析前</span>
+								)}
+							</span>
+							<span className={styles.version}>
+								{isParsing ? (
+									<span className={styles.parsing}>解析中...</span>
+								) : isParsed ? (
+									session.cli_version ? (
+										`v${session.cli_version}`
+									) : (
+										"—"
+									)
+								) : (
+									<span className={styles.beforeParse}>解析前</span>
+								)}
+							</span>
+						</div>
+						<div className={styles.timeRow}>
+							<span className={styles.time}>
+								{formatTimestamp(session.timestamp)}
+							</span>
+							<span className={styles.size}>
+								{formatFileSize(session.file_size)}
+							</span>
+						</div>
 					</div>
 				</div>
 
-				<div className={styles.metaInfo}>
-					<div className={styles.metaRow}>
-						<span className={styles.provider}>
-							{isParsing ? (
-								<span className={styles.parsing}>解析中...</span>
-							) : isParsed ? (
-								session.model_provider || "—"
-							) : (
-								<span className={styles.beforeParse}>解析前</span>
-							)}
-						</span>
-						<span className={styles.version}>
-							{isParsing ? (
-								<span className={styles.parsing}>解析中...</span>
-							) : isParsed ? (
-								session.cli_version ? (
-									`v${session.cli_version}`
-								) : (
-									"—"
-								)
-							) : (
-								<span className={styles.beforeParse}>解析前</span>
-							)}
-						</span>
-					</div>
-					<div className={styles.timeRow}>
-						<span className={styles.time}>
-							{formatTimestamp(session.timestamp)}
-						</span>
-						<span className={styles.size}>
-							{formatFileSize(session.file_size)}
-						</span>
-					</div>
+				<div className={styles.statsBar}>
+					{isParsing ? (
+						<span className={styles.parsing}>解析中...</span>
+					) : !isParsed ? (
+						<span className={styles.beforeParse}>解析前</span>
+					) : (
+						<>
+							<span className={styles.statsItem}>
+								<span className={styles.statsIcon}>🪙</span>
+								トークン:{" "}
+								<strong className={styles.statsValue}>
+									{(session.total_tokens ?? 0).toLocaleString()}
+								</strong>
+								<span className={styles.statsBreakdown}>
+									(入力:{" "}
+									<span className={styles.tokenInput}>
+										{(session.input_tokens ?? 0).toLocaleString()}
+									</span>{" "}
+									/ 出力:{" "}
+									<span className={styles.tokenOutput}>
+										{(session.output_tokens ?? 0).toLocaleString()}
+									</span>{" "}
+									/ 推論:{" "}
+									<span className={styles.tokenReasoning}>
+										{(session.reasoning_tokens ?? 0).toLocaleString()}
+									</span>
+									)
+								</span>
+							</span>
+							<span className={styles.statsDivider}>|</span>
+							<span className={styles.statsItem}>
+								<span className={styles.statsIcon}>🔄</span>
+								ターン数:{" "}
+								<strong className={styles.statsValue}>
+									{session.turn_count ?? 0}
+								</strong>
+							</span>
+							<span className={styles.statsDivider}>|</span>
+							<span className={styles.statsItem}>
+								<span className={styles.statsIcon}>🛠️</span>
+								ステップ数:{" "}
+								<strong className={styles.statsValue}>
+									{session.step_count ?? 0}
+								</strong>
+							</span>
+						</>
+					)}
 				</div>
 			</div>
 			{expanded && children.length > 0 && (
