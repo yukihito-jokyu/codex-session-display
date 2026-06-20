@@ -4,6 +4,7 @@ import (
 	"codex-session-display/internal/domain/dto"
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
@@ -414,4 +415,237 @@ func TestCacheFSRepository_SummaryPriorityAndFallback(t *testing.T) {
 	if summaryFallback.Cwd == nil || *summaryFallback.Cwd != "/fallback/cwd" {
 		t.Errorf("expected fallback to detail to successfully load Cwd, got %v", summaryFallback.Cwd)
 	}
+}
+
+func TestCacheFSRepository_SaveSessionDetail_WithStatistics(t *testing.T) {
+	tmpDir := t.TempDir()
+	repo := NewCacheFSRepository(tmpDir)
+
+	sessionID := "test-stats-session"
+	detail := &dto.SessionDetailResponse{
+		ID:                 sessionID,
+		CacheSchemaVersion: dto.CurrentSessionDetailCacheSchemaVersion,
+		ParsedAt:           "2026-05-30T07:14:40Z",
+		Nodes: []dto.FlowNode{
+			{
+				ID:   "meta-node-1",
+				Type: "sessionMeta",
+				Data: dto.NodeData{
+					Category: "meta",
+					Label:    "Meta",
+				},
+			},
+		},
+		Statistics: dto.Statistics{
+			TotalTokens:   1500,
+			ToolCallCount: 5,
+			TurnCount:     2,
+			Turns: []dto.TurnStatistics{
+				{
+					Index: 0,
+					ConsumedTokens: dto.TokenBreakdown{
+						InputTokens:           400,
+						OutputTokens:          100,
+						ReasoningOutputTokens: 20,
+					},
+				},
+				{
+					Index: 1,
+					ConsumedTokens: dto.TokenBreakdown{
+						InputTokens:           800,
+						OutputTokens:          200,
+						ReasoningOutputTokens: 50,
+					},
+				},
+			},
+		},
+	}
+
+	tests := []struct {
+		name      string
+		sessionID string
+		detail    *dto.SessionDetailResponse
+		verify    func(t *testing.T, summaryPath string)
+	}{
+		{
+			name:      "should aggregate and save statistics in summary.json",
+			sessionID: sessionID,
+			detail:    detail,
+			verify: func(t *testing.T, summaryPath string) {
+				data, err := os.ReadFile(summaryPath)
+				if err != nil {
+					t.Fatalf("failed to read summary cache: %v", err)
+				}
+
+				var summary dto.SessionSummary
+				if err := json.Unmarshal(data, &summary); err != nil {
+					t.Fatalf("failed to unmarshal summary: %v", err)
+				}
+
+				if summary.TotalTokens == nil || *summary.TotalTokens != 1500 {
+					t.Errorf("expected TotalTokens 1500, got %v", getVal(summary.TotalTokens))
+				}
+				if summary.InputTokens == nil || *summary.InputTokens != 1200 {
+					t.Errorf("expected InputTokens 1200, got %v", getVal(summary.InputTokens))
+				}
+				if summary.OutputTokens == nil || *summary.OutputTokens != 300 {
+					t.Errorf("expected OutputTokens 300, got %v", getVal(summary.OutputTokens))
+				}
+				if summary.ReasoningTokens == nil || *summary.ReasoningTokens != 70 {
+					t.Errorf("expected ReasoningTokens 70, got %v", getVal(summary.ReasoningTokens))
+				}
+				if summary.TurnCount == nil || *summary.TurnCount != 2 {
+					t.Errorf("expected TurnCount 2, got %v", getValInt(summary.TurnCount))
+				}
+				if summary.StepCount == nil || *summary.StepCount != 5 {
+					t.Errorf("expected StepCount 5, got %v", getValInt(summary.StepCount))
+				}
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := repo.SaveSessionDetail(context.Background(), tt.sessionID, tt.detail)
+			if err != nil {
+				t.Fatalf("SaveSessionDetail failed: %v", err)
+			}
+			summaryPath := filepath.Join(tmpDir, tt.sessionID+".summary.json")
+			tt.verify(t, summaryPath)
+		})
+	}
+}
+
+func getVal(ptr *int64) string {
+	if ptr == nil {
+		return "nil"
+	}
+	return fmt.Sprintf("%d", *ptr)
+}
+
+func getValInt(ptr *int) string {
+	if ptr == nil {
+		return "nil"
+	}
+	return fmt.Sprintf("%d", *ptr)
+}
+
+func TestCacheFSRepository_GetSessionSummary_FallbackMerge(t *testing.T) {
+	tmpDir := t.TempDir()
+	repo := NewCacheFSRepository(tmpDir)
+
+	sessionID := "fallback-merge-session"
+
+	// 1. 統計情報のない古い summary.json を作成
+	oldSummary := dto.SessionSummary{
+		ID:         sessionID,
+		Cwd:        getStringPtrHelper("test-cwd"),
+		CliVersion: getStringPtrHelper("1.0.0"),
+		Parsed:     true,
+	}
+	oldSummaryData, _ := json.Marshal(oldSummary)
+	_ = os.WriteFile(filepath.Join(tmpDir, sessionID+".summary.json"), oldSummaryData, 0o644)
+
+	// 2. 統計情報と詳細データを持つ detail.json を作成
+	detail := &dto.SessionDetailResponse{
+		ID:                 sessionID,
+		CacheSchemaVersion: dto.CurrentSessionDetailCacheSchemaVersion,
+		Statistics: dto.Statistics{
+			TotalTokens:   3000,
+			ToolCallCount: 10,
+			TurnCount:     4,
+			Turns: []dto.TurnStatistics{
+				{
+					ConsumedTokens: dto.TokenBreakdown{
+						InputTokens:           1000,
+						OutputTokens:          200,
+						ReasoningOutputTokens: 50,
+					},
+				},
+				{
+					ConsumedTokens: dto.TokenBreakdown{
+						InputTokens:           1500,
+						OutputTokens:          300,
+						ReasoningOutputTokens: 100,
+					},
+				},
+			},
+		},
+	}
+	detailData, _ := json.Marshal(detail)
+	_ = os.WriteFile(filepath.Join(tmpDir, sessionID+".json"), detailData, 0o644)
+
+	// 3. GetSessionSummary を実行して、マージされた結果を検証
+	summary, err := repo.GetSessionSummary(context.Background(), sessionID)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	if summary.ID != sessionID {
+		t.Errorf("expected ID '%s', got '%s'", sessionID, summary.ID)
+	}
+	if summary.Cwd == nil || *summary.Cwd != "test-cwd" {
+		t.Errorf("expected Cwd 'test-cwd', got '%v'", summary.Cwd)
+	}
+	if summary.TotalTokens == nil || *summary.TotalTokens != 3000 {
+		t.Errorf("expected merged TotalTokens 3000, got %v", getVal(summary.TotalTokens))
+	}
+	if summary.InputTokens == nil || *summary.InputTokens != 2500 {
+		t.Errorf("expected merged InputTokens 2500, got %v", getVal(summary.InputTokens))
+	}
+	if summary.OutputTokens == nil || *summary.OutputTokens != 500 {
+		t.Errorf("expected merged OutputTokens 500, got %v", getVal(summary.OutputTokens))
+	}
+	if summary.ReasoningTokens == nil || *summary.ReasoningTokens != 150 {
+		t.Errorf("expected merged ReasoningTokens 150, got %v", getVal(summary.ReasoningTokens))
+	}
+	if summary.TurnCount == nil || *summary.TurnCount != 4 {
+		t.Errorf("expected merged TurnCount 4, got %v", getValInt(summary.TurnCount))
+	}
+	if summary.StepCount == nil || *summary.StepCount != 10 {
+		t.Errorf("expected merged StepCount 10, got %v", getValInt(summary.StepCount))
+	}
+}
+
+func TestCacheFSRepository_GetSessionSummary_FallbackNoDetail(t *testing.T) {
+	tmpDir := t.TempDir()
+	repo := NewCacheFSRepository(tmpDir)
+
+	sessionID := "fallback-nodetail-session"
+
+	// 1. 統計情報のない古い summary.json を作成
+	oldSummary := dto.SessionSummary{
+		ID:         sessionID,
+		Cwd:        getStringPtrHelper("test-cwd"),
+		CliVersion: getStringPtrHelper("1.0.0"),
+		Parsed:     true,
+	}
+	oldSummaryData, _ := json.Marshal(oldSummary)
+	_ = os.WriteFile(filepath.Join(tmpDir, sessionID+".summary.json"), oldSummaryData, 0o644)
+
+	// 2. detail.json は作成しない
+
+	// 3. GetSessionSummary を実行して、エラーにならず元の情報が取得できることを検証
+	summary, err := repo.GetSessionSummary(context.Background(), sessionID)
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	if summary.ID != sessionID {
+		t.Errorf("expected ID '%s', got '%s'", sessionID, summary.ID)
+	}
+	if summary.Cwd == nil || *summary.Cwd != "test-cwd" {
+		t.Errorf("expected Cwd 'test-cwd', got '%v'", summary.Cwd)
+	}
+	// 統計情報は nil のままであるべき
+	if summary.TotalTokens != nil {
+		t.Errorf("expected TotalTokens to be nil, got %d", *summary.TotalTokens)
+	}
+	if summary.InputTokens != nil {
+		t.Errorf("expected InputTokens to be nil, got %d", *summary.InputTokens)
+	}
+}
+
+func getStringPtrHelper(s string) *string {
+	return &s
 }
