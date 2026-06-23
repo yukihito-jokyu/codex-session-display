@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { DatePicker } from "../../components/ui/DatePicker/DatePicker";
 import { DateTree } from "../../components/ui/DateTree/DateTree";
 import type { SessionSummary } from "../../components/ui/DateTree/SessionRow";
@@ -157,6 +157,27 @@ export function SessionListPage() {
 		}
 	}, [parseSessions]);
 
+	// 選択中の年月における未解析（かつ解析中でない）セッションの数
+	const unparsedCount = useMemo(() => {
+		return sessions.filter((s) => !s.parsed && !parsingSessionIds?.has(s.id))
+			.length;
+	}, [sessions, parsingSessionIds]);
+
+	// 選択中の年月における解析中のセッションの数
+	const parsingCount = useMemo(() => {
+		return sessions.filter((s) => parsingSessionIds?.has(s.id)).length;
+	}, [sessions, parsingSessionIds]);
+
+	// 一括解析ボタンクリック時のハンドラー
+	const handleParseAll = useCallback(() => {
+		const unparsedIds = sessions
+			.filter((s) => !s.parsed && !parsingSessionIds?.has(s.id))
+			.map((s) => s.id);
+		if (unparsedIds.length > 0) {
+			parseSessions(unparsedIds, false);
+		}
+	}, [sessions, parsingSessionIds, parseSessions]);
+
 	// 選択した日付の未解析セッションを自動的かつ優先的にバックグラウンド解析する
 	useEffect(() => {
 		if (activeTab !== "directory" || loading) return;
@@ -177,6 +198,9 @@ export function SessionListPage() {
 				hasUpdate={updateResult?.hasUpdate}
 				latestVersion={updateResult?.latest}
 				onUpdateClick={() => setIsModalOpen(true)}
+				unparsedCount={unparsedCount}
+				parsingCount={parsingCount}
+				onParseAllClick={handleParseAll}
 			/>
 
 			<div className={styles.tabsHeader}>
