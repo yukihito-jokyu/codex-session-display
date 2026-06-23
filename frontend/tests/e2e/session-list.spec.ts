@@ -90,7 +90,7 @@ test.describe("セッション一覧画面 E2E テスト", () => {
 		await expect(page.locator("text=sess-004")).toBeVisible();
 
 		// 「未解析」バッジが表示されていることを確認
-		await expect(page.locator("text=未解析")).toBeVisible();
+		await expect(page.locator("span:has-text('未解析')")).toBeVisible();
 
 		// プレースホルダーの「解析前」テキストが表示されていることを確認
 		await expect(page.locator("text=解析前").first()).toBeVisible();
@@ -1434,6 +1434,122 @@ test.describe("セッション一覧画面 E2E テスト", () => {
 		});
 		await expect(
 			newRow.locator('text="/Users/test/projects/new-detected-app"'),
+		).toBeVisible();
+	});
+
+	test("年月内の未解析セッションの一括解析ボタンが動作し、順次パースされ、完了後にすべて解析済みになること", async ({
+		page,
+	}) => {
+		// 2件 of 未解析セッションを用意 (sess-u1, sess-u2)
+		const testSessions = [
+			{
+				id: "sess-u1",
+				file_path: "/path/to/u1",
+				timestamp: "2026-05-20T10:00:00Z",
+				file_size: 100,
+				parsed: false,
+			},
+			{
+				id: "sess-u2",
+				file_path: "/path/to/u2",
+				timestamp: "2026-05-20T10:01:00Z",
+				file_size: 100,
+				parsed: false,
+			},
+		];
+
+		await mockWailsAPI(page, testSessions);
+
+		// 初期ロード時の自動展開やタブ選択による自動パースを防ぐために、状態を制御する
+		await page.addInitScript(() => {
+			window.sessionStorage.setItem("session_list_expanded_paths", "[]");
+			window.sessionStorage.setItem("session_list_active_tab", "history");
+		});
+
+		// GetSessionDetail をモック。解析時にダミーデータを設定する
+		await page.addInitScript(() => {
+			// biome-ignore lint/suspicious/noExplicitAny: mock
+			const App = (window as any).go.main.App;
+			App.GetSessionDetail = async (id: string) => {
+				// 「解析中...」の表示を検知できるようにするため少し遅延
+				await new Promise((resolve) => setTimeout(resolve, 300));
+
+				// dummySessions 内のステータスを更新
+				// biome-ignore lint/suspicious/noExplicitAny: mock
+				const session = ((window as any).__dummySessions as any[])?.find(
+					(s) => s.id === id,
+				);
+				if (session) {
+					session.parsed = true;
+					session.cwd = `/Users/test/projects/${id}`;
+					session.branch = `feature/${id}`;
+				}
+
+				return {
+					id: id,
+					cache_schema_version: 3,
+					parsed_at: "2026-05-20T14:00:00Z",
+					nodes: [
+						{
+							id: "node-meta",
+							type: "sessionMeta",
+							position: { x: 0, y: 0 },
+							data: {
+								category: "meta",
+								label: "Session Meta",
+								icon: "⚙️",
+								turnIndex: -1,
+								meta: {
+									cwd: `/Users/test/projects/${id}`,
+									git_branch: `feature/${id}`,
+								},
+							},
+						},
+					],
+					statistics: {
+						duration_ms: 100,
+						total_tokens: 0,
+						tool_call_count: 0,
+						turn_count: 0,
+						turns: [],
+					},
+				};
+			};
+		});
+
+		await page.goto("/");
+
+		// 一括解析ボタンが表示されていることを確認
+		// 未解析セッションが2件あるので、ボタンは「未解析を一括解析 (2件)」と表示される
+		const parseAllBtn = page.locator("#bulk-parse-btn");
+		await expect(parseAllBtn).toBeVisible();
+		await expect(parseAllBtn).toHaveText("🔄 未解析を一括解析 (2件)");
+
+		// ボタンをクリックして一括パースを実行
+		await parseAllBtn.click();
+
+		// 解析中の表示に切り替わることを確認
+		// 3並列で実行されるため、2件とも即座に解析中状態になるはず
+		// ボタンは「⏳ 解析中...」になり、かつ disabled であることを確認
+		await expect(parseAllBtn).toHaveText(/⏳ 解析中... \(2\/2件\)/);
+		await expect(parseAllBtn).toBeDisabled();
+
+		// パース完了（遅延300ms後）を待ち、ボタンが「すべて解析済み」になり、disabled になることを確認
+		await expect(parseAllBtn).toHaveText("✓ すべて解析済み");
+		await expect(parseAllBtn).toBeDisabled();
+
+		// 画面上の各セッション行が更新されていることを確認
+		// （20日ノードを展開して確認）
+		const dayHeader = page.locator("div[role='button']:has-text('20日')");
+		await dayHeader.click();
+
+		await expect(page.getByText("sess-u1").first()).toBeVisible();
+		await expect(
+			page.getByText("/Users/test/projects/sess-u1").first(),
+		).toBeVisible();
+		await expect(page.getByText("sess-u2").first()).toBeVisible();
+		await expect(
+			page.getByText("/Users/test/projects/sess-u2").first(),
 		).toBeVisible();
 	});
 });
