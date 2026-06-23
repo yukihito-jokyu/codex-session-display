@@ -1,6 +1,7 @@
 import type React from "react";
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { generateTokenBreakdownText } from "../../../utils/tokenCopy";
 import styles from "./SessionRow.module.css";
 
 export interface SessionSummary {
@@ -71,9 +72,63 @@ export const SessionRow: React.FC<SessionRowProps> = ({
 }) => {
 	const navigate = useNavigate();
 	const [expanded, setExpanded] = useState(false);
+	const [copied, setCopied] = useState(false);
 
 	const handleClick = () => {
 		navigate(`/sessions/${session.id}`);
+	};
+
+	const handleCopyBreakdown = (e: React.MouseEvent) => {
+		e.stopPropagation();
+
+		const subagentInfos: {
+			nickname: string;
+			total: number;
+			input: number;
+			output: number;
+		}[] = [];
+		const visited = new Set<string>();
+
+		const collect = (id: string, isRoot: boolean) => {
+			if (visited.has(id)) return;
+			visited.add(id);
+
+			const current = sessionsMap?.get(id);
+			if (!current) return;
+
+			if (!isRoot) {
+				subagentInfos.push({
+					nickname: current.originator || "Subagent",
+					total: current.total_tokens ?? 0,
+					input: current.input_tokens ?? 0,
+					output: current.output_tokens ?? 0,
+				});
+			}
+
+			if (current.child_session_ids) {
+				for (const cid of current.child_session_ids) {
+					collect(cid, false);
+				}
+			}
+		};
+
+		collect(session.id, true);
+
+		const mainTokens = {
+			total: session.total_tokens ?? 0,
+			input: session.input_tokens ?? 0,
+			output: session.output_tokens ?? 0,
+		};
+
+		const text = generateTokenBreakdownText(
+			session.id,
+			mainTokens,
+			subagentInfos,
+		);
+		navigator.clipboard.writeText(text).then(() => {
+			setCopied(true);
+			setTimeout(() => setCopied(false), 2000);
+		});
 	};
 
 	const isParsed = session.parsed;
@@ -237,6 +292,17 @@ export const SessionRow: React.FC<SessionRowProps> = ({
 									{session.step_count ?? 0}
 								</strong>
 							</span>
+
+							{/* ホバー時に表示されるコピーボタン */}
+							<button
+								type="button"
+								className={styles.rowCopyBtn}
+								onClick={handleCopyBreakdown}
+								title="トークン消費の内訳をコピー"
+								aria-label="Copy token breakdown"
+							>
+								{copied ? "✓ コピー済" : "📋 コピー"}
+							</button>
 						</>
 					)}
 				</div>
