@@ -1328,4 +1328,112 @@ test.describe("セッション一覧画面 E2E テスト", () => {
 		// 再表示されることを確認
 		await expect(rowG1New).toBeVisible();
 	});
+
+	test("ファイル追加検知イベントによってセッション一覧が自動リロードされ、新規の未解析セッションが自動パースされること", async ({
+		page,
+	}) => {
+		// 1. 新しい未解析セッションデータを準備
+		const newSession = {
+			id: "sess-015-new-unparsed",
+			file_path: "/path/to/session-15",
+			cwd: undefined,
+			cli_version: undefined,
+			originator: "user-1",
+			model_provider: undefined,
+			branch: undefined,
+			source: "cli",
+			timestamp: "2026-05-20T08:00:00Z", // 2026年5月20日（既存の表示対象の日付）
+			file_size: 256,
+			file_modified_at: "2026-05-20T08:00:00Z",
+			parsed: false,
+		};
+
+		// このセッション用の GetSessionDetail の詳細モックを設定
+		await page.addInitScript(() => {
+			// biome-ignore lint/suspicious/noExplicitAny: mock
+			const App = (window as any).go.main.App;
+			const originalGetSessionDetail = App.GetSessionDetail;
+
+			App.GetSessionDetail = async (id: string) => {
+				if (id === "sess-015-new-unparsed") {
+					// ダミーのリスト状態を更新（パース完了にする）
+					// biome-ignore lint/suspicious/noExplicitAny: mock
+					const session = ((window as any).__dummySessions as any[])?.find(
+						(s) => s.id === id,
+					);
+					if (session) {
+						session.parsed = true;
+						session.cwd = "/Users/test/projects/new-detected-app";
+						session.branch = "feature/new-detected";
+						session.model_provider = "openai";
+					}
+
+					return {
+						id: id,
+						cache_schema_version: 3,
+						parsed_at: "2026-05-20T08:10:00Z",
+						nodes: [
+							{
+								id: "node-meta",
+								type: "sessionMeta",
+								position: { x: 0, y: 0 },
+								data: {
+									category: "meta",
+									label: "Session Meta",
+									icon: "⚙️",
+									turnIndex: -1,
+									meta: {
+										cwd: "/Users/test/projects/new-detected-app",
+										git_branch: "feature/new-detected",
+										model_provider: "openai",
+									},
+								},
+							},
+						],
+						statistics: {
+							duration_ms: 100,
+							total_tokens: 0,
+							tool_call_count: 0,
+							turn_count: 0,
+							turns: [],
+						},
+					};
+				}
+				return originalGetSessionDetail(id);
+			};
+		});
+
+		// ページを表示
+		await page.goto("/");
+
+		// 最初は sess-015-new-unparsed が存在しないことを確認
+		await expect(page.locator("text=sess-015")).not.toBeVisible();
+
+		// dummySessionsに新セッションを追加し、イベントを発生させる
+		await page.evaluate((newSess) => {
+			// biome-ignore lint/suspicious/noExplicitAny: mock
+			const dummy = (window as any).__dummySessions;
+			dummy.push(newSess);
+			// イベント発火
+			// biome-ignore lint/suspicious/noExplicitAny: mock
+			(window as any).__emitWailsEvent(
+				"session-dir-changed",
+				newSess.file_path,
+			);
+		}, newSession);
+
+		// sess-015-new-unparsed が出現し、自動パースされてCWDが反映されることを検証
+		const newRow = page
+			.locator("div[role='button']:has-text('sess-015')")
+			.first();
+		await expect(newRow).toBeVisible();
+
+		// 自動パースの結果、CWDとブランチ名が表示されることを待機
+		await expect(newRow.locator("text=feature/new-detected")).toBeVisible({
+			timeout: 5000,
+		});
+		await expect(
+			newRow.locator('text="/Users/test/projects/new-detected-app"'),
+		).toBeVisible();
+	});
 });

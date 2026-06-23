@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"sync"
+	"time"
 
 	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -33,6 +34,7 @@ type App struct {
 	sessionRepo        usecase.SessionRepository
 	frontendReady      bool
 	pendingSessionFile []string
+	sessionWatcher     *repository.SessionWatcher
 }
 
 // NewApp は新しい App アプリケーション構造体を作成します。
@@ -58,11 +60,21 @@ func NewApp() (*App, error) {
 	listSessionsUC := usecase.NewListSessionsUseCase(sessionRepo, cacheRepo)
 	getSessionDetailUC := usecase.NewGetSessionDetailUseCase(sessionRepo, cacheRepo, repository.NewJSONLParser())
 
-	return &App{
+	var app *App
+	watcher := repository.NewSessionWatcher(sessionsDir, 1*time.Second, func(filePath string) {
+		if app != nil {
+			app.emitSessionDirChanged(filePath)
+		}
+	})
+
+	app = &App{
 		listSessionsUC:     listSessionsUC,
 		getSessionDetailUC: getSessionDetailUC,
 		sessionRepo:        sessionRepo,
-	}, nil
+		sessionWatcher:     watcher,
+	}
+
+	return app, nil
 }
 
 // startup はアプリ起動時に呼び出されます。ランタイムメソッドを呼び出せるように
@@ -72,6 +84,9 @@ func (a *App) startup(ctx context.Context) {
 	a.mu.Lock()
 	a.ctx = ctx
 	a.mu.Unlock()
+	if a.sessionWatcher != nil {
+		a.sessionWatcher.Start(ctx)
+	}
 }
 
 // Greet は指定された名前に挨拶を返します。
@@ -261,6 +276,17 @@ func (a *App) flushPendingSessionFiles() {
 func (a *App) emitOpenSessionFile(ctx context.Context, filePath string) {
 	windowShow(ctx)
 	eventsEmit(ctx, "open-session-file", filePath)
+}
+
+func (a *App) emitSessionDirChanged(filePath string) {
+	a.mu.Lock()
+	ctx := a.ctx
+	ready := a.frontendReady
+	a.mu.Unlock()
+
+	if ctx != nil && ready {
+		eventsEmit(ctx, "session-dir-changed", filePath)
+	}
 }
 
 // Emit は Wails イベントをフロントエンドに送信します（usecase.AppEventsEmitter インターフェースの実装）。

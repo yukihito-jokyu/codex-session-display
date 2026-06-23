@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { GetSessionDetail, ListSessions } from "wailsjs/go/main/App";
+import { EventsOn } from "wailsjs/runtime/runtime";
 import type { SessionSummary } from "../../../components/ui/DateTree/SessionRow";
 
 export function useSessions() {
@@ -314,6 +315,49 @@ export function useSessions() {
 		lastFetchedRef.current = null;
 		fetchSessions(searchQuery, currentYear || 0, currentMonth || 0);
 	}, [fetchSessions, searchQuery, currentYear, currentMonth]);
+
+	// 新規セッションがロードされたことを検知し、未解析なら自動的にバックグラウンド解析に投入する
+	const prevSessionsRef = useRef<SessionSummary[]>([]);
+	const isFirstLoadRef = useRef(true);
+
+	useEffect(() => {
+		if (loading) return;
+
+		if (isFirstLoadRef.current) {
+			prevSessionsRef.current = sessions;
+			isFirstLoadRef.current = false;
+			return;
+		}
+
+		const prevIds = new Set(prevSessionsRef.current.map((s) => s.id));
+		const newUnparsedIds = sessions
+			.filter((s) => !prevIds.has(s.id) && !s.parsed)
+			.map((s) => s.id);
+
+		prevSessionsRef.current = sessions;
+
+		if (newUnparsedIds.length > 0) {
+			parseSessions(newUnparsedIds);
+		}
+	}, [sessions, loading, parseSessions]);
+
+	// バックエンドからのファイル変更・新規追加イベントを監視し、サイレントリロードを実行する
+	const searchQueryRef = useRef(searchQuery);
+	searchQueryRef.current = searchQuery;
+
+	useEffect(() => {
+		const unsubscribe = EventsOn("session-dir-changed", () => {
+			fetchSessions(
+				searchQueryRef.current,
+				currentYearRef.current || 0,
+				currentMonthRef.current || 0,
+				true, // サイレントリロード
+			);
+		});
+		return () => {
+			unsubscribe();
+		};
+	}, [fetchSessions]);
 
 	return {
 		sessions,
