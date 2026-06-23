@@ -153,6 +153,7 @@ export function useSessions() {
 				prevYearMonthRef.current.month !== currentMonth)
 		) {
 			sessionStorage.removeItem("session_list_expanded_paths");
+			sessionStorage.removeItem("session_list_collapsed_dirs");
 		}
 		prevYearMonthRef.current = { year: currentYear, month: currentMonth };
 	}, [currentYear, currentMonth]);
@@ -278,7 +279,7 @@ export function useSessions() {
 	}, [searchQuery, fetchSessions, updateParsingIds]);
 
 	const parseSessions = useCallback(
-		(ids: string[]) => {
+		(ids: string[], priority = false) => {
 			// 未解析かつ解析中/キュー/失敗履歴にないIDのみ抽出
 			const newIds = ids.filter((id) => {
 				const session = sessions.find((s) => s.id === id);
@@ -291,7 +292,11 @@ export function useSessions() {
 
 			if (newIds.length === 0) return;
 
-			queueRef.current.push(...newIds);
+			if (priority) {
+				queueRef.current.unshift(...newIds);
+			} else {
+				queueRef.current.push(...newIds);
+			}
 			updateParsingIds((prev) => {
 				for (const id of newIds) {
 					prev.add(id);
