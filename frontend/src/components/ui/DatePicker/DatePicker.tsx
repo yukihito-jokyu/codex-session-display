@@ -5,11 +5,22 @@ import styles from "./DatePicker.module.css";
 interface DatePickerProps {
 	value: string; // YYYY-MM-DD
 	onChange: (value: string) => void;
+	sessionCounts?: { [dateStr: string]: number };
 }
 
-export const DatePicker: React.FC<DatePickerProps> = ({ value, onChange }) => {
+export const DatePicker: React.FC<DatePickerProps> = ({
+	value,
+	onChange,
+	sessionCounts,
+}) => {
 	const [isOpen, setIsOpen] = useState(false);
 	const containerRef = useRef<HTMLDivElement>(null);
+	const dropdownRef = useRef<HTMLDivElement>(null);
+
+	const [hoveredDay, setHoveredDay] = useState<{
+		date: Date;
+		rect: { top: number; left: number; width: number; height: number };
+	} | null>(null);
 
 	// カレンダー表示用の年月
 	const [viewDate, setViewDate] = useState(() => {
@@ -40,6 +51,13 @@ export const DatePicker: React.FC<DatePickerProps> = ({ value, onChange }) => {
 			document.removeEventListener("mousedown", handleClickOutside);
 		};
 	}, []);
+
+	// ドロップダウンが閉じられたらホバー状態をクリア
+	useEffect(() => {
+		if (!isOpen) {
+			setHoveredDay(null);
+		}
+	}, [isOpen]);
 
 	// 年・月の取得
 	const year = viewDate.getFullYear();
@@ -93,6 +111,38 @@ export const DatePicker: React.FC<DatePickerProps> = ({ value, onChange }) => {
 
 		return grid;
 	}, [year, month]);
+
+	// 表示中の月における1日の最大セッション数を算出
+	const maxSessions = useMemo(() => {
+		let max = 0;
+		if (!sessionCounts) return 0;
+		const lastDay = new Date(year, month + 1, 0).getDate();
+		for (let i = 1; i <= lastDay; i++) {
+			const date = new Date(year, month, i);
+			const y = date.getFullYear();
+			const m = String(date.getMonth() + 1).padStart(2, "0");
+			const d = String(date.getDate()).padStart(2, "0");
+			const dateStr = `${y}-${m}-${d}`;
+			const count = sessionCounts[dateStr] || 0;
+			if (count > max) {
+				max = count;
+			}
+		}
+		return max;
+	}, [sessionCounts, year, month]);
+
+	// セッション数に応じた4段階の相対レベル（1〜4）を判定
+	const getLevel = (count: number): number => {
+		if (count <= 0) return 0;
+		if (maxSessions < 4) {
+			return Math.min(count, 4);
+		}
+		const step = maxSessions / 4;
+		if (count <= step) return 1;
+		if (count <= 2 * step) return 2;
+		if (count <= 3 * step) return 3;
+		return 4;
+	};
 
 	// 選択された日付のフォーマット (表示用)
 	const formattedDisplay = useMemo(() => {
@@ -158,7 +208,7 @@ export const DatePicker: React.FC<DatePickerProps> = ({ value, onChange }) => {
 
 			{/* ポップアップカレンダー */}
 			{isOpen && (
-				<div className={styles.dropdown}>
+				<div className={styles.dropdown} ref={dropdownRef}>
 					<div className={styles.header}>
 						<button type="button" className={styles.navBtn} onClick={prevMonth}>
 							◀
@@ -185,6 +235,15 @@ export const DatePicker: React.FC<DatePickerProps> = ({ value, onChange }) => {
 						{days.map(({ date, isCurrentMonth }) => {
 							const selected = isSelected(date);
 							const today = isToday(date);
+
+							const y = date.getFullYear();
+							const m = String(date.getMonth() + 1).padStart(2, "0");
+							const d = String(date.getDate()).padStart(2, "0");
+							const dateStr = `${y}-${m}-${d}`;
+							const count = sessionCounts ? sessionCounts[dateStr] || 0 : 0;
+							const level = isCurrentMonth ? getLevel(count) : 0;
+							const levelClass = level > 0 ? styles[`graphL${level}`] : "";
+
 							return (
 								<button
 									key={date.toISOString()}
@@ -193,14 +252,59 @@ export const DatePicker: React.FC<DatePickerProps> = ({ value, onChange }) => {
 										!isCurrentMonth ? styles.otherMonth : ""
 									} ${selected ? styles.selected : ""} ${
 										today ? styles.today : ""
-									}`}
+									} ${levelClass}`}
 									onClick={() => handleSelectDate(date)}
+									onMouseEnter={(e) => {
+										const button = e.currentTarget;
+										const dropdown = dropdownRef.current;
+										if (!button || !dropdown) return;
+										const buttonRect = button.getBoundingClientRect();
+										const dropdownRect = dropdown.getBoundingClientRect();
+										setHoveredDay({
+											date,
+											rect: {
+												top: buttonRect.top - dropdownRect.top,
+												left: buttonRect.left - dropdownRect.left,
+												width: buttonRect.width,
+												height: buttonRect.height,
+											},
+										});
+									}}
+									onMouseLeave={() => setHoveredDay(null)}
 								>
 									{date.getDate()}
 								</button>
 							);
 						})}
 					</div>
+
+					{hoveredDay && (
+						<div
+							className={styles.tooltip}
+							style={{
+								top: `${hoveredDay.rect.top - 8}px`,
+								left: `${Math.max(
+									80,
+									Math.min(
+										200,
+										hoveredDay.rect.left + hoveredDay.rect.width / 2,
+									),
+								)}px`,
+							}}
+						>
+							{(() => {
+								const y = hoveredDay.date.getFullYear();
+								const m = String(hoveredDay.date.getMonth() + 1).padStart(
+									2,
+									"0",
+								);
+								const d = String(hoveredDay.date.getDate()).padStart(2, "0");
+								const dateKey = `${y}-${m}-${d}`;
+								const count = sessionCounts?.[dateKey] || 0;
+								return `${count} session${count === 1 ? "" : "s"} on ${dateKey}`;
+							})()}
+						</div>
+					)}
 				</div>
 			)}
 		</div>
