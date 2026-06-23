@@ -270,6 +270,26 @@ export namespace dto {
 	}
 	
 	
+	export class SubagentDetail {
+	    id: string;
+	    nickname: string;
+	    total_tokens: number;
+	    input_tokens: number;
+	    output_tokens: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new SubagentDetail(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.id = source["id"];
+	        this.nickname = source["nickname"];
+	        this.total_tokens = source["total_tokens"];
+	        this.input_tokens = source["input_tokens"];
+	        this.output_tokens = source["output_tokens"];
+	    }
+	}
 	export class TokenCountEntry {
 	    index: number;
 	    turn_index: number;
@@ -403,6 +423,7 @@ export namespace dto {
 	    timeline: ConversationTimelineTurn[];
 	    parent_session_id?: string;
 	    child_session_ids?: string[];
+	    subagents?: SubagentDetail[];
 	
 	    static createFrom(source: any = {}) {
 	        return new SessionDetailResponse(source);
@@ -420,6 +441,7 @@ export namespace dto {
 	        this.timeline = this.convertValues(source["timeline"], ConversationTimelineTurn);
 	        this.parent_session_id = source["parent_session_id"];
 	        this.child_session_ids = source["child_session_ids"];
+	        this.subagents = this.convertValues(source["subagents"], SubagentDetail);
 	    }
 	
 		convertValues(a: any, classs: any, asMap: boolean = false): any {
@@ -490,6 +512,7 @@ export namespace dto {
 	        this.step_count = source["step_count"];
 	    }
 	}
+	
 	
 	
 	

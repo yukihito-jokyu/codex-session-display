@@ -336,3 +336,34 @@
 	background: var(--bg-btn-hover);
 	color: var(--color-accent);
 }
+
+.tokenStatCard {
+	position: relative;
+}
+
+.copyBtn {
+	position: absolute;
+	right: 12px;
+	top: 12px;
+	background: rgba(88, 166, 255, 0.1);
+	border: 1px solid rgba(88, 166, 255, 0.2);
+	color: var(--color-accent);
+	font-size: 10px;
+	font-weight: 600;
+	padding: 2px 6px;
+	border-radius: 4px;
+	cursor: pointer;
+	transition: all 0.2s;
+}
+
+.copyBtn:hover {
+	background: rgba(88, 166, 255, 0.2);
+	border-color: var(--color-accent);
+}
+
+.statSubValue {
+	font-size: 10px;
+	color: var(--text-secondary);
+	margin-top: 2px;
+	font-family: monospace;
+}

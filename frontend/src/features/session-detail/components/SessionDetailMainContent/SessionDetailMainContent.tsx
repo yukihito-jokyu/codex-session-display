@@ -143,6 +143,8 @@ export function SessionDetailMainContent({
 			{sessionData?.statistics && (
 				<Suspense fallback={null}>
 					<RightPanel
+						sessionId={sessionData.id}
+						subagents={sessionData.subagents}
 						statistics={sessionData.statistics}
 						tokenCounts={sessionData.token_counts || []}
 						nodes={sessionData.nodes || []}

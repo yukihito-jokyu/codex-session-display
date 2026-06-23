@@ -13,14 +13,17 @@ import {
 	YAxis,
 } from "recharts";
 import type { dto } from "wailsjs/go/models";
+import { generateTokenBreakdownText } from "../../../../utils/tokenCopy";
 import styles from "./RightPanel.module.css";
 
 interface RightPanelProps {
+	sessionId: string;
 	statistics: dto.Statistics;
 	tokenCounts: dto.TokenCountEntry[];
 	nodes: dto.FlowNode[];
 	selectedTokenCountIndices: number[];
 	onTokenLogClick?: (tokenIndex: number) => void;
+	subagents?: dto.SubagentDetail[];
 }
 
 interface LastTokenChartData {
@@ -170,15 +173,54 @@ function LastTokenTooltip({ active, payload, label }: TooltipContentProps) {
 }
 
 export function RightPanel({
+	sessionId,
 	statistics,
 	tokenCounts,
 	nodes,
 	selectedTokenCountIndices,
 	onTokenLogClick,
+	subagents = [],
 }: RightPanelProps) {
 	const [tokenLogMode, setTokenLogMode] = useState<"cumulative" | "last">(
 		"cumulative",
 	);
+	const [copied, setCopied] = useState(false);
+
+	const handleCopyTokens = (e: React.MouseEvent) => {
+		e.stopPropagation();
+		const mainTokens = {
+			total: Number(statistics.total_tokens),
+			input: statistics.turns
+				? statistics.turns.reduce(
+						(sum, t) => sum + (t.consumed_tokens?.input_tokens ?? 0),
+						0,
+					)
+				: 0,
+			output: statistics.turns
+				? statistics.turns.reduce(
+						(sum, t) => sum + (t.consumed_tokens?.output_tokens ?? 0),
+						0,
+					)
+				: 0,
+		};
+
+		const subagentInfos = subagents.map((s) => ({
+			nickname: s.nickname,
+			total: s.total_tokens,
+			input: s.input_tokens,
+			output: s.output_tokens,
+		}));
+
+		const text = generateTokenBreakdownText(
+			sessionId,
+			mainTokens,
+			subagentInfos,
+		);
+		navigator.clipboard.writeText(text).then(() => {
+			setCopied(true);
+			setTimeout(() => setCopied(false), 2000);
+		});
+	};
 
 	// ターンごとのツール呼び出し回数を nodes から集計
 	const toolCallsPerTurn = useMemo(() => {
@@ -276,12 +318,34 @@ export function RightPanel({
 						{formatDuration(Number(statistics.duration_ms))}
 					</span>
 				</div>
-				<div className={styles.statCard}>
+				<div className={`${styles.statCard} ${styles.tokenStatCard}`}>
 					<span className={styles.statLabel}>Total Tokens</span>
 					<span className={styles.statValue}>
-						{formatNumber(Number(statistics.total_tokens))}
+						{formatNumber(
+							Number(statistics.total_tokens) +
+								subagents.reduce((sum, s) => sum + s.total_tokens, 0),
+						)}
 					</span>
+					<button
+						type="button"
+						className={styles.copyBtn}
+						onClick={handleCopyTokens}
+						title="トークン消費の内訳をコピー"
+						aria-label="Copy token breakdown"
+					>
+						{copied ? "✓ コピー済" : "📋 コピー"}
+					</button>
+					{subagents.length > 0 && (
+						<span className={styles.statSubValue}>
+							(本体: {formatNumber(Number(statistics.total_tokens))} / 子:{" "}
+							{formatNumber(
+								subagents.reduce((sum, s) => sum + s.total_tokens, 0),
+							)}
+							)
+						</span>
+					)}
 				</div>
+
 				<div className={styles.statCard}>
 					<span className={styles.statLabel}>Tool Calls</span>
 					<span className={styles.statValue}>{statistics.tool_call_count}</span>

@@ -265,3 +265,28 @@
 	border-top-color: var(--color-accent);
 	transition: border-color 0.2s ease;
 }
+
+.rowCopyBtn {
+	margin-left: auto;
+	opacity: 0;
+	pointer-events: none;
+	background: rgba(88, 166, 255, 0.1);
+	border: 1px solid rgba(88, 166, 255, 0.2);
+	color: var(--color-accent);
+	font-size: 10px;
+	font-weight: 600;
+	padding: 2px 6px;
+	border-radius: 4px;
+	cursor: pointer;
+	transition: all 0.2s ease;
+}
+
+.row:hover .rowCopyBtn {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.rowCopyBtn:hover {
+	background: rgba(88, 166, 255, 0.2);
+	border-color: var(--color-accent);
+}

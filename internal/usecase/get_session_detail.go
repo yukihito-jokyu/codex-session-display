@@ -1923,6 +1923,89 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 		}
 	}
 
+	// 5. 子セッションのニックネームマッピングを作成
+	parentSpawnedNicknames := make(map[string]string)
+	for _, r := range records {
+		if r.Type == "event_msg" && r.SubType == "collab_agent_spawn_end" && r.EventMsg != nil && r.EventMsg.NewThreadID != "" && r.EventMsg.NewAgentNickname != "" {
+			parentSpawnedNicknames[r.EventMsg.NewThreadID] = r.EventMsg.NewAgentNickname
+		}
+		if r.Type == "response_item" && r.SubType == "function_call_output" && r.ResponseItem != nil && r.ResponseItem.Output != "" {
+			var outData struct {
+				AgentID  string `json:"agent_id"`
+				Nickname string `json:"nickname"`
+			}
+			if jsonErr := json.Unmarshal([]byte(r.ResponseItem.Output), &outData); jsonErr == nil && outData.AgentID != "" && outData.Nickname != "" {
+				parentSpawnedNicknames[outData.AgentID] = outData.Nickname
+			}
+		}
+	}
+
+	// 6. 再帰的にサブエージェント情報を収集
+	var subagents []dto.SubagentDetail
+	visitedSubagents := make(map[string]bool)
+
+	var collectSubagents func(id string, spawnedNicknames map[string]string)
+	collectSubagents = func(id string, spawnedNicknames map[string]string) {
+		if visitedSubagents[id] {
+			return
+		}
+		visitedSubagents[id] = true
+
+		var targetSummary *dto.SessionSummary
+		for idx := range allSessions {
+			if allSessions[idx].ID == id {
+				targetSummary = &allSessions[idx]
+				break
+			}
+		}
+		if targetSummary == nil {
+			return
+		}
+
+		nickname := ""
+		if spawnedNicknames != nil {
+			if n, ok := spawnedNicknames[id]; ok && n != "" {
+				nickname = n
+			}
+		}
+		if nickname == "" && targetSummary.Originator != nil && *targetSummary.Originator != "" {
+			nickname = *targetSummary.Originator
+		}
+		if nickname == "" {
+			nickname = "Subagent"
+		}
+
+		totalTokens := int64(0)
+		if targetSummary.TotalTokens != nil {
+			totalTokens = *targetSummary.TotalTokens
+		}
+		inputTokens := int64(0)
+		if targetSummary.InputTokens != nil {
+			inputTokens = *targetSummary.InputTokens
+		}
+		outputTokens := int64(0)
+		if targetSummary.OutputTokens != nil {
+			outputTokens = *targetSummary.OutputTokens
+		}
+
+		subagents = append(subagents, dto.SubagentDetail{
+			ID:           id,
+			Nickname:     nickname,
+			TotalTokens:  totalTokens,
+			InputTokens:  inputTokens,
+			OutputTokens: outputTokens,
+		})
+
+		for _, cid := range targetSummary.ChildSessionIDs {
+			collectSubagents(cid, nil)
+		}
+	}
+
+	// childSessionIDs から再帰的探索を開始
+	for _, cid := range childSessionIDs {
+		collectSubagents(cid, parentSpawnedNicknames)
+	}
+
 	res := &dto.SessionDetailResponse{
 		ID:                 sessionID,
 		CacheSchemaVersion: dto.CurrentSessionDetailCacheSchemaVersion,
@@ -1939,6 +2022,7 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 		),
 		ParentSessionID: parentSessionID,
 		ChildSessionIDs: childSessionIDs,
+		Subagents:       subagents,
 	}
 
 	// 9. キャッシュへの保存

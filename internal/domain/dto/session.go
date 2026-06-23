@@ -161,4 +161,14 @@ type SessionDetailResponse struct {
 	Timeline           []ConversationTimelineTurn `json:"timeline"`
 	ParentSessionID    *string                    `json:"parent_session_id,omitempty"`
 	ChildSessionIDs    []string                   `json:"child_session_ids,omitempty"`
+	Subagents          []SubagentDetail           `json:"subagents,omitempty"`
+}
+
+// SubagentDetail は子セッション（サブエージェント）のトークン情報を表します。
+type SubagentDetail struct {
+	ID           string `json:"id"`
+	Nickname     string `json:"nickname"`
+	TotalTokens  int64  `json:"total_tokens"`
+	InputTokens  int64  `json:"input_tokens"`
+	OutputTokens int64  `json:"output_tokens"`
 }

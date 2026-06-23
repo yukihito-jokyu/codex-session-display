@@ -3334,3 +3334,77 @@ func TestGetSessionDetailUseCase_ExecuteBuildsPseudoConversationTurn(t *testing.
 		t.Errorf("Timeline[1] = %+v, want normal turn", res.Timeline[1])
 	}
 }
+
+func TestGetSessionDetailUseCase_RecursiveSubagents(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	filePath := filepath.Join(tmpDir, "rollout-parent.jsonl")
+
+	// 親セッションのログレコード
+	logs := []string{
+		`{"type":"session_meta","timestamp":1717084800,"payload":{"id":"parent-session-3","cli_version":"v0.131.0"}}`,
+		`{"type":"event_msg","timestamp":1717084810,"payload":{"type":"task_started","turn_id":"turn-1"}}`,
+		`{"type":"event_msg","timestamp":1717084820,"payload":{"type":"collab_agent_spawn_end","new_thread_id":"sub-session-uuid-5678","new_agent_nickname":"SubBot3"}}`,
+		`{"type":"event_msg","timestamp":1717084830,"payload":{"type":"task_complete","turn_id":"turn-1"}}`,
+	}
+	if err := os.WriteFile(filePath, []byte(strings.Join(logs, "\n")), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	sessionRepo := &mockSessionRepositoryForDetail{
+		paths: map[string]string{"parent-session-3": filePath},
+		sessions: []dto.SessionSummary{
+			{
+				ID:              "parent-session-3",
+				ChildSessionIDs: []string{"sub-session-uuid-5678"},
+			},
+			{
+				ID:              "sub-session-uuid-5678",
+				ParentSessionID: getStringPtrRef("parent-session-3"),
+				ChildSessionIDs: []string{"grandchild-session-uuid-9999"},
+				TotalTokens:     getInt64PtrRef(200),
+				InputTokens:     getInt64PtrRef(150),
+				OutputTokens:    getInt64PtrRef(50),
+			},
+			{
+				ID:              "grandchild-session-uuid-9999",
+				ParentSessionID: getStringPtrRef("sub-session-uuid-5678"),
+				Originator:      getStringPtrRef("GrandBot"),
+				TotalTokens:     getInt64PtrRef(100),
+				InputTokens:     getInt64PtrRef(80),
+				OutputTokens:    getInt64PtrRef(20),
+			},
+		},
+	}
+	cacheRepo := &mockCacheRepositoryForDetail{}
+
+	parser := repository.NewJSONLParser()
+	uc := usecase.NewGetSessionDetailUseCase(sessionRepo, cacheRepo, parser)
+	res, err := uc.Execute(context.Background(), "parent-session-3")
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	if len(res.Subagents) != 2 {
+		t.Fatalf("len(Subagents) = %d, want 2", len(res.Subagents))
+	}
+
+	sub := res.Subagents[0]
+	if sub.ID != "sub-session-uuid-5678" || sub.Nickname != "SubBot3" || sub.TotalTokens != 200 || sub.InputTokens != 150 || sub.OutputTokens != 50 {
+		t.Errorf("Subagent[0] mismatch: %+v", sub)
+	}
+
+	grand := res.Subagents[1]
+	if grand.ID != "grandchild-session-uuid-9999" || grand.Nickname != "GrandBot" || grand.TotalTokens != 100 || grand.InputTokens != 80 || grand.OutputTokens != 20 {
+		t.Errorf("Subagent[1] mismatch: %+v", grand)
+	}
+}
+
+func getStringPtrRef(s string) *string {
+	return &s
+}
+
+func getInt64PtrRef(i int64) *int64 {
+	return &i
+}
