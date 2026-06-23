@@ -99,6 +99,16 @@
 	--node-warning-icon-bg: #3c181c;
 	--node-warning-border: #f8514966;
 	--node-warning-text: #f85149;
+
+	/* 8. Calendar Activity Graph */
+	--color-calendar-graph-L1: #0e4429;
+	--color-calendar-graph-L1-text: var(--text-primary);
+	--color-calendar-graph-L2: #006d32;
+	--color-calendar-graph-L2-text: #ffffff;
+	--color-calendar-graph-L3: #26a641;
+	--color-calendar-graph-L3-text: #0f1117;
+	--color-calendar-graph-L4: #39d353;
+	--color-calendar-graph-L4-text: #0f1117;
 }
 
 body.light-theme {
@@ -202,4 +212,14 @@ body.light-theme {
 	--node-warning-icon-bg: #ffebee;
 	--node-warning-border: #ef9a9a;
 	--node-warning-text: #c62828;
+
+	/* 8. Calendar Activity Graph (Light Theme) */
+	--color-calendar-graph-L1: #9be9a8;
+	--color-calendar-graph-L1-text: var(--text-primary);
+	--color-calendar-graph-L2: #40c463;
+	--color-calendar-graph-L2-text: var(--text-primary);
+	--color-calendar-graph-L3: #30a14e;
+	--color-calendar-graph-L3-text: #ffffff;
+	--color-calendar-graph-L4: #216e39;
+	--color-calendar-graph-L4-text: #ffffff;
 }

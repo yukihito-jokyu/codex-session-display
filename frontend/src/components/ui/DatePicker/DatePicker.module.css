@@ -173,6 +173,9 @@
 
 .today {
 	border: 1px solid var(--color-accent);
+}
+
+.today:not([class*="graphL"]) {
 	color: var(--color-accent);
 }
 
@@ -180,4 +183,58 @@
 	background: var(--color-accent);
 	color: #fff;
 	font-weight: 600;
+}
+
+/* Contribution Graph Levels */
+.graphL1 {
+	background-color: var(--color-calendar-graph-L1);
+	color: var(--color-calendar-graph-L1-text);
+}
+.graphL2 {
+	background-color: var(--color-calendar-graph-L2);
+	color: var(--color-calendar-graph-L2-text);
+}
+.graphL3 {
+	background-color: var(--color-calendar-graph-L3);
+	color: var(--color-calendar-graph-L3-text);
+}
+.graphL4 {
+	background-color: var(--color-calendar-graph-L4);
+	color: var(--color-calendar-graph-L4-text);
+}
+
+.graphL1:hover,
+.graphL2:hover,
+.graphL3:hover,
+.graphL4:hover {
+	opacity: 0.8;
+}
+
+/* Custom Tooltip */
+.tooltip {
+	position: absolute;
+	transform: translate(-50%, -100%);
+	background: var(--bg-btn);
+	color: var(--text-primary);
+	padding: 6px 10px;
+	font-size: 11px;
+	font-weight: 500;
+	border-radius: 6px;
+	white-space: nowrap;
+	pointer-events: none;
+	z-index: 1100;
+	box-shadow: var(--panel-shadow);
+	border: 1px solid var(--border-color);
+	animation: tooltipFadeIn 0.15s ease-out;
+}
+
+@keyframes tooltipFadeIn {
+	from {
+		opacity: 0;
+		transform: translate(-50%, -95%) scale(0.95);
+	}
+	to {
+		opacity: 1;
+		transform: translate(-50%, -100%) scale(1);
+	}
 }

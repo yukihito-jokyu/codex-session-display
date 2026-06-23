@@ -99,6 +99,18 @@ export function SessionListPage() {
 		return map;
 	}, [sessions]);
 
+	// 日付ごとのセッション件数を集計
+	const sessionCounts = useMemo(() => {
+		const counts: { [dateStr: string]: number } = {};
+		for (const s of sessions) {
+			const dateStr = getFormattedDate(s);
+			if (dateStr) {
+				counts[dateStr] = (counts[dateStr] || 0) + 1;
+			}
+		}
+		return counts;
+	}, [sessions]);
+
 	// 選択された日付に該当するセッションをフィルタリング
 	const filteredSessions = useMemo(() => {
 		return sessions.filter((s) => getFormattedDate(s) === selectedDate);
@@ -268,7 +280,11 @@ export function SessionListPage() {
 			) : (
 				<>
 					<div className={styles.calendarContainer}>
-						<DatePicker value={selectedDate} onChange={handleDateChange} />
+						<DatePicker
+							value={selectedDate}
+							onChange={handleDateChange}
+							sessionCounts={sessionCounts}
+						/>
 					</div>
 
 					{loading ? (

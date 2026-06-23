@@ -1552,4 +1552,57 @@ test.describe("セッション一覧画面 E2E テスト", () => {
 			page.getByText("/Users/test/projects/sess-u2").first(),
 		).toBeVisible();
 	});
+
+	test("カレンダーのセッション数に応じた色のグラデーション（草）およびホバー時のツールチップ表示検証", async ({
+		page,
+	}) => {
+		// ページロード (デフォルトのダミーセッション)
+		await page.goto("/");
+
+		// 「ディレクトリ分類」タブをクリック
+		await page.locator("button:has-text('ディレクトリ分類')").click();
+
+		const dateInput = page.locator("input[type='date']");
+		await expect(dateInput).toBeVisible();
+
+		// 日付を 2026-05-20 に設定 (5件のセッションがある日)
+		await dateInput.fill("2026-05-20");
+
+		// カレンダーのポップアップを表示するためトリガーボタンをクリック
+		const triggerBtn = page.locator("button:has-text('📅')");
+		await triggerBtn.click();
+
+		// 19日セル（1件のセッション -> レベル1）と20日セル（5件のセッション -> レベル4）を特定
+		const cell19 = page
+			.locator("div[class*='daysGrid'] button")
+			.filter({ hasText: /^19$/ })
+			.first();
+		const cell20 = page
+			.locator("div[class*='daysGrid'] button")
+			.filter({ hasText: /^20$/ })
+			.first();
+		const cell18 = page
+			.locator("div[class*='daysGrid'] button")
+			.filter({ hasText: /^18$/ })
+			.first();
+
+		// レベル判定のクラスが正しく適用されていることを確認
+		await expect(cell19).toHaveClass(/graphL1/);
+		await expect(cell20).toHaveClass(/graphL4/);
+		await expect(cell18).not.toHaveClass(/graphL/);
+
+		// 19日セルへホバーした際、ツールチップが「1 session on 2026-05-19」として表示されることを確認
+		await cell19.hover();
+		const tooltip = page.locator("div[class*='tooltip']");
+		await expect(tooltip).toBeVisible();
+		await expect(tooltip).toHaveText("1 session on 2026-05-19");
+
+		// 20日セルへホバーした際、ツールチップが「5 sessions on 2026-05-20」として表示されることを確認
+		await cell20.hover();
+		await expect(tooltip).toHaveText("5 sessions on 2026-05-20");
+
+		// 18日セルへホバーした際、ツールチップが「0 sessions on 2026-05-18」として表示されることを確認
+		await cell18.hover();
+		await expect(tooltip).toHaveText("0 sessions on 2026-05-18");
+	});
 });
