@@ -63,6 +63,17 @@ export function SessionListPage() {
 		const d = String(now.getDate()).padStart(2, "0");
 		return `${y}-${m}-${d}`;
 	});
+	const [collapsedDirs, setCollapsedDirs] = useState<Set<string>>(() => {
+		const saved = sessionStorage.getItem("session_list_collapsed_dirs");
+		if (saved) {
+			try {
+				return new Set(JSON.parse(saved));
+			} catch (_e) {
+				// ignore
+			}
+		}
+		return new Set();
+	});
 
 	useEffect(() => {
 		sessionStorage.setItem("session_list_active_tab", activeTab);
@@ -71,6 +82,13 @@ export function SessionListPage() {
 	useEffect(() => {
 		sessionStorage.setItem("session_list_selected_date", selectedDate);
 	}, [selectedDate]);
+
+	useEffect(() => {
+		sessionStorage.setItem(
+			"session_list_collapsed_dirs",
+			JSON.stringify(Array.from(collapsedDirs)),
+		);
+	}, [collapsedDirs]);
 
 	// sessionsMap を作成 (親子関係の解決用)
 	const sessionsMap = useMemo(() => {
@@ -86,21 +104,34 @@ export function SessionListPage() {
 		return sessions.filter((s) => getFormattedDate(s) === selectedDate);
 	}, [sessions, selectedDate]);
 
-	const filteredSessionsMap = useMemo(() => {
-		const map = new Map<string, SessionSummary>();
+	// ディレクトリ（cwd）ごとにグループ化
+	const groupedSessions = useMemo(() => {
+		const groups: { [key: string]: SessionSummary[] } = {};
 		for (const s of filteredSessions) {
-			map.set(s.id, s);
+			const cwd = s.cwd || "未解析のセッション";
+			if (!groups[cwd]) {
+				groups[cwd] = [];
+			}
+			groups[cwd].push(s);
 		}
-		return map;
+		return groups;
 	}, [filteredSessions]);
 
-	// フィルタリングされた結果のうち、ルートセッションのみを抽出
-	const rootFilteredSessions = useMemo(() => {
-		return filteredSessions.filter((s) => {
-			if (!s.parent_session_id) return true;
-			return !filteredSessionsMap.has(s.parent_session_id);
-		});
-	}, [filteredSessions, filteredSessionsMap]);
+	// 各グループ内で親子関係を解決したルートセッションを抽出
+	const groupedRootSessions = useMemo(() => {
+		const rootGroups: { [key: string]: SessionSummary[] } = {};
+		for (const [cwd, list] of Object.entries(groupedSessions)) {
+			const groupMap = new Map<string, SessionSummary>();
+			for (const s of list) {
+				groupMap.set(s.id, s);
+			}
+			rootGroups[cwd] = list.filter((s) => {
+				if (!s.parent_session_id) return true;
+				return !groupMap.has(s.parent_session_id);
+			});
+		}
+		return rootGroups;
+	}, [groupedSessions]);
 
 	// 日付変更時の処理
 	const handleDateChange = (dateStr: string) => {
@@ -118,6 +149,24 @@ export function SessionListPage() {
 			}
 		}
 	};
+
+	useEffect(() => {
+		if (typeof window !== "undefined") {
+			// biome-ignore lint/suspicious/noExplicitAny: test helper
+			(window as any).parseSessions = parseSessions;
+		}
+	}, [parseSessions]);
+
+	// 選択した日付の未解析セッションを自動的かつ優先的にバックグラウンド解析する
+	useEffect(() => {
+		if (activeTab !== "directory" || loading) return;
+		const unparsedIds = filteredSessions
+			.filter((s) => !s.parsed)
+			.map((s) => s.id);
+		if (unparsedIds.length > 0) {
+			parseSessions(unparsedIds, true);
+		}
+	}, [activeTab, filteredSessions, loading, parseSessions]);
 
 	return (
 		<div className={styles.listPage}>
@@ -213,21 +262,67 @@ export function SessionListPage() {
 						</div>
 					) : (
 						<div className={styles.directoryList}>
-							{rootFilteredSessions.map((session) => (
-								<SessionRow
-									key={session.id}
-									session={session}
-									sessionsMap={sessionsMap}
-									isParsing={parsingSessionIds?.has(session.id)}
-									parsingSessionIds={parsingSessionIds}
-								/>
-							))}
-							{rootFilteredSessions.length === 0 && (
+							{Object.keys(groupedRootSessions).length === 0 ? (
 								<div className={styles.empty}>
 									<div className={styles.emptyIcon}>📂</div>
 									<div className={styles.emptyText}>
 										No sessions found for this date.
 									</div>
+								</div>
+							) : (
+								<div className={styles.directoryAccordion}>
+									{Object.entries(groupedRootSessions).map(
+										([cwd, rootSessions]) => {
+											const isCollapsed = collapsedDirs.has(cwd);
+											const totalCount = groupedSessions[cwd]?.length || 0;
+
+											const toggleCollapse = () => {
+												setCollapsedDirs((prev) => {
+													const next = new Set(prev);
+													if (next.has(cwd)) {
+														next.delete(cwd);
+													} else {
+														next.add(cwd);
+													}
+													return next;
+												});
+											};
+
+											return (
+												<div key={cwd} className={styles.directoryItem}>
+													<button
+														type="button"
+														className={`${styles.directoryHeader} ${!isCollapsed ? styles.directoryHeaderActive : ""}`}
+														onClick={toggleCollapse}
+														aria-expanded={!isCollapsed}
+													>
+														<span
+															className={`${styles.directoryToggleIcon} ${!isCollapsed ? styles.open : ""}`}
+														>
+															▶
+														</span>
+														<span className={styles.directoryTitle}>{cwd}</span>
+														<span className={styles.directoryCount}>
+															{totalCount}
+														</span>
+													</button>
+													{!isCollapsed && (
+														<div className={styles.directoryContent}>
+															{rootSessions.map((session) => (
+																<SessionRow
+																	key={session.id}
+																	session={session}
+																	sessionsMap={sessionsMap}
+																	isParsing={parsingSessionIds?.has(session.id)}
+																	parsingSessionIds={parsingSessionIds}
+																/>
+															))}
+														</div>
+													)}
+												</div>
+											);
+										},
+									)}
 								</div>
 							)}
 						</div>

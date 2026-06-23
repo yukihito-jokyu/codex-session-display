@@ -965,4 +965,367 @@ test.describe("セッション一覧画面 E2E テスト", () => {
 		await expect(parsingStats.getByText("10", { exact: true })).toBeVisible();
 		await expect(parsingStats.locator("text=ターン数: 1")).toBeVisible();
 	});
+
+	test("未解析セッションの優先パース（キューの先頭へ追加）が正しく機能すること", async ({
+		page,
+	}) => {
+		// 5件の未解析セッションを用意
+		const testSessions = [
+			{
+				id: "sess-q1",
+				file_path: "/path/to/q1",
+				timestamp: "2026-05-20T10:00:00Z",
+				file_size: 100,
+				parsed: false,
+			},
+			{
+				id: "sess-q2",
+				file_path: "/path/to/q2",
+				timestamp: "2026-05-20T10:01:00Z",
+				file_size: 100,
+				parsed: false,
+			},
+			{
+				id: "sess-q3",
+				file_path: "/path/to/q3",
+				timestamp: "2026-05-20T10:02:00Z",
+				file_size: 100,
+				parsed: false,
+			},
+			{
+				id: "sess-q4",
+				file_path: "/path/to/q4",
+				timestamp: "2026-05-20T10:03:00Z",
+				file_size: 100,
+				parsed: false,
+			},
+			{
+				id: "sess-q5",
+				file_path: "/path/to/q5",
+				timestamp: "2026-05-20T10:04:00Z",
+				file_size: 100,
+				parsed: false,
+			},
+		];
+
+		await mockWailsAPI(page, testSessions);
+
+		// GetSessionDetailをフックして、呼び出し順を記録しつつ遅延させる
+		await page.addInitScript(() => {
+			// biome-ignore lint/suspicious/noExplicitAny: mock
+			(window as any).__detailCalls = [];
+			// biome-ignore lint/suspicious/noExplicitAny: mock
+			const originalGetSessionDetail = (window as any).go.main.App
+				.GetSessionDetail;
+			// biome-ignore lint/suspicious/noExplicitAny: mock
+			(window as any).go.main.App.GetSessionDetail = async (id: string) => {
+				// biome-ignore lint/suspicious/noExplicitAny: mock
+				(window as any).__detailCalls.push(id);
+				// 意図的に少し遅延させてキューが溜まるようにする
+				await new Promise((resolve) => setTimeout(resolve, 200));
+				return originalGetSessionDetail(id);
+			};
+		});
+
+		// ページロード
+		await page.addInitScript(() => {
+			window.sessionStorage.setItem("session_list_expanded_paths", "[]");
+		});
+
+		await page.goto("/");
+
+		// キューへの投入順を制御する
+		await page.evaluate(() => {
+			// biome-ignore lint/suspicious/noExplicitAny: test helper
+			const parse = (window as any).parseSessions;
+			// 1, 2, 3 をキューに投入 (これらは maxConcurrency=3 なので即座に実行状態へ)
+			parse(["sess-q1", "sess-q2", "sess-q3"]);
+			// 4 を優先度なしでキューに投入 (これはキューの末尾に追加される)
+			parse(["sess-q4"], false);
+			// 5 を優先度ありでキューに投入 (優先キューイングが効けば、4より前に割り込む)
+			parse(["sess-q5"], true);
+		});
+
+		// 全てのセッションがパース完了するのを待つ（遅延が200msなので十分な時間を待つ）
+		await page.waitForTimeout(1500);
+
+		// biome-ignore lint/suspicious/noExplicitAny: mock
+		const calls = await page.evaluate(() => (window as any).__detailCalls);
+
+		// 期待される呼び出し順:
+		// 最初の3つは sess-q1, sess-q2, sess-q3
+		// その後、優先キューイングが機能していれば、sess-q5 が先に呼ばれ、最後に sess-q4 が呼ばれる。
+		expect(calls.slice(0, 3)).toContain("sess-q1");
+		expect(calls.slice(0, 3)).toContain("sess-q2");
+		expect(calls.slice(0, 3)).toContain("sess-q3");
+		expect(calls[3]).toBe("sess-q5");
+		expect(calls[4]).toBe("sess-q4");
+	});
+
+	test("ディレクトリ分類タブにおいて、選択した日付に未解析セッションがあれば自動的にパースが開始されること", async ({
+		page,
+	}) => {
+		// 1件の未解析セッションを用意
+		const testSessions = [
+			{
+				id: "sess-012",
+				file_path: "/path/to/auto-unparsed",
+				timestamp: "2026-05-20T10:00:00Z",
+				file_size: 100,
+				parsed: false,
+			},
+		];
+
+		await mockWailsAPI(page, testSessions);
+
+		// 履歴ツリーで自動展開されるのを防ぐ、かつ選択日付を 2026-05-20 に設定する
+		await page.addInitScript(() => {
+			window.sessionStorage.setItem("session_list_expanded_paths", "[]");
+			window.sessionStorage.setItem("session_list_selected_date", "2026-05-20");
+		});
+
+		// GetSessionDetail をモック
+		await page.addInitScript(() => {
+			// biome-ignore lint/suspicious/noExplicitAny: mock
+			(window as any).__detailCalledFor = [];
+			// biome-ignore lint/suspicious/noExplicitAny: mock
+			const originalGetSessionDetail = (window as any).go.main.App
+				.GetSessionDetail;
+			// biome-ignore lint/suspicious/noExplicitAny: mock
+			(window as any).go.main.App.GetSessionDetail = async (id: string) => {
+				// biome-ignore lint/suspicious/noExplicitAny: mock
+				(window as any).__detailCalledFor.push(id);
+
+				if (id === "sess-012") {
+					// biome-ignore lint/suspicious/noExplicitAny: mock
+					const session = ((window as any).__dummySessions as any[])?.find(
+						(s) => s.id === id,
+					);
+					if (session) {
+						session.parsed = true;
+						session.cwd = "/Users/test/projects/auto-unparsed-app";
+						session.branch = "feature/auto-parsed";
+					}
+
+					return {
+						id: id,
+						cache_schema_version: 3,
+						parsed_at: "2026-05-20T14:00:00Z",
+						nodes: [
+							{
+								id: "node-meta",
+								type: "sessionMeta",
+								position: { x: 0, y: 0 },
+								data: {
+									category: "meta",
+									label: "Session Meta",
+									icon: "⚙️",
+									turnIndex: -1,
+									meta: {
+										cwd: "/Users/test/projects/auto-unparsed-app",
+										git_branch: "feature/auto-parsed",
+									},
+								},
+							},
+						],
+						statistics: {
+							duration_ms: 1000,
+							total_tokens: 0,
+							tool_call_count: 0,
+							turn_count: 0,
+							turns: [],
+						},
+					};
+				}
+
+				return originalGetSessionDetail(id);
+			};
+		});
+
+		// ページロード
+		await page.goto("/");
+
+		// 履歴ツリータブでは自動解析が走らないことを確認
+		const callsBefore = await page.evaluate(
+			// biome-ignore lint/suspicious/noExplicitAny: mock
+			() => (window as any).__detailCalledFor,
+		);
+		expect(callsBefore).not.toContain("sess-012");
+
+		// 「ディレクトリ分類」タブをクリック
+		await page.locator("button:has-text('ディレクトリ分類')").click();
+
+		// 自動解析が走り、セッションがパース完了することを確認
+		// 解析が走ると CWD やブランチ名が反映されるはず
+		const sessionRow = page
+			.locator("div[role='button']:has-text('sess-012')")
+			.first();
+		await expect(sessionRow.locator("text=feature/auto-parsed")).toBeVisible({
+			timeout: 5000,
+		});
+		await expect(
+			sessionRow.locator('text="/Users/test/projects/auto-unparsed-app"'),
+		).toBeVisible();
+
+		const callsAfter = await page.evaluate(
+			// biome-ignore lint/suspicious/noExplicitAny: mock
+			() => (window as any).__detailCalledFor,
+		);
+		expect(callsAfter).toContain("sess-012");
+	});
+
+	test("ディレクトリ分類タブにおいて、セッションが cwd ごとにグループ化されてアコーディオン表示されること", async ({
+		page,
+	}) => {
+		// グループ化検証用のテストセッション
+		const testSessions = [
+			{
+				id: "sess-g1",
+				file_path: "/path/to/g1",
+				cwd: "/Users/test/projects/react-app",
+				timestamp: "2026-05-20T10:00:00Z",
+				file_size: 100,
+				parsed: true,
+			},
+			{
+				id: "sess-g2",
+				file_path: "/path/to/g2",
+				cwd: "/Users/test/projects/go-app",
+				timestamp: "2026-05-20T11:00:00Z",
+				file_size: 100,
+				parsed: true,
+			},
+			{
+				id: "sess-g3",
+				file_path: "/path/to/g3",
+				cwd: undefined, // 未解析
+				timestamp: "2026-05-20T12:00:00Z",
+				file_size: 100,
+				parsed: false,
+			},
+		];
+
+		await mockWailsAPI(page, testSessions);
+
+		// 履歴ツリーで自動展開されるのを防ぐ、かつ選択日付を 2026-05-20 に設定する
+		await page.addInitScript(() => {
+			window.sessionStorage.setItem("session_list_expanded_paths", "[]");
+			window.sessionStorage.setItem("session_list_selected_date", "2026-05-20");
+		});
+
+		await page.goto("/");
+
+		// 「ディレクトリ分類」タブをクリック
+		await page.locator("button:has-text('ディレクトリ分類')").click();
+
+		// グループヘッダーが表示されていることを確認
+		await expect(
+			page
+				.locator("span[class*='directoryTitle']")
+				.getByText("/Users/test/projects/react-app"),
+		).toBeVisible();
+		await expect(
+			page
+				.locator("span[class*='directoryTitle']")
+				.getByText("/Users/test/projects/go-app"),
+		).toBeVisible();
+		await expect(
+			page
+				.locator("span[class*='directoryTitle']")
+				.getByText("未解析のセッション"),
+		).toBeVisible();
+	});
+
+	test("ディレクトリ分類タブにおいて、アコーディオンの開閉操作および sessionStorage への永続化が正しく機能すること", async ({
+		page,
+	}) => {
+		const testSessions = [
+			{
+				id: "sess-g1",
+				file_path: "/path/to/g1",
+				cwd: "/Users/test/projects/react-app",
+				timestamp: "2026-05-20T10:00:00Z",
+				file_size: 100,
+				parsed: true,
+			},
+			{
+				id: "sess-g2",
+				file_path: "/path/to/g2",
+				cwd: "/Users/test/projects/go-app",
+				timestamp: "2026-05-20T11:00:00Z",
+				file_size: 100,
+				parsed: true,
+			},
+		];
+
+		await mockWailsAPI(page, testSessions);
+
+		// 履歴ツリーの自動展開防止と、初期日付設定
+		await page.addInitScript(() => {
+			window.sessionStorage.setItem("session_list_expanded_paths", "[]");
+			window.sessionStorage.setItem("session_list_selected_date", "2026-05-20");
+		});
+
+		await page.goto("/");
+
+		// ディレクトリ分類タブへ切り替え
+		await page.locator("button:has-text('ディレクトリ分類')").click();
+
+		// 初期状態でアコーディオンがすべて展開されており、sess-g1とsess-g2が表示されていることを確認
+		const rowG1 = page
+			.locator("div[role='button']:has-text('sess-g1')")
+			.first();
+		const rowG2 = page
+			.locator("div[role='button']:has-text('sess-g2')")
+			.first();
+		await expect(rowG1).toBeVisible();
+		await expect(rowG2).toBeVisible();
+
+		// 「/Users/test/projects/react-app」のヘッダーをクリックして閉じる
+		const headerG1 = page.locator(
+			"button:has-text('/Users/test/projects/react-app')",
+		);
+		await headerG1.click();
+
+		// sess-g1 が非表示になり、sess-g2 が表示されたままであることを確認
+		await expect(rowG1).not.toBeVisible();
+		await expect(rowG2).toBeVisible();
+
+		// sessionStorage を確認
+		const collapsedDirs = await page.evaluate(() => {
+			return window.sessionStorage.getItem("session_list_collapsed_dirs");
+		});
+		expect(collapsedDirs).toContain("/Users/test/projects/react-app");
+
+		// 詳細画面へ遷移する
+		await rowG2.click();
+		await expect(page).toHaveURL(/.*#\/sessions\/sess-g2/);
+
+		// 一覧画面へ戻る
+		await page.locator("button:has-text('Back to List')").click();
+
+		// ディレクトリ分類タブが復元されていることを確認
+		await expect(
+			page.locator("button:has-text('ディレクトリ分類')"),
+		).toHaveClass(/activeTab/);
+
+		// 状態が維持され、sess-g1は折りたたまれたまま非表示、sess-g2は表示されていることを確認
+		const rowG1New = page
+			.locator("div[role='button']:has-text('sess-g1')")
+			.first();
+		const rowG2New = page
+			.locator("div[role='button']:has-text('sess-g2')")
+			.first();
+		await expect(rowG1New).not.toBeVisible();
+		await expect(rowG2New).toBeVisible();
+
+		// 再びヘッダーをクリックして展開する
+		const headerG1New = page.locator(
+			"button:has-text('/Users/test/projects/react-app')",
+		);
+		await headerG1New.click();
+
+		// 再表示されることを確認
+		await expect(rowG1New).toBeVisible();
+	});
 });
