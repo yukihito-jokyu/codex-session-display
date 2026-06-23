@@ -9,6 +9,9 @@ interface ToolbarProps {
 	hasUpdate?: boolean;
 	latestVersion?: string;
 	onUpdateClick?: () => void;
+	unparsedCount?: number;
+	parsingCount?: number;
+	onParseAllClick?: () => void;
 }
 
 export const Toolbar: React.FC<ToolbarProps> = ({
@@ -18,6 +21,9 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 	hasUpdate,
 	latestVersion,
 	onUpdateClick,
+	unparsedCount,
+	parsingCount,
+	onParseAllClick,
 }) => {
 	const [inputValue, setInputValue] = useState("");
 	const timeoutRef = useRef<number | null>(null);
@@ -68,6 +74,24 @@ export const Toolbar: React.FC<ToolbarProps> = ({
 						🚀 新バージョンがあります (v{latestVersion})
 					</button>
 				)}
+				{onParseAllClick &&
+					(unparsedCount !== undefined || parsingCount !== undefined) && (
+						<button
+							id="bulk-parse-btn"
+							type="button"
+							className={`${styles.parseAllBtn} ${parsingCount && parsingCount > 0 ? styles.parsing : ""} ${unparsedCount === 0 && (!parsingCount || parsingCount === 0) ? styles.parsed : ""}`}
+							onClick={onParseAllClick}
+							disabled={
+								unparsedCount === 0 || !!(parsingCount && parsingCount > 0)
+							}
+						>
+							{parsingCount && parsingCount > 0
+								? `⏳ 解析中... (${parsingCount}/${(unparsedCount || 0) + parsingCount}件)`
+								: unparsedCount === 0
+									? "✓ すべて解析済み"
+									: `🔄 未解析を一括解析 (${unparsedCount}件)`}
+						</button>
+					)}
 			</div>
 			<div className={styles.searchContainer}>
 				<span className={styles.searchIcon} aria-hidden="true">
