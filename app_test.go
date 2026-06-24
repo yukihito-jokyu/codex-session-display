@@ -1,15 +1,19 @@
 package main
 
 import (
+	"bytes"
 	"codex-session-display/internal/domain/dto"
 	"codex-session-display/internal/repository"
 	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
 	"testing"
 	"time"
+
+	wailsruntime "github.com/wailsapp/wails/v2/pkg/runtime"
 )
 
 func TestApp_OpenLogDirectory(t *testing.T) {
@@ -295,4 +299,120 @@ func (s *stubSessionRepository) GetSessionIDByFilePath(ctx context.Context, file
 
 func (s *stubSessionRepository) GetSessionModTime(ctx context.Context, sessionID string) (time.Time, error) {
 	return time.Time{}, nil
+}
+
+func TestApp_SaveChartImage(t *testing.T) {
+	originalSaveFileDialog := saveFileDialog
+	defer func() {
+		saveFileDialog = originalSaveFileDialog
+	}()
+
+	tempDir := t.TempDir()
+
+	tests := []struct {
+		name         string
+		base64Data   string
+		defaultName  string
+		dialogPath   string
+		dialogErr    error
+		wantErr      bool
+		wantErrCode  string
+		expectedData []byte
+	}{
+		{
+			name:         "success - normal base64",
+			base64Data:   "SGVsbG8gV29ybGQ=", // "Hello World"
+			defaultName:  "test.png",
+			dialogPath:   filepath.Join(tempDir, "test1.png"),
+			wantErr:      false,
+			expectedData: []byte("Hello World"),
+		},
+		{
+			name:         "success - with data uri prefix",
+			base64Data:   "data:image/png;base64,SGVsbG8gV29ybGQ=",
+			defaultName:  "test.png",
+			dialogPath:   filepath.Join(tempDir, "test2.png"),
+			wantErr:      false,
+			expectedData: []byte("Hello World"),
+		},
+		{
+			name:        "success - user cancelled",
+			base64Data:  "SGVsbG8gV29ybGQ=",
+			defaultName: "test.png",
+			dialogPath:  "", // cancel returns empty path
+			wantErr:     false,
+		},
+		{
+			name:        "error - empty base64",
+			base64Data:  "",
+			defaultName: "test.png",
+			wantErr:     true,
+			wantErrCode: "INVALID_ARGUMENT",
+		},
+		{
+			name:        "error - invalid base64",
+			base64Data:  "invalid-base-64!!!",
+			defaultName: "test.png",
+			dialogPath:  filepath.Join(tempDir, "test3.png"),
+			wantErr:     true,
+			wantErrCode: "INVALID_ARGUMENT",
+		},
+		{
+			name:        "error - dialog failure",
+			base64Data:  "SGVsbG8gV29ybGQ=",
+			defaultName: "test.png",
+			dialogErr:   errors.New("dialog failed"),
+			wantErr:     true,
+			wantErrCode: "INTERNAL_ERROR",
+		},
+		{
+			name:        "error - file write failure (invalid path)",
+			base64Data:  "SGVsbG8gV29ybGQ=",
+			defaultName: "test.png",
+			dialogPath:  filepath.Join(tempDir, "nonexistent-dir", "test.png"),
+			wantErr:     true,
+			wantErrCode: "FILE_WRITE_ERROR",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			// Mock Dialog
+			saveFileDialog = func(ctx context.Context, options wailsruntime.SaveDialogOptions) (string, error) {
+				if tt.dialogErr != nil {
+					return "", tt.dialogErr
+				}
+				return tt.dialogPath, nil
+			}
+
+			app := &App{ctx: context.Background()}
+			err := app.SaveChartImage(tt.base64Data, tt.defaultName)
+
+			if (err != nil) != tt.wantErr {
+				t.Fatalf("expected error=%v, got %v", tt.wantErr, err)
+			}
+
+			if tt.wantErr {
+				var appErr *dto.AppError
+				if !errors.As(err, &appErr) {
+					t.Fatalf("expected *dto.AppError, got %T", err)
+				}
+				if appErr.Code != tt.wantErrCode {
+					t.Fatalf("expected error code %q, got %q", tt.wantErrCode, appErr.Code)
+				}
+				return
+			}
+
+			// Verify file content for success cases with non-empty dialogPath
+			if tt.dialogPath != "" {
+				data, err := os.ReadFile(tt.dialogPath)
+				if err != nil {
+					t.Fatalf("failed to read written file: %v", err)
+				}
+				if !bytes.Equal(data, tt.expectedData) {
+					t.Fatalf("expected file content %q, got %q", string(tt.expectedData), string(data))
+				}
+			}
+		})
+	}
 }

@@ -7,12 +7,14 @@ import (
 	"codex-session-display/internal/usecase"
 	"codex-session-display/internal/utils/logger"
 	"context"
+	"encoding/base64"
 	"errors"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"sync"
 	"time"
 
@@ -20,9 +22,10 @@ import (
 )
 
 var (
-	execCommand = exec.Command
-	windowShow  = wailsruntime.WindowShow
-	eventsEmit  = wailsruntime.EventsEmit
+	execCommand    = exec.Command
+	windowShow     = wailsruntime.WindowShow
+	eventsEmit     = wailsruntime.EventsEmit
+	saveFileDialog = wailsruntime.SaveFileDialog
 )
 
 // App はアプリケーションの構造体です。
@@ -347,5 +350,65 @@ func (a *App) ApplyUpdate(downloadURL string) error {
 		return appErr
 	}
 
+	return nil
+}
+
+// SaveChartImage は base64 形式の画像データをOSネイティブのダイアログで指定されたパスに PNG ファイルとして保存します。
+func (a *App) SaveChartImage(base64Data, defaultName string) error {
+	logger.Info("SaveChartImage called", "defaultName", defaultName)
+
+	if base64Data == "" {
+		return &dto.AppError{
+			Code:    "INVALID_ARGUMENT",
+			Message: "画像データが空です",
+		}
+	}
+
+	filePath, err := saveFileDialog(a.ctx, wailsruntime.SaveDialogOptions{
+		DefaultFilename: defaultName,
+		Title:           "画像を保存",
+		Filters: []wailsruntime.FileFilter{
+			{
+				DisplayName: "PNG Image (*.png)",
+				Pattern:     "*.png",
+			},
+		},
+	})
+	if err != nil {
+		logger.Error("Failed to show SaveFileDialog", "error", err)
+		return &dto.AppError{
+			Code:    "INTERNAL_ERROR",
+			Message: "保存ダイアログの表示に失敗しました",
+		}
+	}
+
+	if filePath == "" {
+		logger.Info("SaveChartImage cancelled by user")
+		return nil
+	}
+
+	rawBase64 := base64Data
+	if idx := strings.Index(base64Data, ","); idx != -1 {
+		rawBase64 = base64Data[idx+1:]
+	}
+
+	data, err := base64.StdEncoding.DecodeString(rawBase64)
+	if err != nil {
+		logger.Error("Failed to decode base64 data", "error", err)
+		return &dto.AppError{
+			Code:    "INVALID_ARGUMENT",
+			Message: "画像データのデコードに失敗しました",
+		}
+	}
+
+	if err := os.WriteFile(filePath, data, 0o644); err != nil {
+		logger.Error("Failed to write image file", "error", err, "path", filePath)
+		return &dto.AppError{
+			Code:    "FILE_WRITE_ERROR",
+			Message: "ファイルの書き込みに失敗しました",
+		}
+	}
+
+	logger.Info("SaveChartImage succeeded", "path", filePath)
 	return nil
 }

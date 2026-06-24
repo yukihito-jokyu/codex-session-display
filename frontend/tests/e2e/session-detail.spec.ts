@@ -1532,4 +1532,46 @@ test.describe("セッション詳細画面 E2E テスト", () => {
 			page.locator("text=Session Detail: sess-002-uuid-long-name"),
 		).toBeVisible();
 	});
+
+	test("Last Token Consumption per Index の画像エクスポートが動作すること", async ({
+		page,
+	}) => {
+		await page.goto("/#/sessions/sess-001-uuid-long-name");
+		await expect(page.locator("text=Session Analytics")).toBeVisible();
+
+		// エクスポートボタンが表示されていることを確認
+		const exportBtn = page.getByTestId("export-chart-button");
+		await expect(exportBtn).toBeVisible();
+		await expect(exportBtn).toHaveAttribute("title", "画像をエクスポート");
+
+		// WailsのSaveChartImage呼び出し履歴を初期化
+		await page.evaluate(() => {
+			// biome-ignore lint/suspicious/noExplicitAny: mock field on window
+			(window as any).__saveChartImageCalls = [];
+		});
+
+		// エクスポートボタンをクリック
+		await exportBtn.click();
+
+		// SaveChartImageが非同期に呼び出されるまで待機
+		await page.waitForFunction(
+			() => {
+				// biome-ignore lint/suspicious/noExplicitAny: mock field on window
+				return ((window as any).__saveChartImageCalls || []).length > 0;
+			},
+			{ timeout: 5000 },
+		);
+
+		// SaveChartImageが呼び出され、期待される引数で実行されたことをアサーション
+		const calls = await page.evaluate(() => {
+			// biome-ignore lint/suspicious/noExplicitAny: mock field on window
+			return (window as any).__saveChartImageCalls || [];
+		});
+
+		expect(calls.length).toBe(1);
+		expect(calls[0].defaultName).toBe(
+			"token-consumption-chart-sess-001-uuid-long-name.png",
+		);
+		expect(calls[0].base64Data).toMatch(/^data:image\/png;base64,/);
+	});
 });

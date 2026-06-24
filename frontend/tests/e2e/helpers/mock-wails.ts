@@ -398,6 +398,20 @@ export async function mockWailsAPI(
 				((window as any).__frontendReadyCalls || 0) + 1;
 		};
 
+		go.main.App.SaveChartImage = async (
+			base64Data: string,
+			defaultName: string,
+		) => {
+			(window as any).__saveChartImageCalls =
+				(window as any).__saveChartImageCalls || [];
+			(window as any).__saveChartImageCalls.push({ base64Data, defaultName });
+
+			if (defaultName === "trigger-error") {
+				throw new Error("Mocked Save Error");
+			}
+			return null;
+		};
+
 		go.main.App.GetSessionDetail = async (id: string) => {
 			(window as any).__getSessionDetailCalls =
 				(window as any).__getSessionDetailCalls || [];

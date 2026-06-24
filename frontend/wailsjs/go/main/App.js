@@ -45,3 +45,7 @@ export function OpenLogDirectory() {
 export function ResolveSessionIDFromPath(arg1) {
   return window['go']['main']['App']['ResolveSessionIDFromPath'](arg1);
 }
+
+export function SaveChartImage(arg1, arg2) {
+  return window['go']['main']['App']['SaveChartImage'](arg1, arg2);
+}
