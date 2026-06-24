@@ -24,6 +24,7 @@ type SessionSummary struct {
 	ReasoningTokens *int64   `json:"reasoning_tokens,omitempty"`
 	TurnCount       *int     `json:"turn_count,omitempty"`
 	StepCount       *int     `json:"step_count,omitempty"`
+	DurationMs      *int64   `json:"duration_ms,omitempty"`
 }
 
 // TokenBadgeData は React Flow のノード上に表示するトークンバッジのデータを表します。
@@ -172,4 +173,7 @@ type SubagentDetail struct {
 	TotalTokens  int64  `json:"total_tokens"`
 	InputTokens  int64  `json:"input_tokens"`
 	OutputTokens int64  `json:"output_tokens"`
+	TurnCount    *int   `json:"turn_count,omitempty"`
+	StepCount    *int   `json:"step_count,omitempty"`
+	DurationMs   *int64 `json:"duration_ms,omitempty"`
 }

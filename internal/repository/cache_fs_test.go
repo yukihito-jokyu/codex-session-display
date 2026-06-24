@@ -437,6 +437,7 @@ func TestCacheFSRepository_SaveSessionDetail_WithStatistics(t *testing.T) {
 			},
 		},
 		Statistics: dto.Statistics{
+			DurationMs:    120000,
 			TotalTokens:   1500,
 			ToolCallCount: 5,
 			TurnCount:     2,
@@ -500,6 +501,9 @@ func TestCacheFSRepository_SaveSessionDetail_WithStatistics(t *testing.T) {
 				if summary.StepCount == nil || *summary.StepCount != 5 {
 					t.Errorf("expected StepCount 5, got %v", getValInt(summary.StepCount))
 				}
+				if summary.DurationMs == nil || *summary.DurationMs != 120000 {
+					t.Errorf("expected DurationMs 120000, got %v", getVal(summary.DurationMs))
+				}
 			},
 		},
 	}
@@ -551,6 +555,7 @@ func TestCacheFSRepository_GetSessionSummary_FallbackMerge(t *testing.T) {
 		ID:                 sessionID,
 		CacheSchemaVersion: dto.CurrentSessionDetailCacheSchemaVersion,
 		Statistics: dto.Statistics{
+			DurationMs:    180000,
 			TotalTokens:   3000,
 			ToolCallCount: 10,
 			TurnCount:     4,
@@ -604,6 +609,9 @@ func TestCacheFSRepository_GetSessionSummary_FallbackMerge(t *testing.T) {
 	}
 	if summary.StepCount == nil || *summary.StepCount != 10 {
 		t.Errorf("expected merged StepCount 10, got %v", getValInt(summary.StepCount))
+	}
+	if summary.DurationMs == nil || *summary.DurationMs != 180000 {
+		t.Errorf("expected merged DurationMs 180000, got %v", getVal(summary.DurationMs))
 	}
 }
 

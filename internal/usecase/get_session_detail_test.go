@@ -3366,6 +3366,9 @@ func TestGetSessionDetailUseCase_RecursiveSubagents(t *testing.T) {
 				TotalTokens:     getInt64PtrRef(200),
 				InputTokens:     getInt64PtrRef(150),
 				OutputTokens:    getInt64PtrRef(50),
+				TurnCount:       getIntPtrRef(5),
+				StepCount:       getIntPtrRef(10),
+				DurationMs:      getInt64PtrRef(30000),
 			},
 			{
 				ID:              "grandchild-session-uuid-9999",
@@ -3374,6 +3377,9 @@ func TestGetSessionDetailUseCase_RecursiveSubagents(t *testing.T) {
 				TotalTokens:     getInt64PtrRef(100),
 				InputTokens:     getInt64PtrRef(80),
 				OutputTokens:    getInt64PtrRef(20),
+				TurnCount:       getIntPtrRef(2),
+				StepCount:       getIntPtrRef(4),
+				DurationMs:      getInt64PtrRef(15000),
 			},
 		},
 	}
@@ -3391,12 +3397,12 @@ func TestGetSessionDetailUseCase_RecursiveSubagents(t *testing.T) {
 	}
 
 	sub := res.Subagents[0]
-	if sub.ID != "sub-session-uuid-5678" || sub.Nickname != "SubBot3" || sub.TotalTokens != 200 || sub.InputTokens != 150 || sub.OutputTokens != 50 {
+	if sub.ID != "sub-session-uuid-5678" || sub.Nickname != "SubBot3" || sub.TotalTokens != 200 || sub.InputTokens != 150 || sub.OutputTokens != 50 || *sub.TurnCount != 5 || *sub.StepCount != 10 || *sub.DurationMs != 30000 {
 		t.Errorf("Subagent[0] mismatch: %+v", sub)
 	}
 
 	grand := res.Subagents[1]
-	if grand.ID != "grandchild-session-uuid-9999" || grand.Nickname != "GrandBot" || grand.TotalTokens != 100 || grand.InputTokens != 80 || grand.OutputTokens != 20 {
+	if grand.ID != "grandchild-session-uuid-9999" || grand.Nickname != "GrandBot" || grand.TotalTokens != 100 || grand.InputTokens != 80 || grand.OutputTokens != 20 || *grand.TurnCount != 2 || *grand.StepCount != 4 || *grand.DurationMs != 15000 {
 		t.Errorf("Subagent[1] mismatch: %+v", grand)
 	}
 }
@@ -3406,6 +3412,10 @@ func getStringPtrRef(s string) *string {
 }
 
 func getInt64PtrRef(i int64) *int64 {
+	return &i
+}
+
+func getIntPtrRef(i int) *int {
 	return &i
 }
 

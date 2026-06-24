@@ -276,6 +276,9 @@ export namespace dto {
 	    total_tokens: number;
 	    input_tokens: number;
 	    output_tokens: number;
+	    turn_count?: number;
+	    step_count?: number;
+	    duration_ms?: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new SubagentDetail(source);
@@ -288,6 +291,9 @@ export namespace dto {
 	        this.total_tokens = source["total_tokens"];
 	        this.input_tokens = source["input_tokens"];
 	        this.output_tokens = source["output_tokens"];
+	        this.turn_count = source["turn_count"];
+	        this.step_count = source["step_count"];
+	        this.duration_ms = source["duration_ms"];
 	    }
 	}
 	export class TokenCountEntry {
@@ -485,6 +491,7 @@ export namespace dto {
 	    reasoning_tokens?: number;
 	    turn_count?: number;
 	    step_count?: number;
+	    duration_ms?: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new SessionSummary(source);
@@ -512,6 +519,7 @@ export namespace dto {
 	        this.reasoning_tokens = source["reasoning_tokens"];
 	        this.turn_count = source["turn_count"];
 	        this.step_count = source["step_count"];
+	        this.duration_ms = source["duration_ms"];
 	    }
 	}
 	

@@ -203,6 +203,9 @@ export function RightPanel({
 						0,
 					)
 				: 0,
+			turnCount: statistics.turn_count,
+			stepCount: statistics.tool_call_count,
+			durationMs: statistics.duration_ms,
 		};
 
 		const subagentInfos = subagents.map((s) => ({
@@ -210,6 +213,9 @@ export function RightPanel({
 			total: s.total_tokens,
 			input: s.input_tokens,
 			output: s.output_tokens,
+			turnCount: s.turn_count,
+			stepCount: s.step_count,
+			durationMs: s.duration_ms,
 		}));
 
 		const text = generateTokenBreakdownText(
