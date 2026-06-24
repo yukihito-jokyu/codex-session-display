@@ -12,6 +12,7 @@ import {
 	XAxis,
 	YAxis,
 } from "recharts";
+import { SaveChartImage } from "wailsjs/go/main/App";
 import type { dto } from "wailsjs/go/models";
 import { generateTokenBreakdownText } from "../../../../utils/tokenCopy";
 import styles from "./RightPanel.module.css";
@@ -220,6 +221,185 @@ export function RightPanel({
 			setCopied(true);
 			setTimeout(() => setCopied(false), 2000);
 		});
+	};
+
+	const handleExportChart = async (e: React.MouseEvent) => {
+		e.stopPropagation();
+
+		const container = document.querySelector(
+			'[data-testid="last-token-chart"]',
+		);
+		// 凡例内のSVGアイコンを選択しないよう、凡例以外のSVGを指定して取得
+		const svg = container?.querySelector(
+			"svg:not(.recharts-legend-wrapper svg)",
+		);
+		if (!svg) {
+			console.error("Chart SVG element not found");
+			return;
+		}
+
+		try {
+			// クローンを作成して、CSS変数の実値をインライン化する
+			const clonedSvg = svg.cloneNode(true) as SVGElement;
+
+			// CSS変数を実際のカラー値に解決するヘルパー関数
+			const resolveCssVariables = (val: string): string => {
+				if (!val?.includes("var(")) {
+					return val;
+				}
+
+				let resolved = val;
+				// 最大3段階のネストに対応
+				for (let depth = 0; depth < 3; depth++) {
+					const matches = resolved.match(/var\((--[^)]+)\)/g);
+					if (!matches) {
+						break;
+					}
+
+					let replaced = false;
+					for (const match of matches) {
+						const varName = match.slice(4, -1).trim();
+						let actualVal = window
+							.getComputedStyle(document.documentElement)
+							.getPropertyValue(varName)
+							.trim();
+						if (!actualVal) {
+							actualVal = window
+								.getComputedStyle(document.body)
+								.getPropertyValue(varName)
+								.trim();
+						}
+
+						if (actualVal) {
+							resolved = resolved.replace(match, actualVal);
+							replaced = true;
+						}
+					}
+
+					if (!replaced) {
+						break;
+					}
+				}
+				return resolved;
+			};
+
+			// CSS変数を実際の値に変換する関数
+			const inlineStyles = (source: Element, target: Element) => {
+				const computed = window.getComputedStyle(source);
+
+				// RechartsのSVG要素で使われがちな属性とスタイルを計算後の値に置換
+				const styleProps = [
+					"fill",
+					"stroke",
+					"color",
+					"font-size",
+					"font-family",
+					"stroke-width",
+					"stroke-dasharray",
+					"opacity",
+				];
+				for (const prop of styleProps) {
+					let val = computed.getPropertyValue(prop);
+					if (val) {
+						val = resolveCssVariables(val);
+						(target as HTMLElement).style.setProperty(prop, val);
+					}
+				}
+
+				// 子要素に対しても再帰的に適用
+				for (let i = 0; i < source.children.length; i++) {
+					inlineStyles(source.children[i], target.children[i]);
+				}
+			};
+
+			inlineStyles(svg, clonedSvg);
+
+			const scale = 2; // 高解像度（2倍）で出力
+			const width = svg.clientWidth || svg.getBoundingClientRect().width || 500;
+			const height =
+				svg.clientHeight || svg.getBoundingClientRect().height || 180;
+
+			// viewBoxが設定されていなければ設定する
+			if (!svg.getAttribute("viewBox")) {
+				clonedSvg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+			}
+			clonedSvg.setAttribute("width", (width * scale).toString());
+			clonedSvg.setAttribute("height", (height * scale).toString());
+
+			// clonedSvgのインラインスタイルにあるwidth/heightが優先されて解像度が制限されるのを防ぐため、明示的にスケール後の値を設定する
+			clonedSvg.style.removeProperty("width");
+			clonedSvg.style.removeProperty("height");
+			clonedSvg.style.width = `${width * scale}px`;
+			clonedSvg.style.height = `${height * scale}px`;
+
+			// テーマに応じた背景色を取得（透明背景を回避）
+			const bodyStyle = window.getComputedStyle(document.body);
+			let bgColor = bodyStyle.getPropertyValue("--bg-app").trim() || "#0f1117";
+			if (bgColor.startsWith("rgba")) {
+				const matches = bgColor.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/);
+				if (matches) {
+					bgColor = `rgb(${matches[1]}, ${matches[2]}, ${matches[3]})`;
+				}
+			}
+
+			const serializer = new XMLSerializer();
+			const svgString = serializer.serializeToString(clonedSvg);
+
+			const img = new Image();
+			img.width = width * scale;
+			img.height = height * scale;
+
+			const svgBlob = new Blob([svgString], {
+				type: "image/svg+xml;charset=utf-8",
+			});
+			const url = URL.createObjectURL(svgBlob);
+
+			img.onload = () => {
+				const canvas = document.createElement("canvas");
+				canvas.width = width * scale;
+				canvas.height = height * scale;
+
+				const ctx = canvas.getContext("2d");
+				if (ctx) {
+					ctx.imageSmoothingEnabled = true;
+					ctx.imageSmoothingQuality = "high";
+					ctx.fillStyle = bgColor;
+					ctx.fillRect(0, 0, canvas.width, canvas.height);
+					ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+
+					try {
+						const base64Data = canvas.toDataURL("image/png");
+						SaveChartImage(
+							base64Data,
+							`token-consumption-chart-${sessionId}.png`,
+						)
+							.then(() => {
+								console.log("Chart image exported successfully");
+							})
+							.catch((err) => {
+								console.error("Save image failed", err);
+								const errMsg = err instanceof Error ? err.message : String(err);
+								alert(`画像の保存に失敗しました: ${errMsg}`);
+							});
+					} catch (e) {
+						console.error("Canvas toDataURL failed", e);
+						alert("画像の生成に失敗しました");
+					}
+				}
+				URL.revokeObjectURL(url);
+			};
+
+			img.onerror = (err) => {
+				console.error("Image load failed", err);
+				URL.revokeObjectURL(url);
+				alert("画像の読み込みに失敗しました");
+			};
+
+			img.src = url;
+		} catch (error) {
+			console.error("Failed to export chart image", error);
+			alert("チャートのエクスポート中にエラーが発生しました");
+		}
 	};
 
 	const nodeIds = useMemo(() => new Set(nodes.map((node) => node.id)), [nodes]);
@@ -508,9 +688,21 @@ export function RightPanel({
 						</ResponsiveContainer>
 					</div>
 
-					<h3 className={styles.subsectionTitle}>
-						Last Token Consumption per Index
-					</h3>
+					<div className={styles.subsectionHeader}>
+						<h3 className={styles.subsectionTitle}>
+							Last Token Consumption per Index
+						</h3>
+						<button
+							type="button"
+							className={styles.exportBtn}
+							onClick={handleExportChart}
+							title="画像をエクスポート"
+							aria-label="Export chart as image"
+							data-testid="export-chart-button"
+						>
+							📤
+						</button>
+					</div>
 					<div className={styles.chartWrapper} data-testid="last-token-chart">
 						<ResponsiveContainer width="100%" height={180}>
 							<LineChart

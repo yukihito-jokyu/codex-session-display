@@ -367,3 +367,29 @@
 	margin-top: 2px;
 	font-family: monospace;
 }
+
+.subsectionHeader {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+
+.exportBtn {
+	background: rgba(88, 166, 255, 0.1);
+	border: 1px solid rgba(88, 166, 255, 0.2);
+	color: var(--color-accent);
+	font-size: 10px;
+	font-weight: 600;
+	padding: 2px 6px;
+	border-radius: 4px;
+	cursor: pointer;
+	transition: all 0.2s;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+}
+
+.exportBtn:hover {
+	background: rgba(88, 166, 255, 0.2);
+	border-color: var(--color-accent);
+}
