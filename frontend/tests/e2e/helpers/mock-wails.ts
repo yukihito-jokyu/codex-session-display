@@ -482,6 +482,7 @@ export async function mockWailsAPI(
 								duration_ms: 500,
 								time_to_first_token_ms: 200,
 								token_count_count: 0,
+								tool_call_count: 0,
 								consumed_tokens: {
 									total_tokens: 0,
 									input_tokens: 0,
@@ -925,6 +926,7 @@ export async function mockWailsAPI(
 							duration_ms: 5000,
 							time_to_first_token_ms: 500,
 							token_count_count: 4,
+							tool_call_count: 1,
 							consumed_tokens: {
 								total_tokens: 50000,
 								input_tokens: 40000,
@@ -938,6 +940,7 @@ export async function mockWailsAPI(
 							duration_ms: 10500,
 							time_to_first_token_ms: 800,
 							token_count_count: 6,
+							tool_call_count: 2,
 							consumed_tokens: {
 								total_tokens: 100000,
 								input_tokens: 80000,
@@ -951,6 +954,7 @@ export async function mockWailsAPI(
 							duration_ms: 500,
 							time_to_first_token_ms: 200,
 							token_count_count: 0,
+							tool_call_count: 0,
 							consumed_tokens: undefined,
 						},
 					],
