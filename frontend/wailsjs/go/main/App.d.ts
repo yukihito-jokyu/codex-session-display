@@ -23,3 +23,5 @@ export function ListSessions(arg1:string,arg2:number,arg3:number):Promise<Array<
 export function OpenLogDirectory():Promise<void>;
 
 export function ResolveSessionIDFromPath(arg1:string):Promise<string>;
+
+export function SaveChartImage(arg1:string,arg2:string):Promise<void>;
