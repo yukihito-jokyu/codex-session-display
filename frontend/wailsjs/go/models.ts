@@ -336,6 +336,7 @@ export namespace dto {
 	    duration_ms: number;
 	    time_to_first_token_ms: number;
 	    token_count_count: number;
+	    tool_call_count: number;
 	    consumed_tokens: TokenBreakdown;
 	
 	    static createFrom(source: any = {}) {
@@ -349,6 +350,7 @@ export namespace dto {
 	        this.duration_ms = source["duration_ms"];
 	        this.time_to_first_token_ms = source["time_to_first_token_ms"];
 	        this.token_count_count = source["token_count_count"];
+	        this.tool_call_count = source["tool_call_count"];
 	        this.consumed_tokens = this.convertValues(source["consumed_tokens"], TokenBreakdown);
 	    }
 	

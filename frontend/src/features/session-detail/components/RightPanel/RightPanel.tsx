@@ -222,22 +222,6 @@ export function RightPanel({
 		});
 	};
 
-	// ターンごとのツール呼び出し回数を nodes から集計
-	const toolCallsPerTurn = useMemo(() => {
-		const counts = Array(statistics.turn_count || 0).fill(0);
-		for (const node of nodes) {
-			if (
-				node.type === "action" &&
-				node.data?.turnIndex !== undefined &&
-				node.data.turnIndex >= 0 &&
-				node.data.turnIndex < counts.length
-			) {
-				counts[node.data.turnIndex]++;
-			}
-		}
-		return counts;
-	}, [nodes, statistics.turn_count]);
-
 	const nodeIds = useMemo(() => new Set(nodes.map((node) => node.id)), [nodes]);
 	const selectedTokenIndices = useMemo(
 		() => new Set(selectedTokenCountIndices),
@@ -254,11 +238,11 @@ export function RightPanel({
 				output: Number(turn.consumed_tokens?.output_tokens ?? 0),
 				reasoning: Number(turn.consumed_tokens?.reasoning_output_tokens ?? 0),
 				total: Number(turn.consumed_tokens?.total_tokens ?? 0),
-				toolCalls: toolCallsPerTurn[idx] || 0,
+				toolCalls: turn.tool_call_count ?? 0,
 				duration: (Number(turn.duration_ms) / 1000).toFixed(1), // 秒単位に変換
 			};
 		});
-	}, [statistics.turns, toolCallsPerTurn]);
+	}, [statistics.turns]);
 
 	// Last Token 用の折れ線グラフ用データ整形
 	const lastTokenChartData = useMemo(() => {
