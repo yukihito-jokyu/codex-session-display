@@ -47,7 +47,8 @@ func (r *CacheFSRepository) GetSessionSummary(ctx context.Context, sessionID str
 				summary.OutputTokens == nil ||
 				summary.ReasoningTokens == nil ||
 				summary.TurnCount == nil ||
-				summary.StepCount == nil {
+				summary.StepCount == nil ||
+				summary.DurationMs == nil {
 				logger.Info("statistics missing in summary cache, falling back to detail cache for merge", "session_id", sessionID)
 				if detail, err := r.GetSessionDetail(ctx, sessionID); err == nil {
 					var inputTokensSum int64
@@ -62,6 +63,7 @@ func (r *CacheFSRepository) GetSessionSummary(ctx context.Context, sessionID str
 					totalTokensVal := detail.Statistics.TotalTokens
 					turnCountVal := detail.Statistics.TurnCount
 					stepCountVal := detail.Statistics.ToolCallCount
+					durationMsVal := detail.Statistics.DurationMs
 
 					summary.TotalTokens = &totalTokensVal
 					summary.InputTokens = &inputTokensSum
@@ -69,6 +71,7 @@ func (r *CacheFSRepository) GetSessionSummary(ctx context.Context, sessionID str
 					summary.ReasoningTokens = &reasoningTokensSum
 					summary.TurnCount = &turnCountVal
 					summary.StepCount = &stepCountVal
+					summary.DurationMs = &durationMsVal
 
 					// 更新されたサマリーを再度キャッシュに保存して以降の読み込みを高速化する（失敗しても処理は続行）
 					if summaryData, err := json.Marshal(summary); err == nil {
@@ -140,6 +143,7 @@ func (r *CacheFSRepository) GetSessionSummary(ctx context.Context, sessionID str
 		Parsed:          true,
 		ParentSessionID: detail.ParentSessionID,
 		ChildSessionIDs: detail.ChildSessionIDs,
+		DurationMs:      &detail.Statistics.DurationMs,
 	}
 
 	logger.Info("cache read successful (fallback to detail)", "session_id", sessionID)
@@ -247,6 +251,7 @@ func (r *CacheFSRepository) SaveSessionDetail(ctx context.Context, sessionID str
 	totalTokensVal := detail.Statistics.TotalTokens
 	turnCountVal := detail.Statistics.TurnCount
 	stepCountVal := detail.Statistics.ToolCallCount
+	durationMsVal := detail.Statistics.DurationMs
 
 	summary.TotalTokens = &totalTokensVal
 	summary.InputTokens = &inputTokensSum
@@ -254,6 +259,7 @@ func (r *CacheFSRepository) SaveSessionDetail(ctx context.Context, sessionID str
 	summary.ReasoningTokens = &reasoningTokensSum
 	summary.TurnCount = &turnCountVal
 	summary.StepCount = &stepCountVal
+	summary.DurationMs = &durationMsVal
 
 	summaryData, err := json.Marshal(summary)
 	if err != nil {
