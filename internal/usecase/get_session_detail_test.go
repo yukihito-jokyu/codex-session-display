@@ -3408,3 +3408,51 @@ func getStringPtrRef(s string) *string {
 func getInt64PtrRef(i int64) *int64 {
 	return &i
 }
+
+func TestGetSessionDetailUseCase_ToolCallCountInTurnStats(t *testing.T) {
+	t.Parallel()
+
+	sessionRepo := &mockSessionRepositoryForDetail{
+		paths: map[string]string{"session-tool-count-test": "/tmp/session-tool-count-test.jsonl"},
+	}
+	cacheRepo := &mockCacheRepositoryForDetail{}
+	parser := &mockSessionParser{
+		records: []*model.TypedRecord{
+			{LineNumber: 1, Type: "session_meta", SessionMeta: &model.SessionMetaPayload{ID: "session-tool-count-test", CliVersion: "v0.131.0"}},
+			{LineNumber: 2, Type: "event_msg", SubType: "task_started", EventMsg: &model.EventMsgPayload{TurnID: "turn-1"}},
+			{
+				LineNumber: 3,
+				Type:       "response_item",
+				SubType:    "function_call",
+				ResponseItem: &model.ResponseItemPayload{
+					Name: "run_command", Arguments: `{"CommandLine":"go test ./..."}`, CallID: "call-1",
+				},
+			},
+			{
+				LineNumber: 4,
+				Type:       "response_item",
+				SubType:    "function_call",
+				ResponseItem: &model.ResponseItemPayload{
+					Name: "run_command", Arguments: `{"CommandLine":"go build"}`, CallID: "call-2",
+				},
+			},
+			{LineNumber: 5, Type: "response_item", SubType: "function_call_output", ResponseItem: &model.ResponseItemPayload{CallID: "call-2", Output: "build ok"}},
+			{LineNumber: 6, Type: "response_item", SubType: "function_call_output", ResponseItem: &model.ResponseItemPayload{CallID: "call-1", Output: "test ok"}},
+			{LineNumber: 7, Type: "event_msg", SubType: "task_complete", EventMsg: &model.EventMsgPayload{TurnID: "turn-1"}},
+		},
+	}
+
+	uc := usecase.NewGetSessionDetailUseCase(sessionRepo, cacheRepo, parser)
+	res, err := uc.Execute(context.Background(), "session-tool-count-test")
+	if err != nil {
+		t.Fatalf("Execute() error = %v", err)
+	}
+
+	if len(res.Statistics.Turns) != 1 {
+		t.Fatalf("len(Turns) = %d, want 1", len(res.Statistics.Turns))
+	}
+	turn := res.Statistics.Turns[0]
+	if turn.ToolCallCount != 2 {
+		t.Errorf("turn.ToolCallCount = %d, want 2", turn.ToolCallCount)
+	}
+}

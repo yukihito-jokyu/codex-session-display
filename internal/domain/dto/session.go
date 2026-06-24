@@ -87,6 +87,7 @@ type TurnStatistics struct {
 	DurationMs            int64          `json:"duration_ms"`
 	TimeToFirstTokenMs    int64          `json:"time_to_first_token_ms"`
 	TokenCountCount       int            `json:"token_count_count"`
+	ToolCallCount         int            `json:"tool_call_count"`
 	ConsumedTokens        TokenBreakdown `json:"consumed_tokens"`
 }
 
@@ -147,7 +148,7 @@ type ConversationTimelineTurn struct {
 }
 
 // CurrentSessionDetailCacheSchemaVersion は現行のセッション詳細キャッシュ形式を表します。
-const CurrentSessionDetailCacheSchemaVersion = 7
+const CurrentSessionDetailCacheSchemaVersion = 8
 
 // SessionDetailResponse はフロントエンドに返され、ディスクにキャッシュされるセッション詳細を表します。
 type SessionDetailResponse struct {

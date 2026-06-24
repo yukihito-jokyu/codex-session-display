@@ -1826,6 +1826,7 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 			DurationMs:            turnDuration,
 			TimeToFirstTokenMs:    firstTokenMs,
 			TokenCountCount:       len(turn.TokenCounts),
+			ToolCallCount:         turnToolCalls,
 			ConsumedTokens: dto.TokenBreakdown{
 				TotalTokens:           turnTotalTokens,
 				InputTokens:           turnInputTokens,
