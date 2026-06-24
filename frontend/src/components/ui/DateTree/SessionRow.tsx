@@ -25,6 +25,7 @@ export interface SessionSummary {
 	reasoning_tokens?: number | null;
 	turn_count?: number | null;
 	step_count?: number | null;
+	duration_ms?: number | null;
 }
 
 interface SessionRowProps {
@@ -86,6 +87,9 @@ export const SessionRow: React.FC<SessionRowProps> = ({
 			total: number;
 			input: number;
 			output: number;
+			turnCount?: number | null;
+			stepCount?: number | null;
+			durationMs?: number | null;
 		}[] = [];
 		const visited = new Set<string>();
 
@@ -102,6 +106,9 @@ export const SessionRow: React.FC<SessionRowProps> = ({
 					total: current.total_tokens ?? 0,
 					input: current.input_tokens ?? 0,
 					output: current.output_tokens ?? 0,
+					turnCount: current.turn_count,
+					stepCount: current.step_count,
+					durationMs: current.duration_ms,
 				});
 			}
 
@@ -118,6 +125,9 @@ export const SessionRow: React.FC<SessionRowProps> = ({
 			total: session.total_tokens ?? 0,
 			input: session.input_tokens ?? 0,
 			output: session.output_tokens ?? 0,
+			turnCount: session.turn_count,
+			stepCount: session.step_count,
+			durationMs: session.duration_ms,
 		};
 
 		const text = generateTokenBreakdownText(
