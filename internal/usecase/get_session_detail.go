@@ -1989,12 +1989,28 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 			outputTokens = *targetSummary.OutputTokens
 		}
 
+		var turnCount int
+		if targetSummary.TurnCount != nil {
+			turnCount = *targetSummary.TurnCount
+		}
+		var stepCount int
+		if targetSummary.StepCount != nil {
+			stepCount = *targetSummary.StepCount
+		}
+		var durationMs int64
+		if targetSummary.DurationMs != nil {
+			durationMs = *targetSummary.DurationMs
+		}
+
 		subagents = append(subagents, dto.SubagentDetail{
 			ID:           id,
 			Nickname:     nickname,
 			TotalTokens:  totalTokens,
 			InputTokens:  inputTokens,
 			OutputTokens: outputTokens,
+			TurnCount:    &turnCount,
+			StepCount:    &stepCount,
+			DurationMs:   &durationMs,
 		})
 
 		for _, cid := range targetSummary.ChildSessionIDs {
