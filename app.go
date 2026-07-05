@@ -30,14 +30,15 @@ var (
 
 // App はアプリケーションの構造体です。
 type App struct {
-	mu                 sync.Mutex
-	ctx                context.Context
-	listSessionsUC     *usecase.ListSessionsUseCase
-	getSessionDetailUC *usecase.GetSessionDetailUseCase
-	sessionRepo        usecase.SessionRepository
-	frontendReady      bool
-	pendingSessionFile []string
-	sessionWatcher     *repository.SessionWatcher
+	mu                    sync.Mutex
+	ctx                   context.Context
+	listSessionsUC        *usecase.ListSessionsUseCase
+	getSessionDetailUC    *usecase.GetSessionDetailUseCase
+	analyzeClaudeCorpusUC *usecase.AnalyzeClaudeCorpusUseCase
+	sessionRepo           usecase.SessionRepository
+	frontendReady         bool
+	pendingSessionFile    []string
+	sessionWatcher        *repository.SessionWatcher
 }
 
 // NewApp は新しい App アプリケーション構造体を作成します。
@@ -64,6 +65,7 @@ func NewApp() (*App, error) {
 	sessionRepo.SetClaudeProjectsDir(claudeProjectsDir)
 	listSessionsUC := usecase.NewListSessionsUseCase(sessionRepo, cacheRepo)
 	getSessionDetailUC := usecase.NewGetSessionDetailUseCase(sessionRepo, cacheRepo, repository.NewJSONLParser())
+	analyzeClaudeCorpusUC := usecase.NewAnalyzeClaudeCorpusUseCase()
 
 	var app *App
 	watcher := repository.NewSessionWatcher(sessionsDir, 1*time.Second, func(filePath string) {
@@ -73,10 +75,11 @@ func NewApp() (*App, error) {
 	})
 
 	app = &App{
-		listSessionsUC:     listSessionsUC,
-		getSessionDetailUC: getSessionDetailUC,
-		sessionRepo:        sessionRepo,
-		sessionWatcher:     watcher,
+		listSessionsUC:        listSessionsUC,
+		getSessionDetailUC:    getSessionDetailUC,
+		analyzeClaudeCorpusUC: analyzeClaudeCorpusUC,
+		sessionRepo:           sessionRepo,
+		sessionWatcher:        watcher,
 	}
 
 	return app, nil
@@ -438,4 +441,20 @@ func (a *App) SaveChartImage(base64Data, defaultName string) error {
 
 	logger.Info("SaveChartImage succeeded", "path", filePath)
 	return nil
+}
+
+// AnalyzeClaudeCorpus は Claude Code のトランスクリプト履歴コーパスを分析します。
+func (a *App) AnalyzeClaudeCorpus(options dto.AnalyzeOptions) (*dto.AnalyzeResult, error) {
+	logger.Info("AnalyzeClaudeCorpus start", "projectSource", options.ProjectSource)
+	res, err := a.analyzeClaudeCorpusUC.Execute(a.ctx, options)
+	if err != nil {
+		appErr := &dto.AppError{
+			Code:    "ANALYZE_ERROR",
+			Message: "履歴コーパスの分析に失敗しました: " + err.Error(),
+		}
+		logger.Error("AnalyzeClaudeCorpus failed", "error", err, "code", appErr.Code)
+		return nil, appErr
+	}
+	logger.Info("AnalyzeClaudeCorpus completed", "totalFiles", res.TotalFiles, "totalLines", res.TotalLines)
+	return res, nil
 }

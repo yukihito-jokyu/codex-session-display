@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"codex-session-display/internal/domain/dto"
 	"codex-session-display/internal/repository"
+	"codex-session-display/internal/usecase"
 	"context"
 	"errors"
 	"os"
@@ -455,4 +456,65 @@ func TestApp_SaveChartImage(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestApp_AnalyzeClaudeCorpus(t *testing.T) {
+	tempDir := t.TempDir()
+
+	// Create dummy projects and session logs
+	projectDir := filepath.Join(tempDir, "projects", "test-proj")
+	if err := os.MkdirAll(projectDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(projectDir, "session.jsonl"), []byte(`{"type":"user","sessionId":"session-1"}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	uc := usecase.NewAnalyzeClaudeCorpusUseCase()
+	uc.SetCustomProjectsDir(filepath.Join(tempDir, "projects"))
+
+	app := &App{
+		analyzeClaudeCorpusUC: uc,
+		ctx:                   context.Background(),
+	}
+
+	t.Run("success", func(t *testing.T) {
+		res, err := app.AnalyzeClaudeCorpus(dto.AnalyzeOptions{ProjectSource: "home"})
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		if res.TotalFiles != 1 {
+			t.Errorf("expected 1 file, got %d", res.TotalFiles)
+		}
+	})
+
+	t.Run("error when directory not found or config dir not set", func(t *testing.T) {
+		originalConfigDir := os.Getenv("CLAUDE_CONFIG_DIR")
+		os.Unsetenv("CLAUDE_CONFIG_DIR")
+		defer func() {
+			if originalConfigDir != "" {
+				_ = os.Setenv("CLAUDE_CONFIG_DIR", originalConfigDir)
+			}
+		}()
+
+		// Create a separate usecase instance without SetCustomProjectsDir to force it to use environment variables
+		ucErr := usecase.NewAnalyzeClaudeCorpusUseCase()
+		appErr := &App{
+			analyzeClaudeCorpusUC: ucErr,
+			ctx:                   context.Background(),
+		}
+
+		_, err := appErr.AnalyzeClaudeCorpus(dto.AnalyzeOptions{ProjectSource: "config"})
+		if err == nil {
+			t.Fatal("expected error, got nil")
+		}
+
+		var appErrType *dto.AppError
+		if !errors.As(err, &appErrType) {
+			t.Fatalf("expected *dto.AppError, got %T", err)
+		}
+		if appErrType.Code != "ANALYZE_ERROR" {
+			t.Errorf("expected ANALYZE_ERROR, got %s", appErrType.Code)
+		}
+	})
 }
