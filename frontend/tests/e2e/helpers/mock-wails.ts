@@ -131,1184 +131,1246 @@ export const dummySessions: dto.SessionSummary[] = [
 	},
 ];
 
+export const dummyClaudeSessions: dto.SessionSummary[] = [
+	{
+		id: "claude-session-001",
+		provider: "claude",
+		file_path: "-Users-test-claude/claude-session-001.jsonl",
+		cwd: "/Users/test/claude",
+		timestamp: "2026-05-20T15:00:00Z",
+		file_size: 4096,
+		file_modified_at: "2026-05-20T15:00:00Z",
+		parsed: false,
+		encoded_project: "-Users-test-claude",
+		message_count: 3,
+		tool_call_count: 2,
+		total_cost_usd: 0.0323,
+	},
+];
+
 export async function mockWailsAPI(
 	page: Page,
 	sessions: dto.SessionSummary[] = dummySessions,
+	claudeSessions: dto.SessionSummary[] = dummyClaudeSessions,
 ) {
 	// Wails APIのモックをブラウザコンテキストに注入
-	await page.addInitScript((sessionsArg) => {
-		window.sessionStorage.clear();
-		const dummySessions = sessionsArg as dto.SessionSummary[];
-		(window as any).__dummySessions = dummySessions;
-
-		const clipboard = {
-			writeText: async (text: string) => {
-				(window as any).__copiedTexts = (window as any).__copiedTexts || [];
-				(window as any).__copiedTexts.push(text);
-			},
-		};
-		Object.defineProperty(navigator, "clipboard", {
-			value: clipboard,
-			configurable: true,
-		});
-
-		// グローバルオブジェクト go.main.App.ListSessions を定義
-		const go = (window as any).go || {};
-		const runtime = (window as any).runtime || {};
-		const eventListeners = new Map<string, Set<(...args: unknown[]) => void>>();
-
-		go.main = go.main || {};
-		go.main.App = go.main.App || {};
-		runtime.EventsOnMultiple = (
-			eventName: string,
-			callback: (...args: unknown[]) => void,
-			_maxCallbacks: number,
-		) => {
-			const listeners = eventListeners.get(eventName) || new Set();
-			listeners.add(callback);
-			eventListeners.set(eventName, listeners);
-
-			return () => {
-				listeners.delete(callback);
-				if (listeners.size === 0) {
-					eventListeners.delete(eventName);
-				}
+	await page.addInitScript(
+		(args) => {
+			window.sessionStorage.clear();
+			const { sessionsArg, claudeSessionsArg } = args as {
+				sessionsArg: dto.SessionSummary[];
+				claudeSessionsArg: dto.SessionSummary[];
 			};
-		};
+			const dummySessions = sessionsArg;
+			(window as any).__dummySessions = dummySessions;
+			(window as any).__dummyClaudeSessions = claudeSessionsArg;
 
-		(window as any).__emitWailsEvent = (
-			eventName: string,
-			...args: unknown[]
-		) => {
-			const listeners = eventListeners.get(eventName);
-			if (!listeners) {
-				return;
-			}
-			for (const listener of listeners) {
-				listener(...args);
-			}
-		};
-
-		go.main.App.ListSessions = async (
-			query: string,
-			year: number,
-			month: number,
-		) => {
-			// デバッグ用およびテストアサーション用に呼び出し引数を記録
-			(window as any).__listSessionsCalls =
-				(window as any).__listSessionsCalls || [];
-			(window as any).__listSessionsCalls.push({ query, year, month });
-
-			// クエリが trigger-error の場合は意図的に例外をスロー
-			if (query === "trigger-error") {
-				throw new Error("Mocked API Error");
-			}
-
-			if (query === "timestamp-error") {
-				return dummySessions.filter((s) => s.id === "sess-005-timestamp-error");
-			}
-
-			if (query === "hang") {
-				return new Promise(() => {}); // never resolves
-			}
-
-			if (query === "return-undefined") {
-				return undefined as any;
-			}
-
-			if (query === "trigger-string-error") {
-				throw "Mocked List String Error";
-			}
-
-			if (year === 0 && month === 0 && (window as any).__triggerInitialError) {
-				throw new Error("Initial Load Error");
-			}
-
-			if (year === 0 && month === 0 && (window as any).__hangInitialLoad) {
-				return new Promise(() => {}); // never resolves
-			}
-
-			if (query === "multi-date") {
-				return dummySessions;
-			}
-
-			if (query === "test-timestamp-fallbacks") {
-				const sessA = {
-					id: "sess-008-fallback-undefined",
-					file_path: "/path/to/session-8",
-					cwd: "/Users/test/projects/react-app",
-					cli_version: "1.0.0",
-					originator: "user-1",
-					model_provider: "anthropic",
-					branch: "main",
-					source: "cli",
-					timestamp: undefined,
-					file_size: 1024,
-					file_modified_at: "2026-05-20T10:00:00Z",
-					parsed: true,
-				};
-				const sessB = {
-					id: "sess-009-fallback-invalid",
-					file_path: "/path/to/session-9",
-					cwd: "/Users/test/projects/react-app",
-					cli_version: "1.0.0",
-					originator: "user-1",
-					model_provider: "anthropic",
-					branch: "main",
-					source: "cli",
-					timestamp: "invalid-date-format-string",
-					file_size: 1024,
-					file_modified_at: "2026-05-20T10:00:00Z",
-					parsed: true,
-				};
-				return [sessA, sessB];
-			}
-
-			if (query === "all-invalid-grouping-dates") {
-				return [
-					{
-						id: "sess-011-invalid-grouping",
-						file_path: "/path/to/session-11",
-						cwd: "/Users/test/projects/invalid-grouping",
-						cli_version: "1.0.0",
-						originator: "user-1",
-						model_provider: "openai",
-						branch: "broken-date",
-						source: "cli",
-						timestamp: "invalid-date-format-string",
-						file_size: 128,
-						file_modified_at: "also-invalid",
-						parsed: true,
-					},
-				];
-			}
-
-			let targetYear = year;
-			let targetMonth = month;
-
-			// 初回呼び出し (year=0, month=0) の場合は最新のセッションがある2026年5月をデフォルトとする
-			if (year === 0 && month === 0) {
-				targetYear = 2026;
-				targetMonth = 5;
-			}
-
-			// 年月でフィルタリング
-			let filtered = dummySessions.filter((s) => {
-				if (!s.timestamp) return false;
-				const d = new Date(s.timestamp);
-				return (
-					d.getFullYear() === targetYear && d.getMonth() + 1 === targetMonth
-				);
+			const clipboard = {
+				writeText: async (text: string) => {
+					(window as any).__copiedTexts = (window as any).__copiedTexts || [];
+					(window as any).__copiedTexts.push(text);
+				},
+			};
+			Object.defineProperty(navigator, "clipboard", {
+				value: clipboard,
+				configurable: true,
 			});
 
-			// 検索クエリでフィルタリング
-			if (query) {
-				const q = query.toLowerCase();
-				filtered = filtered.filter(
-					(s) =>
-						s.id.toLowerCase().includes(q) ||
-						s.branch?.toLowerCase().includes(q) ||
-						s.cwd?.toLowerCase().includes(q) ||
-						s.model_provider?.toLowerCase().includes(q),
+			// グローバルオブジェクト go.main.App.ListSessions を定義
+			const go = (window as any).go || {};
+			const runtime = (window as any).runtime || {};
+			const eventListeners = new Map<
+				string,
+				Set<(...args: unknown[]) => void>
+			>();
+
+			go.main = go.main || {};
+			go.main.App = go.main.App || {};
+			runtime.EventsOnMultiple = (
+				eventName: string,
+				callback: (...args: unknown[]) => void,
+				_maxCallbacks: number,
+			) => {
+				const listeners = eventListeners.get(eventName) || new Set();
+				listeners.add(callback);
+				eventListeners.set(eventName, listeners);
+
+				return () => {
+					listeners.delete(callback);
+					if (listeners.size === 0) {
+						eventListeners.delete(eventName);
+					}
+				};
+			};
+
+			(window as any).__emitWailsEvent = (
+				eventName: string,
+				...args: unknown[]
+			) => {
+				const listeners = eventListeners.get(eventName);
+				if (!listeners) {
+					return;
+				}
+				for (const listener of listeners) {
+					listener(...args);
+				}
+			};
+
+			const listSessionsByProvider = async (
+				providerOrQuery: string,
+				queryOrYear: string | number,
+				yearOrMonth: number,
+				maybeMonth?: number,
+			) => {
+				const knownProviders = new Set(["codex", "claude"]);
+				const provider = knownProviders.has(providerOrQuery)
+					? providerOrQuery
+					: "codex";
+				const query = knownProviders.has(providerOrQuery)
+					? (queryOrYear as string)
+					: providerOrQuery;
+				const year = knownProviders.has(providerOrQuery)
+					? yearOrMonth
+					: (queryOrYear as number);
+				const month = knownProviders.has(providerOrQuery)
+					? (maybeMonth as number)
+					: yearOrMonth;
+				// デバッグ用およびテストアサーション用に呼び出し引数を記録
+				(window as any).__listSessionsCalls =
+					(window as any).__listSessionsCalls || [];
+				(window as any).__listSessionsCalls.push({
+					provider,
+					query,
+					year,
+					month,
+				});
+
+				// クエリが trigger-error の場合は意図的に例外をスロー
+				if (query === "trigger-error") {
+					throw new Error("Mocked API Error");
+				}
+
+				if (query === "timestamp-error") {
+					return dummySessions.filter(
+						(s) => s.id === "sess-005-timestamp-error",
+					);
+				}
+
+				if (query === "hang") {
+					return new Promise(() => {}); // never resolves
+				}
+
+				if (query === "return-undefined") {
+					return undefined as any;
+				}
+
+				if (query === "trigger-string-error") {
+					throw "Mocked List String Error";
+				}
+
+				if (
+					year === 0 &&
+					month === 0 &&
+					(window as any).__triggerInitialError
+				) {
+					throw new Error("Initial Load Error");
+				}
+
+				if (year === 0 && month === 0 && (window as any).__hangInitialLoad) {
+					return new Promise(() => {}); // never resolves
+				}
+
+				if (query === "multi-date") {
+					return dummySessions;
+				}
+
+				if (provider === "claude") {
+					return (window as any).__dummyClaudeSessions || [];
+				}
+
+				if (query === "test-timestamp-fallbacks") {
+					const sessA = {
+						id: "sess-008-fallback-undefined",
+						file_path: "/path/to/session-8",
+						cwd: "/Users/test/projects/react-app",
+						cli_version: "1.0.0",
+						originator: "user-1",
+						model_provider: "anthropic",
+						branch: "main",
+						source: "cli",
+						timestamp: undefined,
+						file_size: 1024,
+						file_modified_at: "2026-05-20T10:00:00Z",
+						parsed: true,
+					};
+					const sessB = {
+						id: "sess-009-fallback-invalid",
+						file_path: "/path/to/session-9",
+						cwd: "/Users/test/projects/react-app",
+						cli_version: "1.0.0",
+						originator: "user-1",
+						model_provider: "anthropic",
+						branch: "main",
+						source: "cli",
+						timestamp: "invalid-date-format-string",
+						file_size: 1024,
+						file_modified_at: "2026-05-20T10:00:00Z",
+						parsed: true,
+					};
+					return [sessA, sessB];
+				}
+
+				if (query === "all-invalid-grouping-dates") {
+					return [
+						{
+							id: "sess-011-invalid-grouping",
+							file_path: "/path/to/session-11",
+							cwd: "/Users/test/projects/invalid-grouping",
+							cli_version: "1.0.0",
+							originator: "user-1",
+							model_provider: "openai",
+							branch: "broken-date",
+							source: "cli",
+							timestamp: "invalid-date-format-string",
+							file_size: 128,
+							file_modified_at: "also-invalid",
+							parsed: true,
+						},
+					];
+				}
+
+				let targetYear = year;
+				let targetMonth = month;
+
+				// 初回呼び出し (year=0, month=0) の場合は最新のセッションがある2026年5月をデフォルトとする
+				if (year === 0 && month === 0) {
+					targetYear = 2026;
+					targetMonth = 5;
+				}
+
+				// 年月でフィルタリング
+				let filtered = dummySessions.filter((s) => {
+					if (!s.timestamp) return false;
+					const d = new Date(s.timestamp);
+					return (
+						d.getFullYear() === targetYear && d.getMonth() + 1 === targetMonth
+					);
+				});
+
+				// 検索クエリでフィルタリング
+				if (query) {
+					const q = query.toLowerCase();
+					filtered = filtered.filter(
+						(s) =>
+							s.id.toLowerCase().includes(q) ||
+							s.branch?.toLowerCase().includes(q) ||
+							s.cwd?.toLowerCase().includes(q) ||
+							s.model_provider?.toLowerCase().includes(q),
+					);
+				}
+
+				return filtered;
+			};
+			go.main.App.ListSessions = listSessionsByProvider;
+			go.main.App.ListSessionsByProvider = listSessionsByProvider;
+
+			go.main.App.CheckUpdate = async () => {
+				(window as any).__checkUpdateCalls =
+					((window as any).__checkUpdateCalls || 0) + 1;
+				return (
+					(window as any).__mockUpdateResult || {
+						hasUpdate: false,
+						current: "1.0.0",
+						latest: "1.0.0",
+						releaseUrl: "",
+						downloadUrl: "",
+					}
 				);
-			}
+			};
 
-			return filtered;
-		};
+			go.main.App.ApplyUpdate = async (downloadUrl: string) => {
+				(window as any).__applyUpdateCalls =
+					(window as any).__applyUpdateCalls || [];
+				(window as any).__applyUpdateCalls.push(downloadUrl);
 
-		go.main.App.CheckUpdate = async () => {
-			(window as any).__checkUpdateCalls =
-				((window as any).__checkUpdateCalls || 0) + 1;
-			return (
-				(window as any).__mockUpdateResult || {
-					hasUpdate: false,
-					current: "1.0.0",
-					latest: "1.0.0",
-					releaseUrl: "",
-					downloadUrl: "",
+				console.log(
+					"[Mock] ApplyUpdate called, triggerMockProgress:",
+					(window as any).__triggerMockProgress,
+				);
+				if ((window as any).__triggerMockProgress) {
+					const emit = (window as any).__emitWailsEvent;
+					console.log("[Mock] emit function exists:", !!emit);
+					if (emit) {
+						setTimeout(
+							() =>
+								emit("update-progress", {
+									status: "downloading",
+									progress: 50.0,
+								}),
+							200,
+						);
+						setTimeout(
+							() =>
+								emit("update-progress", {
+									status: "download_complete",
+									progress: 100.0,
+								}),
+							400,
+						);
+						setTimeout(
+							() =>
+								emit("update-progress", {
+									status: "extracting",
+									progress: 100.0,
+								}),
+							600,
+						);
+						setTimeout(
+							() =>
+								emit("update-progress", {
+									status: "restarting",
+									progress: 100.0,
+								}),
+							800,
+						);
+					}
 				}
-			);
-		};
+				return null;
+			};
 
-		go.main.App.ApplyUpdate = async (downloadUrl: string) => {
-			(window as any).__applyUpdateCalls =
-				(window as any).__applyUpdateCalls || [];
-			(window as any).__applyUpdateCalls.push(downloadUrl);
+			go.main.App.ResolveSessionIDFromPath = async (filePath: string) => {
+				(window as any).__resolveSessionIDCalls =
+					(window as any).__resolveSessionIDCalls || [];
+				(window as any).__resolveSessionIDCalls.push({ filePath });
 
-			console.log(
-				"[Mock] ApplyUpdate called, triggerMockProgress:",
-				(window as any).__triggerMockProgress,
-			);
-			if ((window as any).__triggerMockProgress) {
-				const emit = (window as any).__emitWailsEvent;
-				console.log("[Mock] emit function exists:", !!emit);
-				if (emit) {
-					setTimeout(
-						() =>
-							emit("update-progress", {
-								status: "downloading",
-								progress: 50.0,
-							}),
-						200,
-					);
-					setTimeout(
-						() =>
-							emit("update-progress", {
-								status: "download_complete",
-								progress: 100.0,
-							}),
-						400,
-					);
-					setTimeout(
-						() =>
-							emit("update-progress", {
-								status: "extracting",
-								progress: 100.0,
-							}),
-						600,
-					);
-					setTimeout(
-						() =>
-							emit("update-progress", {
-								status: "restarting",
-								progress: 100.0,
-							}),
-						800,
-					);
+				const session = dummySessions.find(
+					(item) => item.file_path === filePath,
+				);
+				if (!session) {
+					throw new Error("Session path not found");
 				}
-			}
-			return null;
-		};
 
-		go.main.App.ResolveSessionIDFromPath = async (filePath: string) => {
-			(window as any).__resolveSessionIDCalls =
-				(window as any).__resolveSessionIDCalls || [];
-			(window as any).__resolveSessionIDCalls.push({ filePath });
+				return session.id;
+			};
 
-			const session = dummySessions.find((item) => item.file_path === filePath);
-			if (!session) {
-				throw new Error("Session path not found");
-			}
+			go.main.App.FrontendReady = async () => {
+				(window as any).__frontendReadyCalls =
+					((window as any).__frontendReadyCalls || 0) + 1;
+			};
 
-			return session.id;
-		};
+			go.main.App.SaveChartImage = async (
+				base64Data: string,
+				defaultName: string,
+			) => {
+				(window as any).__saveChartImageCalls =
+					(window as any).__saveChartImageCalls || [];
+				(window as any).__saveChartImageCalls.push({ base64Data, defaultName });
 
-		go.main.App.FrontendReady = async () => {
-			(window as any).__frontendReadyCalls =
-				((window as any).__frontendReadyCalls || 0) + 1;
-		};
-
-		go.main.App.SaveChartImage = async (
-			base64Data: string,
-			defaultName: string,
-		) => {
-			(window as any).__saveChartImageCalls =
-				(window as any).__saveChartImageCalls || [];
-			(window as any).__saveChartImageCalls.push({ base64Data, defaultName });
-
-			if (defaultName === "trigger-error") {
-				throw new Error("Mocked Save Error");
-			}
-			return null;
-		};
-
-		go.main.App.GetSessionDetail = async (id: string) => {
-			(window as any).__getSessionDetailCalls =
-				(window as any).__getSessionDetailCalls || [];
-			(window as any).__getSessionDetailCalls.push({ id });
-
-			if (id === "trigger-error") {
-				throw new Error("Mocked Detail API Error");
-			}
-
-			if (id === "trigger-string-error") {
-				throw "Mocked Detail String Error";
-			}
-
-			// バックエンドのキャッシュ保存をシミュレートして dummySessions 内のステータスを更新する
-			const session = dummySessions.find((s) => s.id === id);
-			if (session) {
-				if (id === "sess-004-unparsed-session") {
-					throw new Error("Simulated parse failure");
+				if (defaultName === "trigger-error") {
+					throw new Error("Mocked Save Error");
 				}
-				session.parsed = true;
-			}
+				return null;
+			};
 
-			if (id === "sess-002-uuid-long-name") {
+			go.main.App.GetSessionDetail = async (id: string) => {
+				(window as any).__getSessionDetailCalls =
+					(window as any).__getSessionDetailCalls || [];
+				(window as any).__getSessionDetailCalls.push({ id });
+
+				if (id === "trigger-error") {
+					throw new Error("Mocked Detail API Error");
+				}
+
+				if (id === "trigger-string-error") {
+					throw "Mocked Detail String Error";
+				}
+
+				// バックエンドのキャッシュ保存をシミュレートして dummySessions 内のステータスを更新する
+				const session = dummySessions.find((s) => s.id === id);
+				if (session) {
+					if (id === "sess-004-unparsed-session") {
+						throw new Error("Simulated parse failure");
+					}
+					session.parsed = true;
+				}
+
+				if (id === "sess-002-uuid-long-name") {
+					return {
+						id: id,
+						cache_schema_version: 3,
+						parsed_at: "2026-05-20T12:00:00Z",
+						nodes: undefined,
+						edges: undefined,
+						statistics: {
+							duration_ms: 1000,
+							total_tokens: 0,
+							tool_call_count: 0,
+							token_count_count: 0,
+							context_window_size: 0,
+							turn_count: 0,
+							turns: [],
+						},
+						token_counts: [
+							{
+								index: 0,
+								turn_index: 0,
+								bound_to_node_id: "node-user-msg",
+								last_token_usage: undefined,
+								total_token_usage: undefined,
+							},
+						],
+						parent_session_id: "sess-001-uuid-long-name",
+					};
+				}
+
+				if (id === "sess-003-uuid-long-name") {
+					return {
+						id: id,
+						cache_schema_version: 3,
+						parsed_at: "2026-04-10T09:00:00Z",
+						nodes: [
+							{
+								id: "node-summary-only",
+								type: "agentMessage",
+								position: { x: 0, y: 0 },
+								data: {
+									category: "message",
+									label: "Summary Only",
+									icon: "🤖",
+									summary: "Token log omitted session",
+									turnIndex: 0,
+								},
+							},
+						],
+						edges: [],
+						statistics: {
+							duration_ms: 500,
+							total_tokens: 0,
+							tool_call_count: 0,
+							token_count_count: 0,
+							context_window_size: 0,
+							turn_count: 1,
+							turns: [
+								{
+									index: 0,
+									duration_ms: 500,
+									time_to_first_token_ms: 200,
+									token_count_count: 0,
+									tool_call_count: 0,
+									consumed_tokens: {
+										total_tokens: 0,
+										input_tokens: 0,
+										output_tokens: 0,
+										reasoning_output_tokens: 0,
+									},
+								},
+							],
+						},
+						token_counts: undefined,
+					};
+				}
+
+				if (id === "sess-no-turns") {
+					return {
+						id: id,
+						cache_schema_version: 3,
+						parsed_at: "2026-05-20T09:00:00Z",
+						nodes: [
+							{
+								id: "node-no-turns",
+								type: "sessionMeta",
+								position: { x: 0, y: 0 },
+								data: {
+									category: "meta",
+									label: "No Turns",
+									icon: "⚙️",
+									summary: "No turn data",
+									turnIndex: -1,
+								},
+							},
+						],
+						edges: [],
+						statistics: {
+							duration_ms: 0,
+							total_tokens: 0,
+							tool_call_count: 0,
+							token_count_count: 0,
+							context_window_size: 0,
+							turn_count: 0,
+							turns: undefined,
+						},
+						token_counts: undefined,
+					};
+				}
+
+				if (id === "performance-visibility") {
+					return {
+						id: id,
+						cache_schema_version: 3,
+						parsed_at: "2026-05-20T10:00:00Z",
+						nodes: [
+							{
+								id: "node-near",
+								type: "userMessage",
+								position: { x: 0, y: 0 },
+								data: {
+									category: "message",
+									label: "Near Node",
+									icon: "👤",
+									summary: "Zoom target",
+									turnIndex: 0,
+								},
+							},
+							{
+								id: "node-far-away",
+								type: "generic",
+								position: { x: 100000, y: 100000 },
+								data: {
+									category: "event",
+									label: "Far Away Node",
+									icon: "📄",
+									summary: "This node is outside the target viewport",
+									turnIndex: 0,
+								},
+							},
+						],
+						edges: [],
+						statistics: {
+							duration_ms: 1000,
+							total_tokens: 1000,
+							tool_call_count: 0,
+							token_count_count: 1,
+							context_window_size: 100000,
+							turn_count: 1,
+							turns: [],
+						},
+						token_counts: [
+							{
+								index: 0,
+								turn_index: 0,
+								bound_to_node_id: "node-near",
+								last_token_usage: {
+									total_tokens: 1000,
+									input_tokens: 800,
+									output_tokens: 200,
+									reasoning_output_tokens: 0,
+									cached_input_tokens: 0,
+								},
+								total_token_usage: {
+									total_tokens: 1000,
+									input_tokens: 800,
+									output_tokens: 200,
+									reasoning_output_tokens: 0,
+									cached_input_tokens: 0,
+								},
+							},
+						],
+					};
+				}
+
 				return {
 					id: id,
 					cache_schema_version: 3,
-					parsed_at: "2026-05-20T12:00:00Z",
-					nodes: undefined,
-					edges: undefined,
+					parsed_at: "2026-05-20T10:00:00Z",
+					child_session_ids: ["sess-002-uuid-long-name"],
+					nodes: [
+						{
+							id: "node-collab-agent-test",
+							type: "collabAgent",
+							position: { x: 200, y: -120 },
+							data: {
+								category: "agent",
+								label: "Subagent Spawn",
+								icon: "🤖",
+								summary: "Spawned a subagent thread",
+								turnIndex: 0,
+								meta: {
+									new_thread_id: "sess-002-uuid-long-name",
+								},
+							},
+						},
+						{
+							id: "node-meta",
+							type: "sessionMeta",
+							position: { x: 0, y: 0 },
+							data: {
+								category: "meta",
+								label: "Session Meta",
+								icon: "⚙️",
+								summary: "CLI Version: 1.0.0",
+								fullText: "Full session meta details here",
+								turnIndex: -1,
+								tokenBadge: {
+									consumedTokens: 2500000, // 2.5M
+									tokenCountIndex: 0,
+									boundCount: 1,
+								},
+								meta: {
+									version: "1.0.0",
+									config: { debug: true },
+								},
+							},
+						},
+						{
+							id: "node-context-doc",
+							type: "contextDoc",
+							position: { x: 400, y: 0 },
+							data: {
+								category: "context",
+								label: "User Instructions",
+								icon: "📜",
+								summary: "▸ クリックして展開",
+								fullText:
+									"This is a detailed user instruction text that can be expanded.",
+								turnIndex: -1,
+							},
+						},
+						{
+							id: "node-context-doc-long",
+							type: "contextDoc",
+							position: { x: 650, y: 0 },
+							data: {
+								category: "context",
+								label: "Long Context",
+								icon: "",
+								summary: "▸ クリックして展開",
+								fullText: "L".repeat(1201),
+								turnIndex: 0,
+							},
+						},
+						{
+							id: "node-context-doc-warning",
+							type: "contextDoc",
+							position: { x: 900, y: 0 },
+							data: {
+								category: "context",
+								label: "Warning Context",
+								icon: "⚠️",
+								summary: "▸ クリックして展開",
+								fullText: "Warning context details",
+								textLength: 42,
+								turnIndex: -1,
+							},
+						},
+						{
+							id: "node-context-doc-empty",
+							type: "contextDoc",
+							position: { x: 400, y: 120 },
+							data: {
+								category: "context",
+								label: "Empty Context",
+								icon: "",
+								summary: "▸ クリックして展開",
+								fullText: undefined,
+								turnIndex: 0,
+							},
+						},
+						{
+							id: "node-user-msg",
+							type: "userMessage",
+							position: { x: 0, y: 120 },
+							data: {
+								category: "message",
+								label: "User Message",
+								icon: "👤",
+								summary: "Hello, agent",
+								fullText: "Hello, agent, please help me.",
+								turnIndex: 0,
+								tokenBadge: {
+									consumedTokens: 50000, // 50K
+									tokenCountIndex: 0,
+									boundCount: 2,
+								},
+							},
+						},
+						{
+							id: "node-orphan-event",
+							type: "taskEvent",
+							position: { x: 0, y: 240 },
+							data: {
+								category: "event",
+								label: "Orphan Complete",
+								icon: "⚠️",
+								summary: "Orphan complete/aborted event without task_started",
+								fullText: undefined, // fullTextを空にして「No additional details...」を検証
+								turnIndex: -1,
+								tokenBadge: {
+									consumedTokens: 1500, // 1.5K
+									tokenCountIndex: 0,
+									boundCount: 1,
+								},
+							},
+						},
+						{
+							id: "node-agent-msg",
+							type: "agentMessage",
+							position: { x: 200, y: 240 },
+							data: {
+								category: "message",
+								label: "Agent Message",
+								icon: "🤖",
+								summary: "Helpful agent response",
+								fullText: "Here is how to solve...",
+								turnIndex: 1,
+								tokenBadge: {
+									consumedTokens: 500, // 500
+									tokenCountIndex: 1,
+									boundCount: 1,
+								},
+							},
+						},
+						{
+							id: "node-turn-ctx",
+							type: "turnContext",
+							position: { x: 0, y: 360 },
+							data: {
+								category: "context",
+								label: "Turn Context",
+								icon: "🔄",
+								summary: "Context summary",
+								turnIndex: 0,
+							},
+						},
+						{
+							id: "node-dev-msg",
+							type: "developerMessage",
+							position: { x: 200, y: 360 },
+							data: {
+								category: "message",
+								label: "Developer Message",
+								icon: "",
+								summary: "Developer instructions",
+								turnIndex: 0,
+							},
+						},
+						{
+							id: "node-user-api-msg",
+							type: "userApiMessage",
+							position: { x: 400, y: 360 },
+							data: {
+								category: "message",
+								label: "User API Message",
+								icon: "🔌",
+								summary: "API Call message",
+								turnIndex: 0,
+								tokenBadge: {
+									consumedTokens: 0,
+									tokenCountIndex: 2,
+									boundCount: 1,
+								},
+							},
+						},
+						{
+							id: "node-reasoning",
+							type: "reasoning",
+							position: { x: 600, y: 360 },
+							data: {
+								category: "thought",
+								label: "Reasoning Step",
+								icon: "🧠",
+								summary: "Thinking process details",
+								turnIndex: 0,
+							},
+						},
+						{
+							id: "node-action",
+							type: "action",
+							position: { x: 800, y: 360 },
+							data: {
+								category: "action",
+								label: "Call Tool",
+								icon: "🛠️",
+								summary: "Tool invocation details",
+								turnIndex: 0,
+							},
+						},
+						{
+							id: "node-websearch",
+							type: "webSearchAction",
+							position: { x: 1000, y: 360 },
+							data: {
+								category: "action",
+								label: "Web Search",
+								icon: "🔍",
+								summary: "Searching the web details",
+								turnIndex: 0,
+							},
+						},
+						{
+							id: "node-external-event",
+							type: "externalEvent",
+							position: { x: 0, y: 480 },
+							data: {
+								category: "event",
+								label: "External Input",
+								icon: "📡",
+								summary: "External system trigger",
+								turnIndex: 0,
+							},
+						},
+						{
+							id: "node-task-event-started",
+							type: "taskEvent",
+							position: { x: 200, y: 480 },
+							data: {
+								category: "event",
+								label: "Task Started",
+								icon: "▶️",
+								summary: "Workflow process start",
+								turnIndex: 0,
+							},
+						},
+						{
+							id: "node-task-event-aborted",
+							type: "taskEvent",
+							position: { x: 400, y: 480 },
+							data: {
+								category: "event",
+								label: "Task Aborted",
+								icon: "⏹️",
+								summary: "Workflow process aborted",
+								turnIndex: 0,
+							},
+						},
+						{
+							id: "node-item-completed",
+							type: "itemCompleted",
+							position: { x: 600, y: 480 },
+							data: {
+								category: "event",
+								label: "Item Completed",
+								icon: "✅",
+								summary: "Item completed details",
+								turnIndex: 0,
+							},
+						},
+						{
+							id: "node-generic",
+							type: "generic", // typeをgenericにしてnodeTypesにマッピング
+							position: { x: 800, y: 480 },
+							data: {
+								category: "generic",
+								label: "", // labelを空にしてidへのフォールバックを検証
+								icon: "❓",
+								summary: "Fallback node details",
+								turnIndex: 0,
+								meta: {},
+							},
+						},
+						{
+							id: "node-task-event-general",
+							type: "taskEvent",
+							position: { x: 1000, y: 480 },
+							data: {
+								category: "event",
+								label: "Task Event", // Started/Complete/Aborted を含まないラベル
+								icon: "🔔",
+								summary: "General workflow event",
+								turnIndex: 0,
+							},
+						},
+					],
+					edges: [
+						{
+							id: "edge-meta-usermsg",
+							source: "node-meta",
+							target: "node-user-msg",
+							type: "default",
+							animated: false,
+						},
+						{
+							id: "edge-context-meta",
+							source: "node-context-doc",
+							target: "node-meta",
+							type: "step",
+							animated: false,
+						},
+					],
 					statistics: {
-						duration_ms: 1000,
-						total_tokens: 0,
-						tool_call_count: 0,
-						token_count_count: 0,
-						context_window_size: 0,
-						turn_count: 0,
-						turns: [],
+						duration_ms: 75000, // 1分15秒 (1m 15s)
+						total_tokens: 150000,
+						tool_call_count: 5,
+						token_count_count: 10,
+						context_window_size: 128000,
+						turn_count: 3,
+						turns: [
+							{
+								index: 0,
+								collaboration_mode_kind: "normal",
+								duration_ms: 5000,
+								time_to_first_token_ms: 500,
+								token_count_count: 4,
+								tool_call_count: 1,
+								consumed_tokens: {
+									total_tokens: 50000,
+									input_tokens: 40000,
+									output_tokens: 10000,
+									reasoning_output_tokens: 2000,
+								},
+							},
+							{
+								index: 1,
+								collaboration_mode_kind: "collaboration",
+								duration_ms: 10500,
+								time_to_first_token_ms: 800,
+								token_count_count: 6,
+								tool_call_count: 2,
+								consumed_tokens: {
+									total_tokens: 100000,
+									input_tokens: 80000,
+									output_tokens: 20000,
+									reasoning_output_tokens: 8000,
+								},
+							},
+							{
+								index: 2,
+								collaboration_mode_kind: undefined,
+								duration_ms: 500,
+								time_to_first_token_ms: 200,
+								token_count_count: 0,
+								tool_call_count: 0,
+								consumed_tokens: undefined,
+							},
+						],
 					},
 					token_counts: [
 						{
 							index: 0,
 							turn_index: 0,
 							bound_to_node_id: "node-user-msg",
+							model_context_window: 10000,
+							last_token_usage: {
+								total_tokens: 20000,
+								input_tokens: 15000,
+								output_tokens: 5000,
+								reasoning_output_tokens: 1000,
+								cached_input_tokens: 5000,
+							},
+							total_token_usage: {
+								total_tokens: 20000,
+								input_tokens: 15000,
+								output_tokens: 5000,
+								reasoning_output_tokens: 1000,
+								cached_input_tokens: 5000,
+							},
+						},
+						{
+							index: 1,
+							turn_index: 0,
+							bound_to_node_id: "node-user-msg",
+							model_context_window: 100000,
+							last_token_usage: {
+								total_tokens: 30000,
+								input_tokens: 25000,
+								output_tokens: 5000,
+								reasoning_output_tokens: 1000,
+								cached_input_tokens: 5000,
+							},
+							total_token_usage: {
+								total_tokens: 50000,
+								input_tokens: 40000,
+								output_tokens: 10000,
+								reasoning_output_tokens: 2000,
+								cached_input_tokens: 10000,
+							},
+						},
+						{
+							index: 2,
+							turn_index: 1,
+							bound_to_node_id: "node-orphan-event",
+							model_context_window: 100000,
+							last_token_usage: {
+								total_tokens: 100000,
+								input_tokens: 80000,
+								output_tokens: 20000,
+								reasoning_output_tokens: 8000,
+								cached_input_tokens: 20000,
+							},
+							total_token_usage: {
+								total_tokens: 150000,
+								input_tokens: 120000,
+								output_tokens: 30000,
+								reasoning_output_tokens: 10000,
+								cached_input_tokens: 30000,
+							},
+						},
+						{
+							index: 3,
+							turn_index: 1,
+							bound_to_node_id: "node-user-api-msg",
+							model_context_window: 100000,
 							last_token_usage: undefined,
 							total_token_usage: undefined,
 						},
-					],
-					parent_session_id: "sess-001-uuid-long-name",
-				};
-			}
-
-			if (id === "sess-003-uuid-long-name") {
-				return {
-					id: id,
-					cache_schema_version: 3,
-					parsed_at: "2026-04-10T09:00:00Z",
-					nodes: [
 						{
-							id: "node-summary-only",
-							type: "agentMessage",
-							position: { x: 0, y: 0 },
-							data: {
-								category: "message",
-								label: "Summary Only",
-								icon: "🤖",
-								summary: "Token log omitted session",
-								turnIndex: 0,
-							},
-						},
-					],
-					edges: [],
-					statistics: {
-						duration_ms: 500,
-						total_tokens: 0,
-						tool_call_count: 0,
-						token_count_count: 0,
-						context_window_size: 0,
-						turn_count: 1,
-						turns: [
-							{
-								index: 0,
-								duration_ms: 500,
-								time_to_first_token_ms: 200,
-								token_count_count: 0,
-								tool_call_count: 0,
-								consumed_tokens: {
-									total_tokens: 0,
-									input_tokens: 0,
-									output_tokens: 0,
-									reasoning_output_tokens: 0,
-								},
-							},
-						],
-					},
-					token_counts: undefined,
-				};
-			}
-
-			if (id === "sess-no-turns") {
-				return {
-					id: id,
-					cache_schema_version: 3,
-					parsed_at: "2026-05-20T09:00:00Z",
-					nodes: [
-						{
-							id: "node-no-turns",
-							type: "sessionMeta",
-							position: { x: 0, y: 0 },
-							data: {
-								category: "meta",
-								label: "No Turns",
-								icon: "⚙️",
-								summary: "No turn data",
-								turnIndex: -1,
-							},
-						},
-					],
-					edges: [],
-					statistics: {
-						duration_ms: 0,
-						total_tokens: 0,
-						tool_call_count: 0,
-						token_count_count: 0,
-						context_window_size: 0,
-						turn_count: 0,
-						turns: undefined,
-					},
-					token_counts: undefined,
-				};
-			}
-
-			if (id === "performance-visibility") {
-				return {
-					id: id,
-					cache_schema_version: 3,
-					parsed_at: "2026-05-20T10:00:00Z",
-					nodes: [
-						{
-							id: "node-near",
-							type: "userMessage",
-							position: { x: 0, y: 0 },
-							data: {
-								category: "message",
-								label: "Near Node",
-								icon: "👤",
-								summary: "Zoom target",
-								turnIndex: 0,
-							},
-						},
-						{
-							id: "node-far-away",
-							type: "generic",
-							position: { x: 100000, y: 100000 },
-							data: {
-								category: "event",
-								label: "Far Away Node",
-								icon: "📄",
-								summary: "This node is outside the target viewport",
-								turnIndex: 0,
-							},
-						},
-					],
-					edges: [],
-					statistics: {
-						duration_ms: 1000,
-						total_tokens: 1000,
-						tool_call_count: 0,
-						token_count_count: 1,
-						context_window_size: 100000,
-						turn_count: 1,
-						turns: [],
-					},
-					token_counts: [
-						{
-							index: 0,
-							turn_index: 0,
-							bound_to_node_id: "node-near",
+							index: 4,
+							turn_index: 2,
+							bound_to_node_id: "node-missing",
+							model_context_window: 100000,
 							last_token_usage: {
-								total_tokens: 1000,
-								input_tokens: 800,
-								output_tokens: 200,
-								reasoning_output_tokens: 0,
-								cached_input_tokens: 0,
+								total_tokens: 1200,
+								input_tokens: 900,
+								output_tokens: 300,
+								reasoning_output_tokens: 100,
+								cached_input_tokens: 200,
 							},
 							total_token_usage: {
-								total_tokens: 1000,
-								input_tokens: 800,
+								total_tokens: 151200,
+								input_tokens: 120900,
+								output_tokens: 30300,
+								reasoning_output_tokens: 10100,
+								cached_input_tokens: 30200,
+							},
+						},
+						{
+							index: 5,
+							turn_index: 2,
+							bound_to_node_id: undefined,
+							model_context_window: 100000,
+							last_token_usage: {
+								total_tokens: 800,
+								input_tokens: 600,
 								output_tokens: 200,
-								reasoning_output_tokens: 0,
-								cached_input_tokens: 0,
+								reasoning_output_tokens: 50,
+								cached_input_tokens: 100,
+							},
+							total_token_usage: {
+								total_tokens: 152000,
+								input_tokens: 121500,
+								output_tokens: 30500,
+								reasoning_output_tokens: 10150,
+								cached_input_tokens: 30300,
 							},
 						},
 					],
-				};
-			}
-
-			return {
-				id: id,
-				cache_schema_version: 3,
-				parsed_at: "2026-05-20T10:00:00Z",
-				child_session_ids: ["sess-002-uuid-long-name"],
-				nodes: [
-					{
-						id: "node-collab-agent-test",
-						type: "collabAgent",
-						position: { x: 200, y: -120 },
-						data: {
-							category: "agent",
-							label: "Subagent Spawn",
-							icon: "🤖",
-							summary: "Spawned a subagent thread",
-							turnIndex: 0,
-							meta: {
-								new_thread_id: "sess-002-uuid-long-name",
+					timeline: [
+						{
+							index: -1,
+							turn_id: "",
+							pseudo: true,
+							duration_ms: 0,
+							consumed_tokens: {
+								total_tokens: 0,
+								input_tokens: 0,
+								output_tokens: 0,
+								reasoning_output_tokens: 0,
 							},
+							items: [
+								{
+									selection_id: "timeline-turn-1-user",
+									node_id: "node-user-msg",
+									node_ids: ["node-user-msg"],
+									token_count_indices: [0, 1],
+									kind: "conversation",
+									label: "",
+									role: "user",
+									body: "Conversation before the turn",
+									timestamp: "2026-05-20T09:59:59Z",
+									record_count: 1,
+									collapsible: false,
+									details: [],
+									last_token_usage: {
+										total_tokens: 0,
+										input_tokens: 0,
+										output_tokens: 0,
+										reasoning_output_tokens: 0,
+									},
+									token_count_count: 0,
+									total_token_usage: undefined,
+								},
+							],
 						},
-					},
-					{
-						id: "node-meta",
-						type: "sessionMeta",
-						position: { x: 0, y: 0 },
-						data: {
-							category: "meta",
-							label: "Session Meta",
-							icon: "⚙️",
-							summary: "CLI Version: 1.0.0",
-							fullText: "Full session meta details here",
-							turnIndex: -1,
-							tokenBadge: {
-								consumedTokens: 2500000, // 2.5M
-								tokenCountIndex: 0,
-								boundCount: 1,
-							},
-							meta: {
-								version: "1.0.0",
-								config: { debug: true },
-							},
-						},
-					},
-					{
-						id: "node-context-doc",
-						type: "contextDoc",
-						position: { x: 400, y: 0 },
-						data: {
-							category: "context",
-							label: "User Instructions",
-							icon: "📜",
-							summary: "▸ クリックして展開",
-							fullText:
-								"This is a detailed user instruction text that can be expanded.",
-							turnIndex: -1,
-						},
-					},
-					{
-						id: "node-context-doc-long",
-						type: "contextDoc",
-						position: { x: 650, y: 0 },
-						data: {
-							category: "context",
-							label: "Long Context",
-							icon: "",
-							summary: "▸ クリックして展開",
-							fullText: "L".repeat(1201),
-							turnIndex: 0,
-						},
-					},
-					{
-						id: "node-context-doc-warning",
-						type: "contextDoc",
-						position: { x: 900, y: 0 },
-						data: {
-							category: "context",
-							label: "Warning Context",
-							icon: "⚠️",
-							summary: "▸ クリックして展開",
-							fullText: "Warning context details",
-							textLength: 42,
-							turnIndex: -1,
-						},
-					},
-					{
-						id: "node-context-doc-empty",
-						type: "contextDoc",
-						position: { x: 400, y: 120 },
-						data: {
-							category: "context",
-							label: "Empty Context",
-							icon: "",
-							summary: "▸ クリックして展開",
-							fullText: undefined,
-							turnIndex: 0,
-						},
-					},
-					{
-						id: "node-user-msg",
-						type: "userMessage",
-						position: { x: 0, y: 120 },
-						data: {
-							category: "message",
-							label: "User Message",
-							icon: "👤",
-							summary: "Hello, agent",
-							fullText: "Hello, agent, please help me.",
-							turnIndex: 0,
-							tokenBadge: {
-								consumedTokens: 50000, // 50K
-								tokenCountIndex: 0,
-								boundCount: 2,
-							},
-						},
-					},
-					{
-						id: "node-orphan-event",
-						type: "taskEvent",
-						position: { x: 0, y: 240 },
-						data: {
-							category: "event",
-							label: "Orphan Complete",
-							icon: "⚠️",
-							summary: "Orphan complete/aborted event without task_started",
-							fullText: undefined, // fullTextを空にして「No additional details...」を検証
-							turnIndex: -1,
-							tokenBadge: {
-								consumedTokens: 1500, // 1.5K
-								tokenCountIndex: 0,
-								boundCount: 1,
-							},
-						},
-					},
-					{
-						id: "node-agent-msg",
-						type: "agentMessage",
-						position: { x: 200, y: 240 },
-						data: {
-							category: "message",
-							label: "Agent Message",
-							icon: "🤖",
-							summary: "Helpful agent response",
-							fullText: "Here is how to solve...",
-							turnIndex: 1,
-							tokenBadge: {
-								consumedTokens: 500, // 500
-								tokenCountIndex: 1,
-								boundCount: 1,
-							},
-						},
-					},
-					{
-						id: "node-turn-ctx",
-						type: "turnContext",
-						position: { x: 0, y: 360 },
-						data: {
-							category: "context",
-							label: "Turn Context",
-							icon: "🔄",
-							summary: "Context summary",
-							turnIndex: 0,
-						},
-					},
-					{
-						id: "node-dev-msg",
-						type: "developerMessage",
-						position: { x: 200, y: 360 },
-						data: {
-							category: "message",
-							label: "Developer Message",
-							icon: "",
-							summary: "Developer instructions",
-							turnIndex: 0,
-						},
-					},
-					{
-						id: "node-user-api-msg",
-						type: "userApiMessage",
-						position: { x: 400, y: 360 },
-						data: {
-							category: "message",
-							label: "User API Message",
-							icon: "🔌",
-							summary: "API Call message",
-							turnIndex: 0,
-							tokenBadge: {
-								consumedTokens: 0,
-								tokenCountIndex: 2,
-								boundCount: 1,
-							},
-						},
-					},
-					{
-						id: "node-reasoning",
-						type: "reasoning",
-						position: { x: 600, y: 360 },
-						data: {
-							category: "thought",
-							label: "Reasoning Step",
-							icon: "🧠",
-							summary: "Thinking process details",
-							turnIndex: 0,
-						},
-					},
-					{
-						id: "node-action",
-						type: "action",
-						position: { x: 800, y: 360 },
-						data: {
-							category: "action",
-							label: "Call Tool",
-							icon: "🛠️",
-							summary: "Tool invocation details",
-							turnIndex: 0,
-						},
-					},
-					{
-						id: "node-websearch",
-						type: "webSearchAction",
-						position: { x: 1000, y: 360 },
-						data: {
-							category: "action",
-							label: "Web Search",
-							icon: "🔍",
-							summary: "Searching the web details",
-							turnIndex: 0,
-						},
-					},
-					{
-						id: "node-external-event",
-						type: "externalEvent",
-						position: { x: 0, y: 480 },
-						data: {
-							category: "event",
-							label: "External Input",
-							icon: "📡",
-							summary: "External system trigger",
-							turnIndex: 0,
-						},
-					},
-					{
-						id: "node-task-event-started",
-						type: "taskEvent",
-						position: { x: 200, y: 480 },
-						data: {
-							category: "event",
-							label: "Task Started",
-							icon: "▶️",
-							summary: "Workflow process start",
-							turnIndex: 0,
-						},
-					},
-					{
-						id: "node-task-event-aborted",
-						type: "taskEvent",
-						position: { x: 400, y: 480 },
-						data: {
-							category: "event",
-							label: "Task Aborted",
-							icon: "⏹️",
-							summary: "Workflow process aborted",
-							turnIndex: 0,
-						},
-					},
-					{
-						id: "node-item-completed",
-						type: "itemCompleted",
-						position: { x: 600, y: 480 },
-						data: {
-							category: "event",
-							label: "Item Completed",
-							icon: "✅",
-							summary: "Item completed details",
-							turnIndex: 0,
-						},
-					},
-					{
-						id: "node-generic",
-						type: "generic", // typeをgenericにしてnodeTypesにマッピング
-						position: { x: 800, y: 480 },
-						data: {
-							category: "generic",
-							label: "", // labelを空にしてidへのフォールバックを検証
-							icon: "❓",
-							summary: "Fallback node details",
-							turnIndex: 0,
-							meta: {},
-						},
-					},
-					{
-						id: "node-task-event-general",
-						type: "taskEvent",
-						position: { x: 1000, y: 480 },
-						data: {
-							category: "event",
-							label: "Task Event", // Started/Complete/Aborted を含まないラベル
-							icon: "🔔",
-							summary: "General workflow event",
-							turnIndex: 0,
-						},
-					},
-				],
-				edges: [
-					{
-						id: "edge-meta-usermsg",
-						source: "node-meta",
-						target: "node-user-msg",
-						type: "default",
-						animated: false,
-					},
-					{
-						id: "edge-context-meta",
-						source: "node-context-doc",
-						target: "node-meta",
-						type: "step",
-						animated: false,
-					},
-				],
-				statistics: {
-					duration_ms: 75000, // 1分15秒 (1m 15s)
-					total_tokens: 150000,
-					tool_call_count: 5,
-					token_count_count: 10,
-					context_window_size: 128000,
-					turn_count: 3,
-					turns: [
 						{
 							index: 0,
-							collaboration_mode_kind: "normal",
+							turn_id: "turn-1",
+							pseudo: false,
 							duration_ms: 5000,
-							time_to_first_token_ms: 500,
-							token_count_count: 4,
-							tool_call_count: 1,
 							consumed_tokens: {
 								total_tokens: 50000,
 								input_tokens: 40000,
 								output_tokens: 10000,
 								reasoning_output_tokens: 2000,
 							},
-						},
-						{
-							index: 1,
-							collaboration_mode_kind: "collaboration",
-							duration_ms: 10500,
-							time_to_first_token_ms: 800,
-							token_count_count: 6,
-							tool_call_count: 2,
-							consumed_tokens: {
-								total_tokens: 100000,
-								input_tokens: 80000,
-								output_tokens: 20000,
-								reasoning_output_tokens: 8000,
-							},
-						},
-						{
-							index: 2,
-							collaboration_mode_kind: undefined,
-							duration_ms: 500,
-							time_to_first_token_ms: 200,
-							token_count_count: 0,
-							tool_call_count: 0,
-							consumed_tokens: undefined,
+							items: [
+								{
+									kind: "collab",
+									label: "Subagent Activity",
+									role: "",
+									body: "Subagent session initiated",
+									timestamp: "2026-05-20T10:00:04Z",
+									record_count: 1,
+									collapsible: true,
+									details: [
+										{
+											label: "Thread ID",
+											value: "sess-002-uuid-long-name",
+										},
+									],
+									last_token_usage: {
+										total_tokens: 0,
+										input_tokens: 0,
+										output_tokens: 0,
+										reasoning_output_tokens: 0,
+									},
+									token_count_count: 0,
+									total_token_usage: undefined,
+								},
+								{
+									kind: "conversation",
+									label: "",
+									role: "user",
+									body: "Hello, agent, please help me.",
+									timestamp: "2026-05-20T10:00:01Z",
+									record_count: 1,
+									collapsible: false,
+									details: [],
+									last_token_usage: {
+										total_tokens: 50000,
+										input_tokens: 40000,
+										output_tokens: 10000,
+										reasoning_output_tokens: 2000,
+									},
+									token_count_count: 2,
+									total_token_usage: {
+										total_tokens: 50000,
+										input_tokens: 40000,
+										output_tokens: 10000,
+										reasoning_output_tokens: 2000,
+									},
+								},
+								{
+									kind: "reasoning",
+									label: "推論",
+									role: "",
+									body: "Inspect the relevant implementation.",
+									timestamp: "2026-05-20T10:00:03Z",
+									record_count: 2,
+									collapsible: true,
+									details: [
+										{
+											label: "要約",
+											value: "Implementation inspection",
+										},
+									],
+									last_token_usage: {
+										total_tokens: 500,
+										input_tokens: 300,
+										output_tokens: 200,
+										reasoning_output_tokens: 150,
+									},
+									token_count_count: 1,
+									total_token_usage: {
+										total_tokens: 49500,
+										input_tokens: 39700,
+										output_tokens: 9800,
+										reasoning_output_tokens: 1850,
+									},
+								},
+								{
+									kind: "tool",
+									label: "コマンド実行",
+									role: "",
+									body: "Run the focused test suite.",
+									timestamp: "2026-05-20T10:00:03.500Z",
+									record_count: 1,
+									collapsible: true,
+									details: [
+										{
+											label: "出力",
+											value:
+												"SEARCH_NEEDLE first.\n" +
+												"Long command output line.\n".repeat(20) +
+												"SEARCH_NEEDLE second.\n" +
+												"Long command output line.\n".repeat(20) +
+												"SEARCH_NEEDLE third.\n" +
+												"LONG_COMMAND_OUTPUT_END",
+										},
+									],
+									last_token_usage: {
+										total_tokens: 100,
+										input_tokens: 50,
+										output_tokens: 50,
+										reasoning_output_tokens: 0,
+									},
+									token_count_count: 1,
+									total_token_usage: undefined,
+								},
+								{
+									kind: "reference",
+									label: "参照ファイル",
+									role: "",
+									body: "Read the project requirements.",
+									timestamp: "2026-05-20T10:00:03.700Z",
+									record_count: 1,
+									collapsible: true,
+									details: [],
+									last_token_usage: {
+										total_tokens: 100,
+										input_tokens: 100,
+										output_tokens: 0,
+										reasoning_output_tokens: 0,
+									},
+									token_count_count: 1,
+									total_token_usage: undefined,
+								},
+								{
+									kind: "system",
+									label: "システム通知",
+									role: "",
+									body: "The operation completed.",
+									timestamp: "2026-05-20T10:00:03.900Z",
+									record_count: 1,
+									collapsible: true,
+									details: [],
+									last_token_usage: {
+										total_tokens: 100,
+										input_tokens: 50,
+										output_tokens: 50,
+										reasoning_output_tokens: 0,
+									},
+									token_count_count: 1,
+									total_token_usage: undefined,
+								},
+								{
+									kind: "conversation",
+									label: "",
+									role: "assistant",
+									body: "Here is how to solve...",
+									timestamp: "2026-05-20T10:00:05Z",
+									record_count: 1,
+									collapsible: false,
+									details: [],
+									last_token_usage: {
+										total_tokens: 0,
+										input_tokens: 0,
+										output_tokens: 0,
+										reasoning_output_tokens: 0,
+									},
+									token_count_count: 0,
+									total_token_usage: undefined,
+								},
+							],
 						},
 					],
-				},
-				token_counts: [
-					{
-						index: 0,
-						turn_index: 0,
-						bound_to_node_id: "node-user-msg",
-						model_context_window: 10000,
-						last_token_usage: {
-							total_tokens: 20000,
-							input_tokens: 15000,
-							output_tokens: 5000,
-							reasoning_output_tokens: 1000,
-							cached_input_tokens: 5000,
-						},
-						total_token_usage: {
-							total_tokens: 20000,
-							input_tokens: 15000,
-							output_tokens: 5000,
-							reasoning_output_tokens: 1000,
-							cached_input_tokens: 5000,
-						},
-					},
-					{
-						index: 1,
-						turn_index: 0,
-						bound_to_node_id: "node-user-msg",
-						model_context_window: 100000,
-						last_token_usage: {
-							total_tokens: 30000,
-							input_tokens: 25000,
-							output_tokens: 5000,
-							reasoning_output_tokens: 1000,
-							cached_input_tokens: 5000,
-						},
-						total_token_usage: {
-							total_tokens: 50000,
-							input_tokens: 40000,
-							output_tokens: 10000,
-							reasoning_output_tokens: 2000,
-							cached_input_tokens: 10000,
-						},
-					},
-					{
-						index: 2,
-						turn_index: 1,
-						bound_to_node_id: "node-orphan-event",
-						model_context_window: 100000,
-						last_token_usage: {
-							total_tokens: 100000,
-							input_tokens: 80000,
-							output_tokens: 20000,
-							reasoning_output_tokens: 8000,
-							cached_input_tokens: 20000,
-						},
-						total_token_usage: {
-							total_tokens: 150000,
-							input_tokens: 120000,
-							output_tokens: 30000,
-							reasoning_output_tokens: 10000,
-							cached_input_tokens: 30000,
-						},
-					},
-					{
-						index: 3,
-						turn_index: 1,
-						bound_to_node_id: "node-user-api-msg",
-						model_context_window: 100000,
-						last_token_usage: undefined,
-						total_token_usage: undefined,
-					},
-					{
-						index: 4,
-						turn_index: 2,
-						bound_to_node_id: "node-missing",
-						model_context_window: 100000,
-						last_token_usage: {
-							total_tokens: 1200,
-							input_tokens: 900,
-							output_tokens: 300,
-							reasoning_output_tokens: 100,
-							cached_input_tokens: 200,
-						},
-						total_token_usage: {
-							total_tokens: 151200,
-							input_tokens: 120900,
-							output_tokens: 30300,
-							reasoning_output_tokens: 10100,
-							cached_input_tokens: 30200,
-						},
-					},
-					{
-						index: 5,
-						turn_index: 2,
-						bound_to_node_id: undefined,
-						model_context_window: 100000,
-						last_token_usage: {
-							total_tokens: 800,
-							input_tokens: 600,
-							output_tokens: 200,
-							reasoning_output_tokens: 50,
-							cached_input_tokens: 100,
-						},
-						total_token_usage: {
-							total_tokens: 152000,
-							input_tokens: 121500,
-							output_tokens: 30500,
-							reasoning_output_tokens: 10150,
-							cached_input_tokens: 30300,
-						},
-					},
-				],
-				timeline: [
-					{
-						index: -1,
-						turn_id: "",
-						pseudo: true,
-						duration_ms: 0,
-						consumed_tokens: {
-							total_tokens: 0,
-							input_tokens: 0,
-							output_tokens: 0,
-							reasoning_output_tokens: 0,
-						},
-						items: [
-							{
-								selection_id: "timeline-turn-1-user",
-								node_id: "node-user-msg",
-								node_ids: ["node-user-msg"],
-								token_count_indices: [0, 1],
-								kind: "conversation",
-								label: "",
-								role: "user",
-								body: "Conversation before the turn",
-								timestamp: "2026-05-20T09:59:59Z",
-								record_count: 1,
-								collapsible: false,
-								details: [],
-								last_token_usage: {
-									total_tokens: 0,
-									input_tokens: 0,
-									output_tokens: 0,
-									reasoning_output_tokens: 0,
-								},
-								token_count_count: 0,
-								total_token_usage: undefined,
-							},
-						],
-					},
-					{
-						index: 0,
-						turn_id: "turn-1",
-						pseudo: false,
-						duration_ms: 5000,
-						consumed_tokens: {
-							total_tokens: 50000,
-							input_tokens: 40000,
-							output_tokens: 10000,
-							reasoning_output_tokens: 2000,
-						},
-						items: [
-							{
-								kind: "collab",
-								label: "Subagent Activity",
-								role: "",
-								body: "Subagent session initiated",
-								timestamp: "2026-05-20T10:00:04Z",
-								record_count: 1,
-								collapsible: true,
-								details: [
-									{
-										label: "Thread ID",
-										value: "sess-002-uuid-long-name",
-									},
-								],
-								last_token_usage: {
-									total_tokens: 0,
-									input_tokens: 0,
-									output_tokens: 0,
-									reasoning_output_tokens: 0,
-								},
-								token_count_count: 0,
-								total_token_usage: undefined,
-							},
-							{
-								kind: "conversation",
-								label: "",
-								role: "user",
-								body: "Hello, agent, please help me.",
-								timestamp: "2026-05-20T10:00:01Z",
-								record_count: 1,
-								collapsible: false,
-								details: [],
-								last_token_usage: {
-									total_tokens: 50000,
-									input_tokens: 40000,
-									output_tokens: 10000,
-									reasoning_output_tokens: 2000,
-								},
-								token_count_count: 2,
-								total_token_usage: {
-									total_tokens: 50000,
-									input_tokens: 40000,
-									output_tokens: 10000,
-									reasoning_output_tokens: 2000,
-								},
-							},
-							{
-								kind: "reasoning",
-								label: "推論",
-								role: "",
-								body: "Inspect the relevant implementation.",
-								timestamp: "2026-05-20T10:00:03Z",
-								record_count: 2,
-								collapsible: true,
-								details: [
-									{
-										label: "要約",
-										value: "Implementation inspection",
-									},
-								],
-								last_token_usage: {
-									total_tokens: 500,
-									input_tokens: 300,
-									output_tokens: 200,
-									reasoning_output_tokens: 150,
-								},
-								token_count_count: 1,
-								total_token_usage: {
-									total_tokens: 49500,
-									input_tokens: 39700,
-									output_tokens: 9800,
-									reasoning_output_tokens: 1850,
-								},
-							},
-							{
-								kind: "tool",
-								label: "コマンド実行",
-								role: "",
-								body: "Run the focused test suite.",
-								timestamp: "2026-05-20T10:00:03.500Z",
-								record_count: 1,
-								collapsible: true,
-								details: [
-									{
-										label: "出力",
-										value:
-											"SEARCH_NEEDLE first.\n" +
-											"Long command output line.\n".repeat(20) +
-											"SEARCH_NEEDLE second.\n" +
-											"Long command output line.\n".repeat(20) +
-											"SEARCH_NEEDLE third.\n" +
-											"LONG_COMMAND_OUTPUT_END",
-									},
-								],
-								last_token_usage: {
-									total_tokens: 100,
-									input_tokens: 50,
-									output_tokens: 50,
-									reasoning_output_tokens: 0,
-								},
-								token_count_count: 1,
-								total_token_usage: undefined,
-							},
-							{
-								kind: "reference",
-								label: "参照ファイル",
-								role: "",
-								body: "Read the project requirements.",
-								timestamp: "2026-05-20T10:00:03.700Z",
-								record_count: 1,
-								collapsible: true,
-								details: [],
-								last_token_usage: {
-									total_tokens: 100,
-									input_tokens: 100,
-									output_tokens: 0,
-									reasoning_output_tokens: 0,
-								},
-								token_count_count: 1,
-								total_token_usage: undefined,
-							},
-							{
-								kind: "system",
-								label: "システム通知",
-								role: "",
-								body: "The operation completed.",
-								timestamp: "2026-05-20T10:00:03.900Z",
-								record_count: 1,
-								collapsible: true,
-								details: [],
-								last_token_usage: {
-									total_tokens: 100,
-									input_tokens: 50,
-									output_tokens: 50,
-									reasoning_output_tokens: 0,
-								},
-								token_count_count: 1,
-								total_token_usage: undefined,
-							},
-							{
-								kind: "conversation",
-								label: "",
-								role: "assistant",
-								body: "Here is how to solve...",
-								timestamp: "2026-05-20T10:00:05Z",
-								record_count: 1,
-								collapsible: false,
-								details: [],
-								last_token_usage: {
-									total_tokens: 0,
-									input_tokens: 0,
-									output_tokens: 0,
-									reasoning_output_tokens: 0,
-								},
-								token_count_count: 0,
-								total_token_usage: undefined,
-							},
-						],
-					},
-				],
+				};
 			};
-		};
 
-		go.main.App.OpenLogDirectory = async () => {
-			(window as any).__openLogDirectoryCalls =
-				(window as any).__openLogDirectoryCalls || 0;
-			(window as any).__openLogDirectoryCalls += 1;
-		};
+			go.main.App.OpenLogDirectory = async () => {
+				(window as any).__openLogDirectoryCalls =
+					(window as any).__openLogDirectoryCalls || 0;
+				(window as any).__openLogDirectoryCalls += 1;
+			};
 
-		go.main.App.GetLogFilePath = async () => {
-			(window as any).__getLogFilePathCalls =
-				(window as any).__getLogFilePathCalls || 0;
-			(window as any).__getLogFilePathCalls += 1;
-			return "/Users/test/.codex-display/logs/app.log";
-		};
+			go.main.App.GetLogFilePath = async () => {
+				(window as any).__getLogFilePathCalls =
+					(window as any).__getLogFilePathCalls || 0;
+				(window as any).__getLogFilePathCalls += 1;
+				return "/Users/test/.codex-display/logs/app.log";
+			};
 
-		(window as any).go = go;
-		(window as any).runtime = runtime;
-	}, sessions);
+			(window as any).go = go;
+			(window as any).runtime = runtime;
+		},
+		{ sessionsArg: sessions, claudeSessionsArg: claudeSessions },
+	);
 }
