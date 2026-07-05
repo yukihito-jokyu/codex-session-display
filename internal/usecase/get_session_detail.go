@@ -66,7 +66,23 @@ func NewGetSessionDetailUseCase(sessionRepo SessionRepository, cacheRepo CacheRe
 	}
 }
 
+func resolveSessionProvider(ctx context.Context, sessionRepo SessionRepository, sessionID string) dto.SessionProvider {
+	if sessionID == "" {
+		return dto.SessionProviderCodex
+	}
+	filePath, err := sessionRepo.GetSessionFilePath(ctx, sessionID)
+	if err != nil {
+		return dto.SessionProviderCodex
+	}
+	if strings.Contains(filePath, ".claude") || strings.Contains(filePath, "projects") {
+		return dto.SessionProviderClaude
+	}
+	return dto.SessionProviderCodex
+}
+
 func buildConversationTimeline(
+	ctx context.Context,
+	sessionRepo SessionRepository,
 	turns []*model.Turn,
 	turnStats []dto.TurnStatistics,
 	recordToNodeID map[int]string,
@@ -106,7 +122,7 @@ func buildConversationTimeline(
 			if len(batch.CallRecords) > 0 && batch.CallRecords[0].ResponseItem != nil {
 				name := batch.CallRecords[0].ResponseItem.Name
 				if name == "spawn_agent" || name == "run_command" || name == "exec_command" {
-					unit, ok := batchTimelineUnit(batch)
+					unit, ok := batchTimelineUnit(ctx, sessionRepo, batch)
 					if ok {
 						units = append(units, unit)
 					}
@@ -121,7 +137,7 @@ func buildConversationTimeline(
 				}
 			}
 		}
-		metaUnits := metadataTimelineUnits(turn)
+		metaUnits := metadataTimelineUnits(ctx, sessionRepo, turn)
 		for i := range metaUnits {
 			if metaUnits[i].Kind == "collab" {
 				units = append(units, metaUnits[i])
@@ -211,7 +227,7 @@ func parseCommandFromArgs(argsJSON string) string {
 	return ""
 }
 
-func batchTimelineUnit(batch *model.Batch) (conversationDisplayUnit, bool) {
+func batchTimelineUnit(ctx context.Context, sessionRepo SessionRepository, batch *model.Batch) (conversationDisplayUnit, bool) {
 	if batch == nil || len(batch.CallRecords) == 0 {
 		return conversationDisplayUnit{}, false
 	}
@@ -247,11 +263,13 @@ func batchTimelineUnit(batch *model.Batch) (conversationDisplayUnit, bool) {
 				nickname = out.Nickname
 			}
 		}
+		pvd := resolveSessionProvider(ctx, sessionRepo, agentID)
 		unit.Body = fmt.Sprintf("Nickname: %s, Role: %s, Thread ID: %s", nickname, role, agentID)
 		unit.Details = []dto.TimelineItemDetail{
 			{Label: "Nickname", Value: nickname},
 			{Label: "Role", Value: role},
 			{Label: "Thread ID", Value: agentID},
+			{Label: "Provider", Value: string(pvd)},
 		}
 		return unit, true
 	}
@@ -396,7 +414,7 @@ func externalTimelineUnit(record *model.TypedRecord) (conversationDisplayUnit, b
 	return unit, true
 }
 
-func metadataTimelineUnits(turn *model.Turn) []conversationDisplayUnit {
+func metadataTimelineUnits(ctx context.Context, sessionRepo SessionRepository, turn *model.Turn) []conversationDisplayUnit {
 	var units []conversationDisplayUnit
 	for _, record := range turn.Records {
 		if record == nil {
@@ -478,11 +496,13 @@ func metadataTimelineUnits(turn *model.Turn) []conversationDisplayUnit {
 				unit.Kind = "collab"
 				unit.Label = "サブエージェント起動"
 				if record.EventMsg != nil {
+					pvd := resolveSessionProvider(ctx, sessionRepo, record.EventMsg.NewThreadID)
 					unit.Body = fmt.Sprintf("Nickname: %s, Role: %s, Thread ID: %s", record.EventMsg.NewAgentNickname, record.EventMsg.NewAgentRole, record.EventMsg.NewThreadID)
 					unit.Details = []dto.TimelineItemDetail{
 						{Label: "Nickname", Value: record.EventMsg.NewAgentNickname},
 						{Label: "Role", Value: record.EventMsg.NewAgentRole},
 						{Label: "Thread ID", Value: record.EventMsg.NewThreadID},
+						{Label: "Provider", Value: string(pvd)},
 					}
 				}
 				units = append(units, unit)
@@ -1113,6 +1133,7 @@ func (uc *GetSessionDetailUseCase) ExecuteByProvider(ctx context.Context, provid
 			cacheModTime, cacheModErr := uc.cacheRepo.GetSessionDetailModTime(ctx, provider, sessionID)
 			if sessionModErr == nil && cacheModErr == nil && !sessionModTime.After(cacheModTime) {
 				logger.Info("cache hit, returning cached session detail", "session_id", sessionID)
+				cached.Provider = provider
 				return cached, nil
 			}
 
@@ -1120,6 +1141,7 @@ func (uc *GetSessionDetailUseCase) ExecuteByProvider(ctx context.Context, provid
 			if sessionModErr == nil {
 				if cachedTime, parseErr := time.Parse(time.RFC3339, cached.ParsedAt); parseErr == nil && !sessionModTime.After(cachedTime) {
 					logger.Info("cache hit, returning cached session detail", "session_id", sessionID)
+					cached.Provider = provider
 					return cached, nil
 				}
 			}
@@ -1813,6 +1835,7 @@ func (uc *GetSessionDetailUseCase) ExecuteByProvider(ctx context.Context, provid
 								"new_thread_id":      agentID,
 								"new_agent_nickname": nickname,
 								"new_agent_role":     role,
+								"provider":           string(resolveSessionProvider(ctx, uc.sessionRepo, agentID)),
 							}
 						}
 
@@ -1967,10 +1990,12 @@ func (uc *GetSessionDetailUseCase) ExecuteByProvider(ctx context.Context, provid
 					record := unit.Records[0]
 					nodeID := fmt.Sprintf("node-%d", record.LineNumber)
 					if record.Type == "event_msg" && record.SubType == "collab_agent_spawn_end" && record.EventMsg != nil {
+						pvd := resolveSessionProvider(ctx, uc.sessionRepo, record.EventMsg.NewThreadID)
 						meta := map[string]interface{}{
 							"new_thread_id":      record.EventMsg.NewThreadID,
 							"new_agent_nickname": record.EventMsg.NewAgentNickname,
 							"new_agent_role":     record.EventMsg.NewAgentRole,
+							"provider":           string(pvd),
 						}
 						summary := fmt.Sprintf("Nickname: %s / Role: %s", record.EventMsg.NewAgentNickname, record.EventMsg.NewAgentRole)
 						pushHarnessNode(nodeID, "collabAgent", "action", "Subagent Spawned", "🤖", summary, "", meta, turn.Index, NodeHeight)
@@ -2412,6 +2437,7 @@ func (uc *GetSessionDetailUseCase) ExecuteByProvider(ctx context.Context, provid
 
 		subagents = append(subagents, dto.SubagentDetail{
 			ID:           id,
+			Provider:     resolveSessionProvider(ctx, uc.sessionRepo, id),
 			Nickname:     nickname,
 			TotalTokens:  totalTokens,
 			InputTokens:  inputTokens,
@@ -2441,6 +2467,8 @@ func (uc *GetSessionDetailUseCase) ExecuteByProvider(ctx context.Context, provid
 		Statistics:         stats,
 		TokenCounts:        tokenCountsList,
 		Timeline: buildConversationTimeline(
+			ctx,
+			uc.sessionRepo,
 			turns,
 			turnStats,
 			RecordToNodeID,

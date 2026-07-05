@@ -362,6 +362,7 @@ export namespace dto {
 	
 	export class SubagentDetail {
 	    id: string;
+	    provider?: string;
 	    nickname: string;
 	    total_tokens: number;
 	    input_tokens: number;
@@ -377,6 +378,7 @@ export namespace dto {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
+	        this.provider = source["provider"];
 	        this.nickname = source["nickname"];
 	        this.total_tokens = source["total_tokens"];
 	        this.input_tokens = source["input_tokens"];

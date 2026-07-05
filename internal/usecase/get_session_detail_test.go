@@ -3427,7 +3427,10 @@ func TestGetSessionDetailUseCase_RecursiveSubagents(t *testing.T) {
 	}
 
 	sessionRepo := &mockSessionRepositoryForDetail{
-		paths: map[string]string{"parent-session-3": filePath},
+		paths: map[string]string{
+			"parent-session-3":             filePath,
+			"grandchild-session-uuid-9999": "/path/to/claude/projects/grandchild-session-uuid-9999.jsonl",
+		},
 		sessions: []dto.SessionSummary{
 			{
 				ID:              "parent-session-3",
@@ -3471,12 +3474,12 @@ func TestGetSessionDetailUseCase_RecursiveSubagents(t *testing.T) {
 	}
 
 	sub := res.Subagents[0]
-	if sub.ID != "sub-session-uuid-5678" || sub.Nickname != "SubBot3" || sub.TotalTokens != 200 || sub.InputTokens != 150 || sub.OutputTokens != 50 || *sub.TurnCount != 5 || *sub.StepCount != 10 || *sub.DurationMs != 30000 {
+	if sub.ID != "sub-session-uuid-5678" || sub.Provider != dto.SessionProviderCodex || sub.Nickname != "SubBot3" || sub.TotalTokens != 200 || sub.InputTokens != 150 || sub.OutputTokens != 50 || *sub.TurnCount != 5 || *sub.StepCount != 10 || *sub.DurationMs != 30000 {
 		t.Errorf("Subagent[0] mismatch: %+v", sub)
 	}
 
 	grand := res.Subagents[1]
-	if grand.ID != "grandchild-session-uuid-9999" || grand.Nickname != "GrandBot" || grand.TotalTokens != 100 || grand.InputTokens != 80 || grand.OutputTokens != 20 || *grand.TurnCount != 2 || *grand.StepCount != 4 || *grand.DurationMs != 15000 {
+	if grand.ID != "grandchild-session-uuid-9999" || grand.Provider != dto.SessionProviderClaude || grand.Nickname != "GrandBot" || grand.TotalTokens != 100 || grand.InputTokens != 80 || grand.OutputTokens != 20 || *grand.TurnCount != 2 || *grand.StepCount != 4 || *grand.DurationMs != 15000 {
 		t.Errorf("Subagent[1] mismatch: %+v", grand)
 	}
 }
