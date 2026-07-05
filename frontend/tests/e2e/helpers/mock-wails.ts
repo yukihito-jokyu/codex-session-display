@@ -458,6 +458,60 @@ export async function mockWailsAPI(
 					((window as any).__frontendReadyCalls || 0) + 1;
 			};
 
+			go.main.App.AnalyzeClaudeCorpus = async (options: any) => {
+				(window as any).__analyzeClaudeCorpusCalls =
+					(window as any).__analyzeClaudeCorpusCalls || [];
+				(window as any).__analyzeClaudeCorpusCalls.push(options);
+
+				if (options.projectSource === "trigger-error") {
+					throw new Error("Mocked Corpus Analyze Error");
+				}
+
+				return {
+					totalFiles: 3,
+					totalLines: 150,
+					parseErrors: [{ fileId: "error-file-1", count: 2 }],
+					fieldPaths: {
+						"message.role": { string: 30 },
+						"message.content[].type": { string: 40 },
+						cwd: { string: 3 },
+					},
+					contentTypes: {
+						text: 15,
+						thinking: 10,
+						tool_use: 10,
+						tool_result: 5,
+					},
+					toolNames: {
+						bash: 8,
+						view_file: 2,
+					},
+					usageKeys: {
+						input_tokens: 10,
+						output_tokens: 10,
+						cache_read_input_tokens: 5,
+					},
+					privacyMetrics: {
+						textLengthDist: {
+							"1-100": 10,
+							"101-500": 5,
+						},
+						thinkingLengthDist: {
+							"1-100": 8,
+							"101-500": 2,
+						},
+						commandHashDist: {
+							"hash-cmd-1-sha256-long-hex-string": 5,
+							"hash-cmd-2-sha256-long-hex-string": 3,
+						},
+						toolOutputDist: {
+							"hash-out-1-sha256-long-hex-string": 4,
+							"hash-out-2-sha256-long-hex-string": 1,
+						},
+					},
+				};
+			};
+
 			go.main.App.SaveChartImage = async (
 				base64Data: string,
 				defaultName: string,

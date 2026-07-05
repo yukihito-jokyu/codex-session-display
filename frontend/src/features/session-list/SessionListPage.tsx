@@ -5,6 +5,7 @@ import type { SessionSummary } from "../../components/ui/DateTree/SessionRow";
 import { SessionRow } from "../../components/ui/DateTree/SessionRow";
 import { Toolbar } from "../../components/ui/Toolbar/Toolbar";
 import { UpdateModal } from "../../components/ui/UpdateModal/UpdateModal";
+import { CorpusAnalyzePage } from "../session-analyzer/CorpusAnalyzePage";
 import { useSessions } from "./hooks/useSessions";
 import { useUpdate } from "./hooks/useUpdate";
 import styles from "./SessionListPage.module.css";
@@ -51,9 +52,13 @@ export function SessionListPage() {
 
 	const { updateResult, progress, apply } = useUpdate();
 	const [isModalOpen, setIsModalOpen] = useState(false);
-	const [activeTab, setActiveTab] = useState<"history" | "directory">(() => {
+	const [activeTab, setActiveTab] = useState<
+		"history" | "directory" | "analysis"
+	>(() => {
 		const saved = sessionStorage.getItem("session_list_active_tab");
-		return saved === "history" || saved === "directory" ? saved : "history";
+		return saved === "history" || saved === "directory" || saved === "analysis"
+			? saved
+			: "history";
 	});
 	const [selectedDate, setSelectedDate] = useState<string>(() => {
 		const saved = sessionStorage.getItem("session_list_selected_date");
@@ -256,6 +261,15 @@ export function SessionListPage() {
 				>
 					ディレクトリ分類
 				</button>
+				{provider === "claude" && (
+					<button
+						type="button"
+						className={`${styles.tabBtn} ${activeTab === "analysis" ? styles.activeTab : ""}`}
+						onClick={() => setActiveTab("analysis")}
+					>
+						コーパス分析
+					</button>
+				)}
 			</div>
 
 			{activeTab === "history" ? (
@@ -303,7 +317,7 @@ export function SessionListPage() {
 						/>
 					)}
 				</>
-			) : (
+			) : activeTab === "directory" ? (
 				<>
 					<div className={styles.calendarContainer}>
 						<DatePicker
@@ -394,6 +408,8 @@ export function SessionListPage() {
 						</div>
 					)}
 				</>
+			) : (
+				<CorpusAnalyzePage />
 			)}
 
 			<UpdateModal

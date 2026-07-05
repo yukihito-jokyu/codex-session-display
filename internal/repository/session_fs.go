@@ -308,7 +308,8 @@ func (r *SessionFSRepository) listClaudeSessions(ctx context.Context, year, mont
 	}
 
 	var filtered []dto.SessionSummary
-	for _, summary := range allSessions {
+	for i := range allSessions {
+		summary := &allSessions[i]
 		// 年月によるフィルタリング
 		if summary.Timestamp != nil {
 			var t time.Time
@@ -325,11 +326,11 @@ func (r *SessionFSRepository) listClaudeSessions(ctx context.Context, year, mont
 		}
 
 		// クエリによるフィルタリング
-		if query != "" && !matchesSessionQuery(&summary, query) {
+		if query != "" && !matchesSessionQuery(summary, query) {
 			continue
 		}
 
-		filtered = append(filtered, summary)
+		filtered = append(filtered, *summary)
 	}
 
 	// 日時で降順ソート
@@ -461,8 +462,8 @@ type claudeTranscriptRecord struct {
 	Message   struct {
 		Content json.RawMessage `json:"content"`
 	} `json:"message"`
-	GitBranch string  `json:"gitBranch"`
-	Version   string  `json:"version"`
+	GitBranch string `json:"gitBranch"`
+	Version   string `json:"version"`
 }
 
 func countClaudeToolUses(content json.RawMessage) int {
