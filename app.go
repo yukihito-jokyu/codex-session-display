@@ -134,8 +134,17 @@ func (a *App) ListSessionsByProvider(provider, query string, year, month int) ([
 
 // GetSessionDetail は指定されたセッションIDの詳細情報を取得します。
 func (a *App) GetSessionDetail(sessionID string) (*dto.SessionDetailResponse, error) {
-	logger.Info("GetSessionDetail start", "session_id", sessionID)
-	res, err := a.getSessionDetailUC.Execute(a.ctx, sessionID)
+	return a.GetSessionDetailByProvider(string(dto.SessionProviderCodex), sessionID)
+}
+
+// GetSessionDetailByProvider は指定されたproviderとセッションIDの詳細情報を取得します。
+func (a *App) GetSessionDetailByProvider(provider, sessionID string) (*dto.SessionDetailResponse, error) {
+	sessionProvider := dto.SessionProvider(provider)
+	if sessionProvider == "" {
+		sessionProvider = dto.SessionProviderCodex
+	}
+	logger.Info("GetSessionDetail start", "provider", sessionProvider, "session_id", sessionID)
+	res, err := a.getSessionDetailUC.ExecuteByProvider(a.ctx, sessionProvider, sessionID)
 	if err != nil {
 		appErr := &dto.AppError{
 			Code:    "INTERNAL_ERROR",
@@ -160,7 +169,7 @@ func (a *App) GetSessionDetail(sessionID string) (*dto.SessionDetailResponse, er
 		logger.Error("GetSessionDetail failed", "error", err, "code", appErr.Code)
 		return nil, appErr
 	}
-	logger.Info("GetSessionDetail completed", "session_id", sessionID)
+	logger.Info("GetSessionDetail completed", "provider", sessionProvider, "session_id", sessionID)
 	return res, nil
 }
 

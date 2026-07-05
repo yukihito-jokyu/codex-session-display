@@ -296,6 +296,26 @@ export namespace dto {
 	        this.duration_ms = source["duration_ms"];
 	    }
 	}
+	export class TranscriptStats {
+	    message_count: number;
+	    tool_call_count: number;
+	    tool_result_count: number;
+	    cache_read_input_tokens: number;
+	    total_cost_usd?: number;
+	
+	    static createFrom(source: any = {}) {
+	        return new TranscriptStats(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.message_count = source["message_count"];
+	        this.tool_call_count = source["tool_call_count"];
+	        this.tool_result_count = source["tool_result_count"];
+	        this.cache_read_input_tokens = source["cache_read_input_tokens"];
+	        this.total_cost_usd = source["total_cost_usd"];
+	    }
+	}
 	export class TokenCountEntry {
 	    index: number;
 	    turn_index: number;
@@ -422,6 +442,7 @@ export namespace dto {
 	}
 	export class SessionDetailResponse {
 	    id: string;
+	    provider?: string;
 	    cache_schema_version: number;
 	    parsed_at: string;
 	    nodes: FlowNode[];
@@ -429,6 +450,7 @@ export namespace dto {
 	    statistics: Statistics;
 	    token_counts: TokenCountEntry[];
 	    timeline: ConversationTimelineTurn[];
+	    transcript_stats?: TranscriptStats;
 	    parent_session_id?: string;
 	    child_session_ids?: string[];
 	    subagents?: SubagentDetail[];
@@ -440,6 +462,7 @@ export namespace dto {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
+	        this.provider = source["provider"];
 	        this.cache_schema_version = source["cache_schema_version"];
 	        this.parsed_at = source["parsed_at"];
 	        this.nodes = this.convertValues(source["nodes"], FlowNode);
@@ -447,6 +470,7 @@ export namespace dto {
 	        this.statistics = this.convertValues(source["statistics"], Statistics);
 	        this.token_counts = this.convertValues(source["token_counts"], TokenCountEntry);
 	        this.timeline = this.convertValues(source["timeline"], ConversationTimelineTurn);
+	        this.transcript_stats = this.convertValues(source["transcript_stats"], TranscriptStats);
 	        this.parent_session_id = source["parent_session_id"];
 	        this.child_session_ids = source["child_session_ids"];
 	        this.subagents = this.convertValues(source["subagents"], SubagentDetail);
@@ -532,6 +556,7 @@ export namespace dto {
 	        this.total_cost_usd = source["total_cost_usd"];
 	    }
 	}
+	
 	
 	
 	
