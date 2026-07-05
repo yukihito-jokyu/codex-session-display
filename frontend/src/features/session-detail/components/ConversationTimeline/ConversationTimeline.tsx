@@ -13,7 +13,7 @@ type ConversationTimelineProps = {
 	scrollTarget: { selectionId: string; timestamp: number } | null;
 	onSelect: (item: dto.ConversationTimelineItem) => void;
 	onShowFullText: (item: dto.ConversationTimelineItem) => void;
-	onSubagentClick?: (threadId: string) => void;
+	onSubagentClick?: (threadId: string, provider?: string) => void;
 };
 
 const compactNumber = new Intl.NumberFormat("en", {
@@ -311,11 +311,17 @@ export function ConversationTimeline({
 																		const threadIdDetail = item.details?.find(
 																			(d) => d.label === "Thread ID",
 																		);
+																		const providerDetail = item.details?.find(
+																			(d) => d.label === "Provider",
+																		);
 																		if (
 																			threadIdDetail?.value &&
 																			onSubagentClick
 																		) {
-																			onSubagentClick(threadIdDetail.value);
+																			onSubagentClick(
+																				threadIdDetail.value,
+																				providerDetail?.value,
+																			);
 																		}
 																	}}
 																>

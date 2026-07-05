@@ -740,6 +740,7 @@ export async function mockWailsAPI(
 								turnIndex: 0,
 								meta: {
 									new_thread_id: "sess-002-uuid-long-name",
+									provider: "codex",
 								},
 							},
 						},
@@ -1258,6 +1259,10 @@ export async function mockWailsAPI(
 										{
 											label: "Thread ID",
 											value: "sess-002-uuid-long-name",
+										},
+										{
+											label: "Provider",
+											value: "codex",
 										},
 									],
 									last_token_usage: {
