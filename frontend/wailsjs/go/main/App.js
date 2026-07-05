@@ -38,6 +38,10 @@ export function ListSessions(arg1, arg2, arg3) {
   return window['go']['main']['App']['ListSessions'](arg1, arg2, arg3);
 }
 
+export function ListSessionsByProvider(arg1, arg2, arg3, arg4) {
+  return window['go']['main']['App']['ListSessionsByProvider'](arg1, arg2, arg3, arg4);
+}
+
 export function OpenLogDirectory() {
   return window['go']['main']['App']['OpenLogDirectory']();
 }
