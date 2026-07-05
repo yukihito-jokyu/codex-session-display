@@ -42,7 +42,7 @@ type SessionDetailMainContentProps = {
 	onTimelineFullText: (item: dto.ConversationTimelineItem) => void;
 	onStartResize: PointerEventHandler<HTMLDivElement>;
 	onResizerKeyDown: KeyboardEventHandler<HTMLDivElement>;
-	onSubagentClick?: (threadId: string) => void;
+	onSubagentClick?: (threadId: string, provider?: string) => void;
 };
 
 export function SessionDetailMainContent({

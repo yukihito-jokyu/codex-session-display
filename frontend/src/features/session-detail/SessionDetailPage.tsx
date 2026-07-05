@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { SessionDetailError } from "./components/SessionDetailError/SessionDetailError";
 import { SessionDetailHeader } from "./components/SessionDetailHeader/SessionDetailHeader";
@@ -12,6 +13,10 @@ export function SessionDetailPage() {
 	const provider =
 		searchParams.get("provider") === "claude" ? "claude" : "codex";
 	const navigate = useNavigate();
+
+	useEffect(() => {
+		document.body.setAttribute("data-provider", provider);
+	}, [provider]);
 	const {
 		sessionData,
 		loading,
@@ -76,8 +81,12 @@ export function SessionDetailPage() {
 			navigate(`/sessions/${parentSessionId}?provider=${provider}`);
 		}
 	};
-	const handleSubagentClick = (subagentId: string) => {
-		navigate(`/sessions/${subagentId}?provider=${provider}`);
+	const handleSubagentClick = (
+		subagentId: string,
+		subagentProvider?: string,
+	) => {
+		const nextProvider = subagentProvider || provider;
+		navigate(`/sessions/${subagentId}?provider=${nextProvider}`);
 	};
 
 	return (

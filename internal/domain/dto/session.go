@@ -192,12 +192,13 @@ type SessionDetailResponse struct {
 
 // SubagentDetail は子セッション（サブエージェント）のトークン情報を表します。
 type SubagentDetail struct {
-	ID           string `json:"id"`
-	Nickname     string `json:"nickname"`
-	TotalTokens  int64  `json:"total_tokens"`
-	InputTokens  int64  `json:"input_tokens"`
-	OutputTokens int64  `json:"output_tokens"`
-	TurnCount    *int   `json:"turn_count,omitempty"`
-	StepCount    *int   `json:"step_count,omitempty"`
-	DurationMs   *int64 `json:"duration_ms,omitempty"`
+	ID           string          `json:"id"`
+	Provider     SessionProvider `json:"provider,omitempty"`
+	Nickname     string          `json:"nickname"`
+	TotalTokens  int64           `json:"total_tokens"`
+	InputTokens  int64           `json:"input_tokens"`
+	OutputTokens int64           `json:"output_tokens"`
+	TurnCount    *int            `json:"turn_count,omitempty"`
+	StepCount    *int            `json:"step_count,omitempty"`
+	DurationMs   *int64          `json:"duration_ms,omitempty"`
 }

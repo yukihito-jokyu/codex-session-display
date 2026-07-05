@@ -167,8 +167,8 @@
 }
 
 .otherMonth {
-	color: var(--text-muted, #767d84);
-	opacity: 0.5;
+	color: var(--text-secondary);
+	opacity: 0.55;
 }
 
 .today {
@@ -186,27 +186,27 @@
 }
 
 /* Contribution Graph Levels */
-.graphL1 {
+.dayCell.graphL1 {
 	background-color: var(--color-calendar-graph-L1);
 	color: var(--color-calendar-graph-L1-text);
 }
-.graphL2 {
+.dayCell.graphL2 {
 	background-color: var(--color-calendar-graph-L2);
 	color: var(--color-calendar-graph-L2-text);
 }
-.graphL3 {
+.dayCell.graphL3 {
 	background-color: var(--color-calendar-graph-L3);
 	color: var(--color-calendar-graph-L3-text);
 }
-.graphL4 {
+.dayCell.graphL4 {
 	background-color: var(--color-calendar-graph-L4);
 	color: var(--color-calendar-graph-L4-text);
 }
 
-.graphL1:hover,
-.graphL2:hover,
-.graphL3:hover,
-.graphL4:hover {
+.dayCell.graphL1:hover,
+.dayCell.graphL2:hover,
+.dayCell.graphL3:hover,
+.dayCell.graphL4:hover {
 	opacity: 0.8;
 }
 

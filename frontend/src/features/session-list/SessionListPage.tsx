@@ -50,6 +50,10 @@ export function SessionListPage() {
 		parseSessions,
 	} = useSessions();
 
+	useEffect(() => {
+		document.body.setAttribute("data-provider", provider);
+	}, [provider]);
+
 	const { updateResult, progress, apply } = useUpdate();
 	const [isModalOpen, setIsModalOpen] = useState(false);
 	const [activeTab, setActiveTab] = useState<
@@ -159,6 +163,17 @@ export function SessionListPage() {
 		const [yearStr, monthStr] = dateStr.split("-");
 		const y = parseInt(yearStr, 10);
 		const m = parseInt(monthStr, 10);
+		if (y && m) {
+			if (y !== currentYear) {
+				setCurrentYear(y);
+			}
+			if (m !== currentMonth) {
+				setCurrentMonth(m);
+			}
+		}
+	};
+
+	const handleMonthChange = (y: number, m: number) => {
 		if (y && m) {
 			if (y !== currentYear) {
 				setCurrentYear(y);
@@ -324,6 +339,7 @@ export function SessionListPage() {
 							value={selectedDate}
 							onChange={handleDateChange}
 							sessionCounts={sessionCounts}
+							onMonthChange={handleMonthChange}
 						/>
 					</div>
 

@@ -21,7 +21,7 @@ export type CustomNodeProps = NodeProps & {
 			boundCount: number;
 		};
 		onTokenBadgeClick?: (nodeId: string) => void;
-		onSubagentClick?: (threadId: string) => void;
+		onSubagentClick?: (threadId: string, provider?: string) => void;
 	};
 };
 
@@ -145,7 +145,10 @@ const BaseCustomNodeComponent = ({
 					className={styles.subagentButton}
 					onClick={(e) => {
 						e.stopPropagation();
-						data.onSubagentClick?.(data.meta?.new_thread_id as string);
+						data.onSubagentClick?.(
+							data.meta?.new_thread_id as string,
+							data.meta?.provider as string,
+						);
 					}}
 				>
 					サブエージェントを表示

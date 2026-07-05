@@ -223,3 +223,175 @@ body.light-theme {
 	--color-calendar-graph-L4: #216e39;
 	--color-calendar-graph-L4-text: #ffffff;
 }
+
+/* Claude / Anthropic 公式カラーテーマ (ダークモード) */
+body[data-provider="claude"] {
+	--bg-app: rgba(25, 24, 22, 0.75);
+	--bg-header: rgba(34, 33, 30, 0.85);
+	--border-color: #423d38;
+	--text-primary: #f5efe6;
+	--text-secondary: #b3a89b;
+	--text-muted: #6e665d;
+	--bg-btn: #34312d;
+	--bg-btn-hover: #423d38;
+	--color-accent: #e05c3e;
+	--grid-dot: #22201e;
+	--panel-shadow: rgba(0, 0, 0, 0.5);
+
+	/* Card / Row */
+	--bg-card: rgba(34, 33, 30, 0.4);
+	--bg-card-hover: rgba(45, 43, 40, 0.6);
+	--card-hover-shadow: rgba(0, 0, 0, 0.15);
+
+	/* Tree / Accordion */
+	--tree-header-hover: rgba(255, 255, 255, 0.03);
+	--tree-line-color: rgba(255, 255, 255, 0.08);
+	--badge-count-bg: rgba(255, 255, 255, 0.05);
+	--size-badge-bg: rgba(255, 255, 255, 0.03);
+	--size-badge-border: rgba(255, 255, 255, 0.03);
+
+	/* Accent badge (toolbar) */
+	--accent-badge-bg: rgba(224, 92, 62, 0.1);
+	--accent-badge-border: rgba(224, 92, 62, 0.2);
+	--accent-value-bg: rgba(224, 92, 62, 0.2);
+
+	/* Search input */
+	--search-bg: rgba(34, 33, 30, 0.6);
+	--search-bg-focus: rgba(34, 33, 30, 0.8);
+	--search-focus-ring: rgba(224, 92, 62, 0.15);
+
+	/* Detail card */
+	--detail-card-bg: rgba(34, 33, 30, 0.4);
+	--mono-bg: rgba(0, 0, 0, 0.3);
+
+	/* Titlebar buttons */
+	--titlebar-bg: rgba(34, 33, 30, 0.8);
+
+	/* Node theme colors: background / icon-bg / border / text-icon */
+	--node-meta-bg: #22211e;
+	--node-meta-icon-bg: #1f2b20;
+	--node-meta-border: #3fb9504d;
+	--node-meta-text: #3fb950;
+
+	--node-input-bg: #22211e;
+	--node-input-icon-bg: #1b2633;
+	--node-input-border: #58a6ff4d;
+	--node-input-text: #58a6ff;
+
+	--node-output-bg: #22211e;
+	--node-output-icon-bg: #192c30;
+	--node-output-border: #00f2fe4d;
+	--node-output-text: #00f2fe;
+
+	--node-think-bg: #22211e;
+	--node-think-icon-bg: #2b1f38;
+	--node-think-border: #bc8cff4d;
+	--node-think-text: #bc8cff;
+
+	--node-action-bg: #22211e;
+	--node-action-icon-bg: #352817;
+	--node-action-border: #e3b3414d;
+	--node-action-text: #e3b341;
+
+	--node-event-bg: #22211e;
+	--node-event-icon-bg: #272522;
+	--node-event-border: #423d38;
+	--node-event-text: #b3a89b;
+
+	--node-warning-bg: #22211e;
+	--node-warning-icon-bg: #3d1c1e;
+	--node-warning-border: #f8514966;
+	--node-warning-text: #f85149;
+
+	/* Calendar Activity Graph */
+	--color-calendar-graph-L1: #3b281f;
+	--color-calendar-graph-L2: #6b3d2b;
+	--color-calendar-graph-L3: #b05c3d;
+	--color-calendar-graph-L4: #e0744c;
+}
+
+/* Claude / Anthropic 公式カラーテーマ (ライトモード) */
+body.light-theme[data-provider="claude"] {
+	--bg-app: rgba(249, 246, 240, 0.75);
+	--bg-header: rgba(240, 235, 225, 0.85);
+	--border-color: #dcd6cd;
+	--text-primary: #191816;
+	--text-secondary: #5c564f;
+	--text-muted: #8e857b;
+	--bg-btn: #f0ebe1;
+	--bg-btn-hover: #e6dfd3;
+	--color-accent: #cc5a37;
+	--grid-dot: #e6dfd3;
+	--panel-shadow: rgba(0, 0, 0, 0.08);
+
+	/* Card / Row */
+	--bg-card: rgba(255, 255, 255, 0.6);
+	--bg-card-hover: rgba(240, 235, 225, 0.8);
+	--card-hover-shadow: rgba(0, 0, 0, 0.08);
+
+	/* Tree / Accordion */
+	--tree-header-hover: rgba(0, 0, 0, 0.03);
+	--tree-line-color: rgba(0, 0, 0, 0.08);
+	--badge-count-bg: rgba(0, 0, 0, 0.05);
+	--size-badge-bg: rgba(0, 0, 0, 0.03);
+	--size-badge-border: rgba(0, 0, 0, 0.04);
+
+	/* Accent badge (toolbar) */
+	--accent-badge-bg: rgba(204, 90, 55, 0.08);
+	--accent-badge-border: rgba(204, 90, 55, 0.2);
+	--accent-value-bg: rgba(204, 90, 55, 0.12);
+
+	/* Search input */
+	--search-bg: rgba(240, 235, 225, 0.8);
+	--search-bg-focus: rgba(255, 255, 255, 0.95);
+	--search-focus-ring: rgba(204, 90, 55, 0.15);
+
+	/* Detail card */
+	--detail-card-bg: rgba(255, 255, 255, 0.6);
+	--mono-bg: rgba(0, 0, 0, 0.05);
+
+	/* Titlebar buttons */
+	--titlebar-bg: rgba(240, 235, 225, 0.8);
+
+	/* Node theme colors: background / icon-bg / border / text-icon */
+	--node-meta-bg: #ffffff;
+	--node-meta-icon-bg: #f1f8e9;
+	--node-meta-border: #c5e1a5;
+	--node-meta-text: #558b2f;
+
+	--node-input-bg: #ffffff;
+	--node-input-icon-bg: #e3f2fd;
+	--node-input-border: #90caf9;
+	--node-input-text: #1565c0;
+
+	--node-output-bg: #ffffff;
+	--node-output-icon-bg: #e0f7fa;
+	--node-output-border: #80deea;
+	--node-output-text: #00838f;
+
+	--node-think-bg: #ffffff;
+	--node-think-icon-bg: #faf5ff;
+	--node-think-border: #e9d5ff;
+	--node-think-text: #8b5cf6;
+
+	--node-action-bg: #ffffff;
+	--node-action-icon-bg: #fff8e1;
+	--node-action-border: #ffe082;
+	--node-action-text: #d97706;
+
+	--node-event-bg: #ffffff;
+	--node-event-icon-bg: #fcfbf9;
+	--node-event-border: #dcd6cd;
+	--node-event-text: #5c564f;
+
+	--node-warning-bg: #ffffff;
+	--node-warning-icon-bg: #ffebee;
+	--node-warning-border: #ef9a9a;
+	--node-warning-text: #c62828;
+
+	/* Calendar Activity Graph (Light Theme) */
+	--color-calendar-graph-L1: #f3d9d2;
+	--color-calendar-graph-L2: #e8b0a0;
+	--color-calendar-graph-L3: #db8369;
+	--color-calendar-graph-L4: #cc5a37;
+}
