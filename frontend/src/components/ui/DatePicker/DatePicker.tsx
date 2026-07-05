@@ -6,12 +6,14 @@ interface DatePickerProps {
 	value: string; // YYYY-MM-DD
 	onChange: (value: string) => void;
 	sessionCounts?: { [dateStr: string]: number };
+	onMonthChange?: (year: number, month: number) => void;
 }
 
 export const DatePicker: React.FC<DatePickerProps> = ({
 	value,
 	onChange,
 	sessionCounts,
+	onMonthChange,
 }) => {
 	const [isOpen, setIsOpen] = useState(false);
 	const containerRef = useRef<HTMLDivElement>(null);
@@ -65,12 +67,16 @@ export const DatePicker: React.FC<DatePickerProps> = ({
 
 	// 前の月へ
 	const prevMonth = () => {
-		setViewDate(new Date(year, month - 1, 1));
+		const nextDate = new Date(year, month - 1, 1);
+		setViewDate(nextDate);
+		onMonthChange?.(nextDate.getFullYear(), nextDate.getMonth() + 1);
 	};
 
 	// 次の月へ
 	const nextMonth = () => {
-		setViewDate(new Date(year, month + 1, 1));
+		const nextDate = new Date(year, month + 1, 1);
+		setViewDate(nextDate);
+		onMonthChange?.(nextDate.getFullYear(), nextDate.getMonth() + 1);
 	};
 
 	// カレンダーの日付グリッド作成
