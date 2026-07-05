@@ -112,6 +112,36 @@
 	text-align: center;
 }
 
+.sourceSwitch {
+	display: flex;
+	gap: 4px;
+	padding: 10px 16px 0;
+	background: var(--bg-header);
+}
+
+.sourceBtn {
+	padding: 6px 12px;
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--text-secondary);
+	background: var(--bg-btn);
+	border: 1px solid var(--border-color);
+	border-radius: 6px;
+	cursor: pointer;
+	transition: all 0.2s ease;
+}
+
+.sourceBtn:hover {
+	color: var(--text-primary);
+	background: var(--bg-btn-hover);
+}
+
+.activeSource {
+	color: var(--color-accent);
+	border-color: var(--color-accent);
+	background: var(--bg-card);
+}
+
 /* Tabs UI styling */
 .tabsHeader {
 	display: flex;

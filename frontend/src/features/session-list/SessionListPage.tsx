@@ -33,6 +33,8 @@ const getFormattedDate = (session: SessionSummary) => {
 export function SessionListPage() {
 	const {
 		sessions,
+		provider,
+		setProvider,
 		loading,
 		error,
 		currentYear,
@@ -190,6 +192,9 @@ export function SessionListPage() {
 		}
 	}, [sessions, parsingSessionIds, parseSessions]);
 
+	const sourcePath =
+		provider === "claude" ? "~/.claude/projects" : "~/.codex/sessions";
+
 	// 選択した日付の未解析セッションを自動的かつ優先的にバックグラウンド解析する
 	useEffect(() => {
 		if (activeTab !== "directory" || loading) return;
@@ -205,7 +210,7 @@ export function SessionListPage() {
 		<div className={styles.listPage}>
 			<Toolbar
 				totalCount={sessions.length}
-				sourcePath="~/.codex/sessions"
+				sourcePath={sourcePath}
 				onSearch={handleSearch}
 				hasUpdate={updateResult?.hasUpdate}
 				latestVersion={updateResult?.latest}
@@ -214,6 +219,27 @@ export function SessionListPage() {
 				parsingCount={parsingCount}
 				onParseAllClick={handleParseAll}
 			/>
+
+			<div
+				className={styles.sourceSwitch}
+				role="group"
+				aria-label="Session source"
+			>
+				<button
+					type="button"
+					className={`${styles.sourceBtn} ${provider === "codex" ? styles.activeSource : ""}`}
+					onClick={() => setProvider("codex")}
+				>
+					Codex
+				</button>
+				<button
+					type="button"
+					className={`${styles.sourceBtn} ${provider === "claude" ? styles.activeSource : ""}`}
+					onClick={() => setProvider("claude")}
+				>
+					Claude Code
+				</button>
+			</div>
 
 			<div className={styles.tabsHeader}>
 				<button
