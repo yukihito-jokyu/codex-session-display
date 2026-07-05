@@ -50,7 +50,7 @@ func (r *SessionFSRepository) SetClaudeProjectsDir(projectsDir string) {
 // year == 0 && month == 0 の場合は、自動的に最新のセッションが存在する年月を特定してその月分のみを返します。
 func (r *SessionFSRepository) ListSessions(ctx context.Context, provider dto.SessionProvider, year, month int, query string) ([]dto.SessionSummary, error) {
 	if provider == dto.SessionProviderClaude {
-		return r.listClaudeSessions(year, month, query)
+		return r.listClaudeSessions(ctx, year, month, query)
 	}
 	// ディレクトリが存在するか確認
 	if _, err := os.Stat(r.rootDir); errors.Is(err, os.ErrNotExist) {
@@ -244,7 +244,7 @@ func (r *SessionFSRepository) ListSessions(ctx context.Context, provider dto.Ses
 	return sessions, nil
 }
 
-func (r *SessionFSRepository) listClaudeSessions(year, month int, query string) ([]dto.SessionSummary, error) {
+func (r *SessionFSRepository) listClaudeSessions(ctx context.Context, year, month int, query string) ([]dto.SessionSummary, error) {
 	if r.claudeProjectsDir == "" {
 		return nil, nil
 	}
@@ -252,7 +252,9 @@ func (r *SessionFSRepository) listClaudeSessions(year, month int, query string) 
 		return nil, nil
 	}
 
-	var sessions []dto.SessionSummary
+	var allSessions []dto.SessionSummary
+	var latestTime time.Time
+
 	err := filepath.WalkDir(r.claudeProjectsDir, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
@@ -261,7 +263,7 @@ func (r *SessionFSRepository) listClaudeSessions(year, month int, query string) 
 			return nil
 		}
 
-		summary, err := r.readClaudeSessionSummary(path)
+		summary, err := r.readClaudeSessionSummary(ctx, path)
 		if err != nil {
 			return nil
 		}
@@ -269,37 +271,91 @@ func (r *SessionFSRepository) listClaudeSessions(year, month int, query string) 
 			return nil
 		}
 
-		if summary.Timestamp != nil && year > 0 && month > 0 {
-			t, err := time.Parse(time.RFC3339Nano, *summary.Timestamp)
-			if err != nil || t.Year() != year || int(t.Month()) != month {
-				return nil
+		allSessions = append(allSessions, *summary)
+
+		// 最新のタイムスタンプを追跡
+		if summary.Timestamp != nil {
+			var t time.Time
+			var parseErr error
+			t, parseErr = time.Parse(time.RFC3339, *summary.Timestamp)
+			if parseErr != nil {
+				t, parseErr = time.Parse(time.RFC3339Nano, *summary.Timestamp)
+			}
+			if parseErr == nil {
+				if t.After(latestTime) {
+					latestTime = t
+				}
 			}
 		}
-
-		if query != "" && !matchesSessionQuery(summary, query) {
-			return nil
-		}
-
-		sessions = append(sessions, *summary)
 		return nil
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to scan Claude sessions directory: %w", err)
 	}
-	return sessions, nil
+
+	var targetYear int
+	var targetMonth int
+
+	if year == 0 && month == 0 {
+		if latestTime.IsZero() {
+			return nil, nil // セッションが存在しない場合
+		}
+		targetYear = latestTime.Year()
+		targetMonth = int(latestTime.Month())
+	} else {
+		targetYear = year
+		targetMonth = month
+	}
+
+	var filtered []dto.SessionSummary
+	for _, summary := range allSessions {
+		// 年月によるフィルタリング
+		if summary.Timestamp != nil {
+			var t time.Time
+			var parseErr error
+			t, parseErr = time.Parse(time.RFC3339, *summary.Timestamp)
+			if parseErr != nil {
+				t, parseErr = time.Parse(time.RFC3339Nano, *summary.Timestamp)
+			}
+			if parseErr != nil || t.Year() != targetYear || int(t.Month()) != targetMonth {
+				continue
+			}
+		} else {
+			continue // タイムスタンプがないものは除外（通常はフォールバックがあるのでここには来ない）
+		}
+
+		// クエリによるフィルタリング
+		if query != "" && !matchesSessionQuery(&summary, query) {
+			continue
+		}
+
+		filtered = append(filtered, summary)
+	}
+
+	// 日時で降順ソート
+	sort.Slice(filtered, func(i, j int) bool {
+		t1, err1 := time.Parse(time.RFC3339, *filtered[i].Timestamp)
+		if err1 != nil {
+			t1, err1 = time.Parse(time.RFC3339Nano, *filtered[i].Timestamp)
+		}
+		t2, err2 := time.Parse(time.RFC3339, *filtered[j].Timestamp)
+		if err2 != nil {
+			t2, err2 = time.Parse(time.RFC3339Nano, *filtered[j].Timestamp)
+		}
+		if err1 != nil || err2 != nil {
+			return false
+		}
+		return t1.After(t2)
+	})
+
+	return filtered, nil
 }
 
-func (r *SessionFSRepository) readClaudeSessionSummary(path string) (*dto.SessionSummary, error) {
+func (r *SessionFSRepository) readClaudeSessionSummary(ctx context.Context, path string) (*dto.SessionSummary, error) {
 	info, err := os.Stat(path)
 	if err != nil {
 		return nil, err
 	}
-
-	file, err := os.Open(path)
-	if err != nil {
-		return nil, err
-	}
-	defer file.Close()
 
 	relPath, err := filepathRelFn(r.claudeProjectsDir, path)
 	if err != nil {
@@ -309,59 +365,91 @@ func (r *SessionFSRepository) readClaudeSessionSummary(path string) (*dto.Sessio
 	sessionID := strings.TrimSuffix(filepath.Base(path), ".jsonl")
 	modTimeStr := info.ModTime().UTC().Format(time.RFC3339)
 
-	var cwd *string
-	var timestamp *string
-	messageCount := 0
-	toolCallCount := 0
-	totalCostUSD := 0.0
+	var sSummary dto.SessionSummary
+	cached, err := r.cacheRepo.GetSessionSummary(ctx, dto.SessionProviderClaude, sessionID)
+	if err == nil && cached != nil {
+		sSummary = *cached
+		sSummary.Provider = dto.SessionProviderClaude
+		sSummary.Parsed = true
+	} else {
+		file, err := os.Open(path)
+		if err != nil {
+			return nil, err
+		}
+		defer file.Close()
 
-	scanner := bufio.NewScanner(file)
-	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
-	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
-		if line == "" {
-			continue
+		var cwd *string
+		var timestamp *string
+		var gitBranch *string
+		var version *string
+		messageCount := 0
+		toolCallCount := 0
+		totalCostUSD := 0.0
+
+		scanner := bufio.NewScanner(file)
+		scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
+		for scanner.Scan() {
+			line := strings.TrimSpace(scanner.Text())
+			if line == "" {
+				continue
+			}
+
+			var record claudeTranscriptRecord
+			if err := json.Unmarshal([]byte(line), &record); err != nil {
+				continue
+			}
+			if record.SessionID != "" {
+				sessionID = record.SessionID
+			}
+			if cwd == nil && record.Cwd != "" {
+				value := record.Cwd
+				cwd = &value
+			}
+			if timestamp == nil && record.Timestamp != "" {
+				value := record.Timestamp
+				timestamp = &value
+			}
+			if gitBranch == nil && record.GitBranch != "" {
+				value := record.GitBranch
+				gitBranch = &value
+			}
+			if version == nil && record.Version != "" {
+				value := record.Version
+				version = &value
+			}
+			if record.Type == "user" || record.Type == "assistant" {
+				messageCount++
+			}
+			totalCostUSD += record.CostUSD
+			toolCallCount += countClaudeToolUses(record.Message.Content)
+		}
+		if err := scanner.Err(); err != nil {
+			return nil, err
 		}
 
-		var record claudeTranscriptRecord
-		if err := json.Unmarshal([]byte(line), &record); err != nil {
-			continue
+		sSummary = dto.SessionSummary{
+			ID:            sessionID,
+			Provider:      dto.SessionProviderClaude,
+			Cwd:           cwd,
+			Timestamp:     timestamp,
+			Branch:        gitBranch,
+			CliVersion:    version,
+			Parsed:        false,
+			MessageCount:  &messageCount,
+			ToolCallCount: &toolCallCount,
+			TotalCostUSD:  &totalCostUSD,
 		}
-		if record.SessionID != "" {
-			sessionID = record.SessionID
-		}
-		if cwd == nil && record.Cwd != "" {
-			value := record.Cwd
-			cwd = &value
-		}
-		if timestamp == nil && record.Timestamp != "" {
-			value := record.Timestamp
-			timestamp = &value
-		}
-		if record.Type == "user" || record.Type == "assistant" {
-			messageCount++
-		}
-		totalCostUSD += record.CostUSD
-		toolCallCount += countClaudeToolUses(record.Message.Content)
 	}
-	if err := scanner.Err(); err != nil {
-		return nil, err
+
+	sSummary.FilePath = relPath
+	sSummary.FileSize = info.Size()
+	sSummary.FileModifiedAt = &modTimeStr
+	sSummary.EncodedProject = &encodedProject
+	if sSummary.Timestamp == nil || *sSummary.Timestamp == "" {
+		sSummary.Timestamp = &modTimeStr
 	}
 
-	return &dto.SessionSummary{
-		ID:             sessionID,
-		Provider:       dto.SessionProviderClaude,
-		FilePath:       relPath,
-		Cwd:            cwd,
-		Timestamp:      timestamp,
-		FileSize:       info.Size(),
-		FileModifiedAt: &modTimeStr,
-		Parsed:         false,
-		EncodedProject: &encodedProject,
-		MessageCount:   &messageCount,
-		ToolCallCount:  &toolCallCount,
-		TotalCostUSD:   &totalCostUSD,
-	}, nil
+	return &sSummary, nil
 }
 
 type claudeTranscriptRecord struct {
@@ -373,6 +461,8 @@ type claudeTranscriptRecord struct {
 	Message   struct {
 		Content json.RawMessage `json:"content"`
 	} `json:"message"`
+	GitBranch string  `json:"gitBranch"`
+	Version   string  `json:"version"`
 }
 
 func countClaudeToolUses(content json.RawMessage) int {
@@ -451,7 +541,63 @@ func (r *SessionFSRepository) GetSessionFilePath(ctx context.Context, sessionID 
 	if err != nil {
 		return "", fmt.Errorf("failed to scan for session file path: %w", err)
 	}
+
+	if r.claudeProjectsDir != "" {
+		err = filepath.WalkDir(r.claudeProjectsDir, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return err
+			}
+			if d.IsDir() || !strings.HasSuffix(d.Name(), ".jsonl") {
+				return nil
+			}
+			if strings.TrimSuffix(d.Name(), ".jsonl") == sessionID {
+				targetPath = path
+				return errSessionFound
+			}
+			embeddedSessionID, readErr := readClaudeSessionIDFromFile(path)
+			if readErr != nil || embeddedSessionID != sessionID {
+				return nil
+			}
+			targetPath = path
+			return errSessionFound
+		})
+		if errors.Is(err, errSessionFound) {
+			return targetPath, nil
+		}
+		if err != nil {
+			return "", fmt.Errorf("failed to scan Claude sessions directory: %w", err)
+		}
+	}
+
 	return "", fmt.Errorf("%w: ID %s", ErrSessionNotFound, sessionID)
+}
+
+func readClaudeSessionIDFromFile(filePath string) (string, error) {
+	file, err := os.Open(filePath)
+	if err != nil {
+		return "", err
+	}
+	defer file.Close()
+
+	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+		var record claudeTranscriptRecord
+		if err := json.Unmarshal([]byte(line), &record); err != nil {
+			continue
+		}
+		if record.SessionID != "" {
+			return record.SessionID, nil
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return "", err
+	}
+	return "", nil
 }
 
 // GetSessionIDByFilePath はセッションファイルパスに対応するセッションIDを返します。
