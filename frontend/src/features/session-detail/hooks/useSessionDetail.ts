@@ -7,7 +7,10 @@ import {
 	useRef,
 	useState,
 } from "react";
-import { GetSessionDetail, OpenLogDirectory } from "wailsjs/go/main/App";
+import {
+	GetSessionDetailByProvider,
+	OpenLogDirectory,
+} from "wailsjs/go/main/App";
 import { dto } from "wailsjs/go/models";
 import { getTimelineItemFullText } from "../components/ConversationTimeline/timelineItemText";
 
@@ -31,7 +34,10 @@ async function getLogFilePath() {
 	return app.GetLogFilePath();
 }
 
-export function useSessionDetail(id: string | undefined) {
+export function useSessionDetail(
+	id: string | undefined,
+	provider: "codex" | "claude" = "codex",
+) {
 	const [sessionData, setSessionData] =
 		useState<dto.SessionDetailResponse | null>(null);
 	const [loading, setLoading] = useState(true);
@@ -65,20 +71,23 @@ export function useSessionDetail(id: string | undefined) {
 		width: number;
 	} | null>(null);
 
-	const fetchSessionDetail = useCallback((targetId: string) => {
-		setLoading(true);
-		setError(null);
-		GetSessionDetail(targetId)
-			.then((data) => {
-				setSessionData(data);
-				setLoading(false);
-			})
-			.catch((err) => {
-				console.error(err);
-				setError(`Failed to fetch session detail: ${err.message || err}`);
-				setLoading(false);
-			});
-	}, []);
+	const fetchSessionDetail = useCallback(
+		(targetId: string, targetProvider: "codex" | "claude") => {
+			setLoading(true);
+			setError(null);
+			GetSessionDetailByProvider(targetProvider, targetId)
+				.then((data) => {
+					setSessionData(data);
+					setLoading(false);
+				})
+				.catch((err) => {
+					console.error(err);
+					setError(`Failed to fetch session detail: ${err.message || err}`);
+					setLoading(false);
+				});
+		},
+		[],
+	);
 
 	useEffect(() => {
 		if (!id) {
@@ -87,14 +96,14 @@ export function useSessionDetail(id: string | undefined) {
 			setLoading(false);
 			return;
 		}
-		fetchSessionDetail(id);
-	}, [id, fetchSessionDetail]);
+		fetchSessionDetail(id, provider);
+	}, [id, provider, fetchSessionDetail]);
 
 	const retry = useCallback(() => {
 		if (id) {
-			fetchSessionDetail(id);
+			fetchSessionDetail(id, provider);
 		}
-	}, [id, fetchSessionDetail]);
+	}, [id, provider, fetchSessionDetail]);
 
 	const timelineItems = useMemo(
 		() =>

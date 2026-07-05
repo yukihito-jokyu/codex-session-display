@@ -1,4 +1,4 @@
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { SessionDetailError } from "./components/SessionDetailError/SessionDetailError";
 import { SessionDetailHeader } from "./components/SessionDetailHeader/SessionDetailHeader";
 import { SessionDetailMainContent } from "./components/SessionDetailMainContent/SessionDetailMainContent";
@@ -8,6 +8,9 @@ import styles from "./SessionDetailPage.module.css";
 
 export function SessionDetailPage() {
 	const { id } = useParams<{ id: string }>();
+	const [searchParams] = useSearchParams();
+	const provider =
+		searchParams.get("provider") === "claude" ? "claude" : "codex";
 	const navigate = useNavigate();
 	const {
 		sessionData,
@@ -35,7 +38,7 @@ export function SessionDetailPage() {
 		handleCopyLogPath,
 		startResize,
 		handleResizerKeyDown,
-	} = useSessionDetail(id);
+	} = useSessionDetail(id, provider);
 	const {
 		timelineWidth,
 		timelineMinWidth,
@@ -70,11 +73,11 @@ export function SessionDetailPage() {
 	const parentSessionId = sessionData?.parent_session_id ?? null;
 	const handleBackToParent = () => {
 		if (parentSessionId) {
-			navigate(`/sessions/${parentSessionId}`);
+			navigate(`/sessions/${parentSessionId}?provider=${provider}`);
 		}
 	};
 	const handleSubagentClick = (subagentId: string) => {
-		navigate(`/sessions/${subagentId}`);
+		navigate(`/sessions/${subagentId}?provider=${provider}`);
 	};
 
 	return (

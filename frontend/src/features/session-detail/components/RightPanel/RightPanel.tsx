@@ -20,6 +20,7 @@ import styles from "./RightPanel.module.css";
 interface RightPanelProps {
 	sessionId: string;
 	statistics: dto.Statistics;
+	transcriptStats?: dto.TranscriptStats;
 	tokenCounts: dto.TokenCountEntry[];
 	nodes: dto.FlowNode[];
 	selectedTokenCountIndices: number[];
@@ -176,6 +177,7 @@ function LastTokenTooltip({ active, payload, label }: TooltipContentProps) {
 export function RightPanel({
 	sessionId,
 	statistics,
+	transcriptStats,
 	tokenCounts,
 	nodes,
 	selectedTokenCountIndices,
@@ -536,6 +538,23 @@ export function RightPanel({
 					<span className={styles.statLabel}>Turns</span>
 					<span className={styles.statValue}>{statistics.turn_count}</span>
 				</div>
+				{transcriptStats?.total_cost_usd != null && (
+					<div className={styles.statCard}>
+						<span className={styles.statLabel}>Cost</span>
+						<span className={styles.statValue}>
+							${transcriptStats.total_cost_usd.toFixed(4)}
+						</span>
+					</div>
+				)}
+				{transcriptStats?.cache_read_input_tokens != null &&
+					transcriptStats.cache_read_input_tokens > 0 && (
+						<div className={styles.statCard}>
+							<span className={styles.statLabel}>Cache Read</span>
+							<span className={styles.statValue}>
+								{formatNumber(transcriptStats.cache_read_input_tokens)}
+							</span>
+						</div>
+					)}
 			</div>
 
 			{/* Turn Duration Bar Sparkline */}
