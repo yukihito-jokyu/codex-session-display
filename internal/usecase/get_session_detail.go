@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"io/fs"
+	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -804,7 +805,7 @@ func isClaudeTranscript(records []*model.TypedRecord) bool {
 	return false
 }
 
-func buildClaudeSessionDetail(sessionID string, records []*model.TypedRecord) *dto.SessionDetailResponse {
+func (uc *GetSessionDetailUseCase) buildClaudeSessionDetail(ctx context.Context, sessionID, filePath string, records []*model.TypedRecord) *dto.SessionDetailResponse {
 	const (
 		harnessX   = 0.0
 		branchX    = 400.0
@@ -829,6 +830,11 @@ func buildClaudeSessionDetail(sessionID string, records []*model.TypedRecord) *d
 	seenUsageMessageIDs := make(map[string]bool)
 	toolUseNodeByID := make(map[string]string)
 	toolUseNameByID := make(map[string]string)
+
+	parentSessionID := getClaudeParentSessionID(filePath)
+	var childSessionIDs []string
+	seenChildSessionIDs := make(map[string]bool)
+	childSpawnedTypes := make(map[string]string)
 
 	addNode := func(id, nodeType, category, label, icon, summary, fullText string, x float64, turn int, meta map[string]interface{}) {
 		nodes = append(nodes, dto.FlowNode{
@@ -933,6 +939,32 @@ func buildClaudeSessionDetail(sessionID string, records []*model.TypedRecord) *d
 		if record == nil || record.Raw == "" {
 			continue
 		}
+
+		// Hook情報やAgentツールの付加情報の解析
+		var hookData struct {
+			Type                string `json:"type"`
+			Event               string `json:"event"`
+			SessionID           string `json:"session_id"`
+			AgentID             string `json:"agent_id"`
+			AgentType           string `json:"agent_type"`
+			AgentTranscriptPath string `json:"agent_transcript_path"`
+		}
+		if err := json.Unmarshal([]byte(record.Raw), &hookData); err == nil {
+			if hookData.AgentID != "" {
+				aid := hookData.AgentID
+				if !seenChildSessionIDs[aid] {
+					seenChildSessionIDs[aid] = true
+					childSessionIDs = append(childSessionIDs, aid)
+				}
+				if hookData.AgentType != "" {
+					childSpawnedTypes[aid] = hookData.AgentType
+				}
+			}
+			if parentSessionID == "" && hookData.SessionID != "" && hookData.SessionID != sessionID {
+				parentSessionID = hookData.SessionID
+			}
+		}
+
 		var claudeRecord claudeDetailRecord
 		if err := json.Unmarshal([]byte(record.Raw), &claudeRecord); err != nil {
 			continue
@@ -1028,11 +1060,51 @@ func buildClaudeSessionDetail(sessionID string, records []*model.TypedRecord) *d
 					}
 					nodeID := fmt.Sprintf("node-%d-tool-%d", record.LineNumber, toolCallCount)
 					meta := map[string]interface{}{"tool_use_id": item.ID, "name": item.Name}
-					addNode(nodeID, "action", "action", item.Name, "🛠️", body, body, branchX, turnIndex, meta)
+					nodeType := "action"
+					kind := "tool"
+					label := "Tool Use: " + item.Name
+					var details []dto.TimelineItemDetail
+					details = append(details, dto.TimelineItemDetail{Label: "tool_use_id", Value: item.ID})
+
+					if strings.EqualFold(item.Name, "agent") && len(item.Input) > 0 {
+						nodeType = "collabAgent"
+						label = "サブエージェント起動"
+						kind = "collab"
+						var inputData struct {
+							AgentID             string `json:"agent_id"`
+							AgentType           string `json:"agent_type"`
+							AgentTranscriptPath string `json:"agent_transcript_path"`
+						}
+						if jsonErr := json.Unmarshal(item.Input, &inputData); jsonErr == nil {
+							if inputData.AgentID != "" {
+								meta["new_thread_id"] = inputData.AgentID
+								meta["provider"] = "claude"
+								meta["agent_type"] = inputData.AgentType
+								details = append(details,
+									dto.TimelineItemDetail{Label: "Thread ID", Value: inputData.AgentID},
+									dto.TimelineItemDetail{Label: "Provider", Value: "claude"},
+								)
+								if inputData.AgentType != "" {
+									details = append(details, dto.TimelineItemDetail{Label: "Role", Value: inputData.AgentType})
+								}
+								// Subagent collection setup
+								aid := inputData.AgentID
+								if !seenChildSessionIDs[aid] {
+									seenChildSessionIDs[aid] = true
+									childSessionIDs = append(childSessionIDs, aid)
+								}
+								if inputData.AgentType != "" {
+									childSpawnedTypes[aid] = inputData.AgentType
+								}
+							}
+						}
+					}
+
+					addNode(nodeID, nodeType, "action", item.Name, "🛠️", body, body, branchX, turnIndex, meta)
 					toolCallCount++
 					toolUseNodeByID[item.ID] = nodeID
 					toolUseNameByID[item.ID] = item.Name
-					addTimelineItem(record, nodeID, "tool", "Tool Use: "+item.Name, "", body, []dto.TimelineItemDetail{{Label: "tool_use_id", Value: item.ID}})
+					addTimelineItem(record, nodeID, kind, label, "", body, details)
 					if lastNodeID != "" {
 						edges = append(edges, dto.FlowEdge{
 							ID:     fmt.Sprintf("edge-%s-%s", lastNodeID, nodeID),
@@ -1058,6 +1130,107 @@ func buildClaudeSessionDetail(sessionID string, records []*model.TypedRecord) *d
 	}
 	if len(tokenCounts) > 0 && lastNodeID != "" {
 		tokenCounts[len(tokenCounts)-1].BoundToNodeID = lastNodeID
+	}
+
+	// 他のセッションの一覧を取得し、親子関係を逆引きで解決
+	allSessions, err := uc.sessionRepo.ListSessions(ctx, dto.SessionProviderClaude, 0, 0, "")
+	if err == nil {
+		for i := range allSessions {
+			if allSessions[i].ParentSessionID != nil && *allSessions[i].ParentSessionID == sessionID {
+				aid := allSessions[i].ID
+				if !seenChildSessionIDs[aid] {
+					seenChildSessionIDs[aid] = true
+					childSessionIDs = append(childSessionIDs, aid)
+				}
+			}
+		}
+	}
+
+	// 再帰的にサブエージェント情報を収集
+	var subagents []dto.SubagentDetail
+	visitedSubagents := make(map[string]bool)
+
+	var collectSubagents func(id string, spawnedNicknames map[string]string)
+	collectSubagents = func(id string, spawnedNicknames map[string]string) {
+		if visitedSubagents[id] {
+			return
+		}
+		visitedSubagents[id] = true
+
+		var targetSummary *dto.SessionSummary
+		for idx := range allSessions {
+			if allSessions[idx].ID == id {
+				targetSummary = &allSessions[idx]
+				break
+			}
+		}
+		if targetSummary == nil {
+			return
+		}
+
+		nickname := ""
+		if spawnedNicknames != nil {
+			if n, ok := spawnedNicknames[id]; ok && n != "" {
+				nickname = n
+			}
+		}
+		if nickname == "" && targetSummary.Originator != nil && *targetSummary.Originator != "" {
+			nickname = *targetSummary.Originator
+		}
+		if nickname == "" {
+			nickname = "Subagent"
+		}
+
+		totalTokens := int64(0)
+		if targetSummary.TotalTokens != nil {
+			totalTokens = *targetSummary.TotalTokens
+		}
+		inputTokens := int64(0)
+		if targetSummary.InputTokens != nil {
+			inputTokens = *targetSummary.InputTokens
+		}
+		outputTokens := int64(0)
+		if targetSummary.OutputTokens != nil {
+			outputTokens = *targetSummary.OutputTokens
+		}
+
+		var turnCount int
+		if targetSummary.TurnCount != nil {
+			turnCount = *targetSummary.TurnCount
+		}
+		var stepCount int
+		if targetSummary.StepCount != nil {
+			stepCount = *targetSummary.StepCount
+		}
+		var durationMs int64
+		if targetSummary.DurationMs != nil {
+			durationMs = *targetSummary.DurationMs
+		}
+
+		subagents = append(subagents, dto.SubagentDetail{
+			ID:           id,
+			Provider:     resolveSessionProvider(ctx, uc.sessionRepo, id),
+			Nickname:     nickname,
+			TotalTokens:  totalTokens,
+			InputTokens:  inputTokens,
+			OutputTokens: outputTokens,
+			TurnCount:    &turnCount,
+			StepCount:    &stepCount,
+			DurationMs:   &durationMs,
+		})
+
+		for _, cid := range targetSummary.ChildSessionIDs {
+			collectSubagents(cid, nil)
+		}
+	}
+
+	for _, cid := range childSessionIDs {
+		collectSubagents(cid, childSpawnedTypes)
+	}
+
+	var parentSessionIDPtr *string
+	if parentSessionID != "" {
+		parentSessionIDPtr = &parentSessionID
 	}
 
 	return &dto.SessionDetailResponse{
@@ -1092,6 +1265,9 @@ func buildClaudeSessionDetail(sessionID string, records []*model.TypedRecord) *d
 			CacheReadInputTokens: totalCacheReadTokens,
 			TotalCostUSD:         totalCostUSD,
 		},
+		ParentSessionID: parentSessionIDPtr,
+		ChildSessionIDs: childSessionIDs,
+		Subagents:       subagents,
 	}
 }
 
@@ -1171,7 +1347,7 @@ func (uc *GetSessionDetailUseCase) ExecuteByProvider(ctx context.Context, provid
 		return nil, model.ErrParseFailed
 	}
 	if provider == dto.SessionProviderClaude || isClaudeTranscript(records) {
-		res := buildClaudeSessionDetail(sessionID, records)
+		res := uc.buildClaudeSessionDetail(ctx, sessionID, filePath, records)
 		if cacheErr := uc.cacheRepo.SaveSessionDetail(ctx, dto.SessionProviderClaude, sessionID, res); cacheErr != nil {
 			logger.Error("failed to save Claude session detail to cache", "session_id", sessionID, "error", cacheErr)
 		}
@@ -2676,4 +2852,16 @@ func isUnsupportedVersion(versionStr string) bool {
 		return true
 	}
 	return false
+}
+
+// getClaudeParentSessionID はパス構造から親セッションIDを抽出して返します。
+// 例: ~/.claude/projects/project-name/parent-session-id/subagents/subagent-id.jsonl
+func getClaudeParentSessionID(path string) string {
+	path = filepath.Clean(path)
+	dir := filepath.Dir(path) // .../parent-session-id/subagents
+	if filepath.Base(dir) == "subagents" {
+		parentDir := filepath.Dir(dir) // .../parent-session-id
+		return filepath.Base(parentDir)
+	}
+	return ""
 }
