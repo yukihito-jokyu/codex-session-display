@@ -1,9 +1,17 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { GetSessionDetail, ListSessionsByProvider } from "wailsjs/go/main/App";
+import {
+	GetSessionDetailByProvider,
+	ListSessionsByProvider,
+} from "wailsjs/go/main/App";
 import { EventsOn } from "wailsjs/runtime/runtime";
 import type { SessionSummary } from "../../../components/ui/DateTree/SessionRow";
 
 export type SessionProvider = "codex" | "claude";
+
+type ParseQueueItem = {
+	id: string;
+	provider: SessionProvider;
+};
 
 export function useSessions() {
 	const [sessions, setSessions] = useState<SessionSummary[]>([]);
@@ -48,7 +56,7 @@ export function useSessions() {
 	);
 	const parsingSessionIdsRef = useRef<Set<string>>(new Set());
 	const failedSessionIdsRef = useRef<Set<string>>(new Set());
-	const queueRef = useRef<string[]>([]);
+	const queueRef = useRef<ParseQueueItem[]>([]);
 	const activeCountRef = useRef<number>(0);
 
 	const currentYearRef = useRef<number | null>(currentYear);
@@ -229,16 +237,16 @@ export function useSessions() {
 			activeCountRef.current < maxConcurrency &&
 			queueRef.current.length > 0
 		) {
-			const nextId = queueRef.current.shift();
-			if (!nextId) break;
+			const next = queueRef.current.shift();
+			if (!next) break;
 
 			activeCountRef.current++;
 
-			GetSessionDetail(nextId)
+			GetSessionDetailByProvider(next.provider, next.id)
 				.then((detail) => {
 					setSessions((prevSessions) => {
 						return prevSessions.map((s) => {
-							if (s.id !== nextId) return s;
+							if (s.id !== next.id) return s;
 
 							// detail.nodes から sessionMeta ノードを探してメタデータを抽出
 							const metaNode = detail.nodes?.find(
@@ -282,13 +290,13 @@ export function useSessions() {
 					});
 				})
 				.catch((err) => {
-					console.error(`Failed to parse session ${nextId}:`, err);
-					failedSessionIdsRef.current.add(nextId);
+					console.error(`Failed to parse session ${next.id}:`, err);
+					failedSessionIdsRef.current.add(next.id);
 				})
 				.finally(() => {
 					activeCountRef.current--;
 					updateParsingIds((prev) => {
-						prev.delete(nextId);
+						prev.delete(next.id);
 						return prev;
 					});
 
@@ -316,17 +324,24 @@ export function useSessions() {
 				const session = sessions.find((s) => s.id === id);
 				const isParsed = session?.parsed;
 				const isParsing = parsingSessionIdsRef.current.has(id);
-				const isInQueue = queueRef.current.includes(id);
+				const isInQueue = queueRef.current.some((item) => item.id === id);
 				const isFailed = failedSessionIdsRef.current.has(id);
 				return !isParsed && !isParsing && !isInQueue && !isFailed;
 			});
 
 			if (newIds.length === 0) return;
 
+			const newItems = newIds.map((id) => {
+				const session = sessions.find((s) => s.id === id);
+				return {
+					id,
+					provider: session?.provider === "claude" ? "claude" : "codex",
+				} satisfies ParseQueueItem;
+			});
 			if (priority) {
-				queueRef.current.unshift(...newIds);
+				queueRef.current.unshift(...newItems);
 			} else {
-				queueRef.current.push(...newIds);
+				queueRef.current.push(...newItems);
 			}
 			updateParsingIds((prev) => {
 				for (const id of newIds) {

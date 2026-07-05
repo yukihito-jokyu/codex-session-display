@@ -116,6 +116,15 @@ type Statistics struct {
 	Turns             []TurnStatistics `json:"turns"`
 }
 
+// TranscriptStats は provider 固有の transcript 集計を表します。
+type TranscriptStats struct {
+	MessageCount         int      `json:"message_count"`
+	ToolCallCount        int      `json:"tool_call_count"`
+	ToolResultCount      int      `json:"tool_result_count"`
+	CacheReadInputTokens int64    `json:"cache_read_input_tokens"`
+	TotalCostUSD         *float64 `json:"total_cost_usd,omitempty"`
+}
+
 // TokenCountEntry は詳細画面で管理されるトークンカウント情報を表します。
 type TokenCountEntry struct {
 	Index              int                `json:"index"`
@@ -162,11 +171,12 @@ type ConversationTimelineTurn struct {
 }
 
 // CurrentSessionDetailCacheSchemaVersion は現行のセッション詳細キャッシュ形式を表します。
-const CurrentSessionDetailCacheSchemaVersion = 8
+const CurrentSessionDetailCacheSchemaVersion = 9
 
 // SessionDetailResponse はフロントエンドに返され、ディスクにキャッシュされるセッション詳細を表します。
 type SessionDetailResponse struct {
 	ID                 string                     `json:"id"`
+	Provider           SessionProvider            `json:"provider,omitempty"`
 	CacheSchemaVersion int                        `json:"cache_schema_version"`
 	ParsedAt           string                     `json:"parsed_at"`
 	Nodes              []FlowNode                 `json:"nodes"`
@@ -174,6 +184,7 @@ type SessionDetailResponse struct {
 	Statistics         Statistics                 `json:"statistics"`
 	TokenCounts        []TokenCountEntry          `json:"token_counts"`
 	Timeline           []ConversationTimelineTurn `json:"timeline"`
+	TranscriptStats    *TranscriptStats           `json:"transcript_stats,omitempty"`
 	ParentSessionID    *string                    `json:"parent_session_id,omitempty"`
 	ChildSessionIDs    []string                   `json:"child_session_ids,omitempty"`
 	Subagents          []SubagentDetail           `json:"subagents,omitempty"`

@@ -27,7 +27,7 @@ Wails（Go + React）によるデスクトップアプリケーション。ロ�
 - **リアルタイム監視**: セッションの実行中ライブ表示は行わない（既存のJSONLファイルの解析のみ）
 - **JSONLの編集・操作**: 解析対象のJSONLファイルを変更・削除しない（読み取り専用）
 - **複数セッションの同時表示**: 一度に1セッションのみ表示する
-- **詳細解析対象外のツール対応**: Claude Code は一覧表示のみ対応し、詳細画面のReact Flow解析はCodexセッションを対象とする。Aider等の他ツールには対応しない
+- **詳細解析対象外のツール対応**: 詳細画面は Codex と Claude Code を対象とする。Aider等の他ツールには対応しない
 - **認証・認可**: ローカル単一ユーザー前提のため、ログイン機能やアクセス制御は不要
 - **多言語対応**: UI言語は日本語固定
 
@@ -728,13 +728,15 @@ provider に応じたセッション一覧を取得する。`provider` は `code
 - Claude Code では `encoded_project`, `message_count`, `tool_call_count`, `total_cost_usd` を返す
 - フロントエンドは `parsed === false` の項目に「解析前」と表示する
 
-#### GetSessionDetail(id)
+#### GetSessionDetail(id) / GetSessionDetailByProvider(provider, id)
 
-指定セッションの解析結果（React Flow形式）を取得する。キャッシュが存在しない、JSONLが新しい、またはキャッシュスキーマバージョンが現行と異なる場合は再解析する。
+指定セッションの解析結果（React Flow形式）を取得する。キャッシュが存在しない、JSONLが新しい、またはキャッシュスキーマバージョンが現行と異なる場合は再解析する。`provider` は `codex` または `claude`。省略時は後方互換のため `codex` とする。
 
-**引数:** `id` — セッションID（UUID）
+**引数:** `id` — セッションID、`provider` — セッション提供元
 
-**戻り値:** `SessionDetailResponse`（nodes, edges, statistics, token_counts, timeline）
+**戻り値:** `SessionDetailResponse`（provider, nodes, edges, statistics, token_counts, timeline, transcript_stats）
+
+Claude Code は transcript の出現順を維持して timeline を構築し、`message.content` の `thinking`, `text`, `tool_use`, `tool_result` を表示単位に分ける。`tool_use.id` と `tool_result.tool_use_id` が一致する場合は対応関係を edge と detail に反映する。`message.id` 単位で usage を重複排除し、入力・出力・cache read token と `total_cost_usd` を統計へ反映する。
 
 #### ExportStatsImage(id)（保留）
 

@@ -81,7 +81,10 @@ export const SessionRow: React.FC<SessionRowProps> = ({
 	const [copied, setCopied] = useState(false);
 
 	const handleClick = () => {
-		navigate(`/sessions/${session.id}`);
+		const provider = session.provider || "codex";
+		navigate(
+			`/sessions/${session.id}?provider=${encodeURIComponent(provider)}`,
+		);
 	};
 
 	const handleCopyBreakdown = (e: React.MouseEvent) => {

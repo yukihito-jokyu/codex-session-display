@@ -14,6 +14,8 @@ export function GetLogFilePath():Promise<string>;
 
 export function GetSessionDetail(arg1:string):Promise<dto.SessionDetailResponse>;
 
+export function GetSessionDetailByProvider(arg1:string,arg2:string):Promise<dto.SessionDetailResponse>;
+
 export function Greet(arg1:string):Promise<string>;
 
 export function HandleOpenSessionFile(arg1:string):Promise<void>;

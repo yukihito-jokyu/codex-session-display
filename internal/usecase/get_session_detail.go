@@ -702,14 +702,415 @@ func resolveFunctionCallOutputs(filePath, turnID string, callBatch, outputBatch 
 	return result
 }
 
+type claudeDetailRecord struct {
+	Type       string          `json:"type"`
+	UUID       string          `json:"uuid"`
+	ParentUUID string          `json:"parentUuid"`
+	SessionID  string          `json:"sessionId"`
+	Cwd        string          `json:"cwd"`
+	Timestamp  string          `json:"timestamp"`
+	CostUSD    float64         `json:"costUSD"`
+	TotalCost  *float64        `json:"total_cost_usd"`
+	Message    claudeMessage   `json:"message"`
+	GitBranch  string          `json:"gitBranch"`
+	Version    string          `json:"version"`
+	RawMessage json.RawMessage `json:"-"`
+}
+
+type claudeMessage struct {
+	ID      string               `json:"id"`
+	Role    string               `json:"role"`
+	Content claudeContentPayload `json:"content"`
+	Usage   *claudeUsage         `json:"usage"`
+}
+
+type claudeContentPayload struct {
+	Text  string
+	Items []claudeContentItem
+}
+
+func (p *claudeContentPayload) UnmarshalJSON(data []byte) error {
+	if len(data) == 0 || string(data) == "null" {
+		return nil
+	}
+	var text string
+	if err := json.Unmarshal(data, &text); err == nil {
+		p.Text = text
+		return nil
+	}
+	var items []claudeContentItem
+	if err := json.Unmarshal(data, &items); err == nil {
+		p.Items = items
+		return nil
+	}
+	var item claudeContentItem
+	if err := json.Unmarshal(data, &item); err != nil {
+		return err
+	}
+	p.Items = []claudeContentItem{item}
+	return nil
+}
+
+type claudeContentItem struct {
+	Type      string          `json:"type"`
+	Text      string          `json:"text"`
+	Thinking  string          `json:"thinking"`
+	ID        string          `json:"id"`
+	Name      string          `json:"name"`
+	Input     json.RawMessage `json:"input"`
+	ToolUseID string          `json:"tool_use_id"`
+	Content   json.RawMessage `json:"content"`
+}
+
+type claudeUsage struct {
+	InputTokens          int64 `json:"input_tokens"`
+	OutputTokens         int64 `json:"output_tokens"`
+	CacheReadInputTokens int64 `json:"cache_read_input_tokens"`
+	CacheCreationTokens  int64 `json:"cache_creation_input_tokens"`
+}
+
+func isClaudeTranscript(records []*model.TypedRecord) bool {
+	for _, record := range records {
+		if record == nil {
+			continue
+		}
+		switch record.Type {
+		case "user", "assistant", "system", "result":
+			return true
+		case "session_meta", "turn_context", "event_msg", "response_item":
+			return false
+		}
+	}
+	return false
+}
+
+func buildClaudeSessionDetail(sessionID string, records []*model.TypedRecord) *dto.SessionDetailResponse {
+	const (
+		harnessX   = 0.0
+		branchX    = 400.0
+		nodeHeight = 80.0
+		nodeGap    = 40.0
+	)
+
+	parsedAt := time.Now().UTC().Format(time.RFC3339)
+	var nodes []dto.FlowNode
+	var edges []dto.FlowEdge
+	var timeline []dto.ConversationTimelineTurn
+	var currentItems []dto.ConversationTimelineItem
+	var tokenCounts []dto.TokenCountEntry
+	var lastNodeID string
+	var currentY float64
+	turnIndex := -1
+	messageCount := 0
+	toolCallCount := 0
+	toolResultCount := 0
+	var totalCostUSD *float64
+	var totalInputTokens, totalOutputTokens, totalCacheReadTokens int64
+	seenUsageMessageIDs := make(map[string]bool)
+	toolUseNodeByID := make(map[string]string)
+	toolUseNameByID := make(map[string]string)
+
+	addNode := func(id, nodeType, category, label, icon, summary, fullText string, x float64, turn int, meta map[string]interface{}) {
+		nodes = append(nodes, dto.FlowNode{
+			ID:       id,
+			Type:     nodeType,
+			Position: dto.Position{X: x, Y: currentY},
+			Data: dto.NodeData{
+				Category:  category,
+				Label:     label,
+				Icon:      icon,
+				Summary:   summary,
+				FullText:  fullText,
+				Meta:      meta,
+				TurnIndex: turn,
+			},
+		})
+		if x == harnessX {
+			if lastNodeID != "" {
+				edges = append(edges, dto.FlowEdge{
+					ID:     fmt.Sprintf("edge-%s-%s", lastNodeID, id),
+					Source: lastNodeID,
+					Target: id,
+					Type:   "default",
+				})
+			}
+			lastNodeID = id
+			currentY += nodeHeight + nodeGap
+		}
+	}
+	addTimelineItem := func(record *model.TypedRecord, nodeID, kind, label, role, body string, details []dto.TimelineItemDetail) {
+		if turnIndex < 0 {
+			turnIndex = 0
+		}
+		currentItems = append(currentItems, dto.ConversationTimelineItem{
+			SelectionID: fmt.Sprintf("timeline-%d-%d", turnIndex, record.LineNumber),
+			NodeID:      nodeID,
+			NodeIDs:     []string{nodeID},
+			Kind:        kind,
+			Label:       label,
+			Role:        role,
+			Body:        body,
+			Timestamp:   fmt.Sprint(record.Envelope.Timestamp),
+			RecordCount: 1,
+			Collapsible: kind != "conversation",
+			Details:     details,
+		})
+	}
+	startTurn := func(record *model.TypedRecord, body string) {
+		if turnIndex >= 0 {
+			timeline = append(timeline, dto.ConversationTimelineTurn{
+				Index: turnIndex,
+				Items: currentItems,
+			})
+			currentItems = nil
+		}
+		turnIndex++
+		nodeID := fmt.Sprintf("node-%d", record.LineNumber)
+		addNode(nodeID, "userMessage", "turn", "User Message", "👤", body, body, harnessX, turnIndex, nil)
+		addTimelineItem(record, nodeID, "conversation", "User", "user", body, nil)
+		messageCount++
+	}
+
+	// 前スキャンによるメタデータの抽出
+	var sessionCwd string
+	var sessionTimestamp string
+	var sessionGitBranch string
+	var sessionVersion string
+
+	for _, record := range records {
+		if record == nil || record.Raw == "" {
+			continue
+		}
+		var claudeRecord claudeDetailRecord
+		if err := json.Unmarshal([]byte(record.Raw), &claudeRecord); err != nil {
+			continue
+		}
+		if sessionCwd == "" && claudeRecord.Cwd != "" {
+			sessionCwd = claudeRecord.Cwd
+		}
+		if sessionTimestamp == "" && claudeRecord.Timestamp != "" {
+			sessionTimestamp = claudeRecord.Timestamp
+		}
+		if sessionGitBranch == "" && claudeRecord.GitBranch != "" {
+			sessionGitBranch = claudeRecord.GitBranch
+		}
+		if sessionVersion == "" && claudeRecord.Version != "" {
+			sessionVersion = claudeRecord.Version
+		}
+	}
+
+	// sessionMeta ノードを最初に追加
+	meta := map[string]interface{}{
+		"provider":    "claude",
+		"cwd":         sessionCwd,
+		"git_branch":  sessionGitBranch,
+		"cli_version": sessionVersion,
+		"timestamp":   sessionTimestamp,
+	}
+	addNode("node-claude-session", "sessionMeta", "meta", "Claude Code Transcript", "⚙️", "Provider: Claude Code", "", harnessX, -1, meta)
+
+	for _, record := range records {
+		if record == nil || record.Raw == "" {
+			continue
+		}
+		var claudeRecord claudeDetailRecord
+		if err := json.Unmarshal([]byte(record.Raw), &claudeRecord); err != nil {
+			continue
+		}
+		if claudeRecord.SessionID != "" {
+			sessionID = claudeRecord.SessionID
+		}
+		if claudeRecord.Timestamp != "" {
+			record.Envelope.Timestamp = claudeRecord.Timestamp
+		}
+		if claudeRecord.CostUSD > 0 {
+			if totalCostUSD == nil {
+				value := 0.0
+				totalCostUSD = &value
+			}
+			*totalCostUSD += claudeRecord.CostUSD
+		}
+		if claudeRecord.TotalCost != nil {
+			value := *claudeRecord.TotalCost
+			totalCostUSD = &value
+		}
+		if claudeRecord.Message.Usage != nil && claudeRecord.Message.ID != "" && !seenUsageMessageIDs[claudeRecord.Message.ID] {
+			seenUsageMessageIDs[claudeRecord.Message.ID] = true
+			usage := claudeRecord.Message.Usage
+			totalInputTokens += usage.InputTokens
+			totalOutputTokens += usage.OutputTokens
+			totalCacheReadTokens += usage.CacheReadInputTokens
+			tokenCounts = append(tokenCounts, dto.TokenCountEntry{
+				Index:     len(tokenCounts),
+				TurnIndex: turnIndex,
+				LastTokenUsage: &model.TokenDetail{
+					TotalTokens:       usage.InputTokens + usage.OutputTokens,
+					InputTokens:       usage.InputTokens,
+					OutputTokens:      usage.OutputTokens,
+					CachedInputTokens: usage.CacheReadInputTokens,
+				},
+				TotalTokenUsage: &model.TokenDetail{
+					TotalTokens:       totalInputTokens + totalOutputTokens,
+					InputTokens:       totalInputTokens,
+					OutputTokens:      totalOutputTokens,
+					CachedInputTokens: totalCacheReadTokens,
+				},
+			})
+		}
+
+		switch claudeRecord.Type {
+		case "user":
+			if claudeRecord.Message.Content.Text != "" {
+				startTurn(record, claudeRecord.Message.Content.Text)
+				continue
+			}
+			for i := range claudeRecord.Message.Content.Items {
+				item := &claudeRecord.Message.Content.Items[i]
+				if item.Type != "tool_result" {
+					continue
+				}
+				body := claudeRawContentText(item.Content)
+				name := toolUseNameByID[item.ToolUseID]
+				if name == "" {
+					name = "tool_result"
+				}
+				nodeID := fmt.Sprintf("node-%d", record.LineNumber)
+				meta := map[string]interface{}{"tool_use_id": item.ToolUseID}
+				addNode(nodeID, "action", "action", "Tool Result: "+name, "🛠️", body, body, branchX, turnIndex, meta)
+				toolResultCount++
+				addTimelineItem(record, nodeID, "tool", "Tool Result: "+name, "", body, []dto.TimelineItemDetail{{Label: "tool_use_id", Value: item.ToolUseID}})
+				if source := toolUseNodeByID[item.ToolUseID]; source != "" {
+					edges = append(edges, dto.FlowEdge{
+						ID:     fmt.Sprintf("edge-%s-%s", source, nodeID),
+						Source: source,
+						Target: nodeID,
+						Type:   "default",
+					})
+				}
+			}
+		case "assistant":
+			messageCount++
+			for i := range claudeRecord.Message.Content.Items {
+				item := &claudeRecord.Message.Content.Items[i]
+				switch item.Type {
+				case "thinking":
+					nodeID := fmt.Sprintf("node-%d-thinking", record.LineNumber)
+					addNode(nodeID, "reasoning", "turn", "Thinking", "🧠", item.Thinking, item.Thinking, harnessX, turnIndex, nil)
+					addTimelineItem(record, nodeID, "reasoning", "Thinking", "assistant", item.Thinking, nil)
+				case "text":
+					nodeID := fmt.Sprintf("node-%d-text", record.LineNumber)
+					addNode(nodeID, "agentMessage", "turn", "Assistant Message", "🤖", item.Text, item.Text, harnessX, turnIndex, nil)
+					addTimelineItem(record, nodeID, "conversation", "Assistant", "assistant", item.Text, nil)
+				case "tool_use":
+					body := item.Name
+					if len(item.Input) > 0 {
+						body = item.Name + "\n" + string(item.Input)
+					}
+					nodeID := fmt.Sprintf("node-%d-tool-%d", record.LineNumber, toolCallCount)
+					meta := map[string]interface{}{"tool_use_id": item.ID, "name": item.Name}
+					addNode(nodeID, "action", "action", item.Name, "🛠️", body, body, branchX, turnIndex, meta)
+					toolCallCount++
+					toolUseNodeByID[item.ID] = nodeID
+					toolUseNameByID[item.ID] = item.Name
+					addTimelineItem(record, nodeID, "tool", "Tool Use: "+item.Name, "", body, []dto.TimelineItemDetail{{Label: "tool_use_id", Value: item.ID}})
+					if lastNodeID != "" {
+						edges = append(edges, dto.FlowEdge{
+							ID:     fmt.Sprintf("edge-%s-%s", lastNodeID, nodeID),
+							Source: lastNodeID,
+							Target: nodeID,
+							Type:   "step",
+						})
+					}
+				}
+			}
+		}
+	}
+	if turnIndex >= 0 {
+		timeline = append(timeline, dto.ConversationTimelineTurn{
+			Index: turnIndex,
+			Items: currentItems,
+			ConsumedTokens: dto.TokenBreakdown{
+				TotalTokens:  totalInputTokens + totalOutputTokens,
+				InputTokens:  totalInputTokens,
+				OutputTokens: totalOutputTokens,
+			},
+		})
+	}
+	if len(tokenCounts) > 0 && lastNodeID != "" {
+		tokenCounts[len(tokenCounts)-1].BoundToNodeID = lastNodeID
+	}
+
+	return &dto.SessionDetailResponse{
+		ID:                 sessionID,
+		Provider:           dto.SessionProviderClaude,
+		CacheSchemaVersion: dto.CurrentSessionDetailCacheSchemaVersion,
+		ParsedAt:           parsedAt,
+		Nodes:              nodes,
+		Edges:              edges,
+		Statistics: dto.Statistics{
+			TotalTokens:     totalInputTokens + totalOutputTokens,
+			ToolCallCount:   toolCallCount,
+			TokenCountCount: len(tokenCounts),
+			TurnCount:       turnIndex + 1,
+			Turns: []dto.TurnStatistics{{
+				Index: turnIndex,
+				ConsumedTokens: dto.TokenBreakdown{
+					TotalTokens:  totalInputTokens + totalOutputTokens,
+					InputTokens:  totalInputTokens,
+					OutputTokens: totalOutputTokens,
+				},
+				TokenCountCount: len(tokenCounts),
+				ToolCallCount:   toolCallCount,
+			}},
+		},
+		TokenCounts: tokenCounts,
+		Timeline:    timeline,
+		TranscriptStats: &dto.TranscriptStats{
+			MessageCount:         messageCount,
+			ToolCallCount:        toolCallCount,
+			ToolResultCount:      toolResultCount,
+			CacheReadInputTokens: totalCacheReadTokens,
+			TotalCostUSD:         totalCostUSD,
+		},
+	}
+}
+
+func claudeRawContentText(raw json.RawMessage) string {
+	if len(raw) == 0 {
+		return ""
+	}
+	var text string
+	if err := json.Unmarshal(raw, &text); err == nil {
+		return text
+	}
+	var parts []struct {
+		Text string `json:"text"`
+	}
+	if err := json.Unmarshal(raw, &parts); err == nil {
+		values := make([]string, 0, len(parts))
+		for _, part := range parts {
+			values = append(values, part.Text)
+		}
+		return strings.Join(values, "\n")
+	}
+	return string(raw)
+}
+
 func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string) (*dto.SessionDetailResponse, error) {
-	logger.Info("GetSessionDetailUseCase start", "session_id", sessionID)
+	return uc.ExecuteByProvider(ctx, dto.SessionProviderCodex, sessionID)
+}
+
+func (uc *GetSessionDetailUseCase) ExecuteByProvider(ctx context.Context, provider dto.SessionProvider, sessionID string) (*dto.SessionDetailResponse, error) {
+	if provider == "" {
+		provider = dto.SessionProviderCodex
+	}
+	logger.Info("GetSessionDetailUseCase start", "provider", provider, "session_id", sessionID)
 
 	// 1. キャッシュの確認
-	if cached, err := uc.cacheRepo.GetSessionDetail(ctx, dto.SessionProviderCodex, sessionID); err == nil && cached != nil {
+	if cached, err := uc.cacheRepo.GetSessionDetail(ctx, provider, sessionID); err == nil && cached != nil {
 		if cached.CacheSchemaVersion == dto.CurrentSessionDetailCacheSchemaVersion {
 			sessionModTime, sessionModErr := uc.sessionRepo.GetSessionModTime(ctx, sessionID)
-			cacheModTime, cacheModErr := uc.cacheRepo.GetSessionDetailModTime(ctx, dto.SessionProviderCodex, sessionID)
+			cacheModTime, cacheModErr := uc.cacheRepo.GetSessionDetailModTime(ctx, provider, sessionID)
 			if sessionModErr == nil && cacheModErr == nil && !sessionModTime.After(cacheModTime) {
 				logger.Info("cache hit, returning cached session detail", "session_id", sessionID)
 				return cached, nil
@@ -746,6 +1147,13 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 			return nil, model.ErrFileReadError
 		}
 		return nil, model.ErrParseFailed
+	}
+	if provider == dto.SessionProviderClaude || isClaudeTranscript(records) {
+		res := buildClaudeSessionDetail(sessionID, records)
+		if cacheErr := uc.cacheRepo.SaveSessionDetail(ctx, dto.SessionProviderClaude, sessionID, res); cacheErr != nil {
+			logger.Error("failed to save Claude session detail to cache", "session_id", sessionID, "error", cacheErr)
+		}
+		return res, nil
 	}
 
 	// 4. バージョンチェック (cli_version v0.121.0 未満は非対応)
@@ -2025,6 +2433,7 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 
 	res := &dto.SessionDetailResponse{
 		ID:                 sessionID,
+		Provider:           dto.SessionProviderCodex,
 		CacheSchemaVersion: dto.CurrentSessionDetailCacheSchemaVersion,
 		ParsedAt:           time.Now().UTC().Format(time.RFC3339),
 		Nodes:              nodes,

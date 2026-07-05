@@ -127,3 +127,8 @@ tasks:
     desc: 解析キャッシュのJSONファイルを削除します
     cmds:
       - rm -f ~/.codex-display/*.json
+
+  clean:cache:claude:
+    desc: Claude Codeの解析キャッシュのJSONファイルを削除します
+    cmds:
+      - rm -f ~/.codex-display/claude-*.json

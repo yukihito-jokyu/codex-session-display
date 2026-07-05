@@ -622,6 +622,30 @@ func TestSessionFSRepository_GetSessionFilePath(t *testing.T) {
 		})
 	}
 
+	t.Run("claude transcript found by embedded session id", func(t *testing.T) {
+		projectsDir := filepath.Join(tmpDir, "claude-projects")
+		projectDir := filepath.Join(projectsDir, "-Users-test-project")
+		if err := os.MkdirAll(projectDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+
+		claudeSessionID := "claude-session-1"
+		claudePath := filepath.Join(projectDir, "transcript-file-name.jsonl")
+		transcript := `{"type":"user","sessionId":"claude-session-1","timestamp":"2026-06-02T10:00:00.000Z","message":{"content":"hello"}}`
+		if err := os.WriteFile(claudePath, []byte(transcript), 0o644); err != nil {
+			t.Fatal(err)
+		}
+
+		repo.SetClaudeProjectsDir(projectsDir)
+		path, err := repo.GetSessionFilePath(context.Background(), claudeSessionID)
+		if err != nil {
+			t.Fatalf("expected no error, got %v", err)
+		}
+		if path != claudePath {
+			t.Fatalf("expected path %q, got %q", claudePath, path)
+		}
+	})
+
 	t.Run("permission error", func(t *testing.T) {
 		permDir := filepath.Join(tmpDir, "perm_error")
 		if err := os.Mkdir(permDir, 0o755); err != nil {

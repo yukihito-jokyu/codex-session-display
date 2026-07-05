@@ -146,6 +146,7 @@ export function SessionDetailMainContent({
 						sessionId={sessionData.id}
 						subagents={sessionData.subagents}
 						statistics={sessionData.statistics}
+						transcriptStats={sessionData.transcript_stats}
 						tokenCounts={sessionData.token_counts || []}
 						nodes={sessionData.nodes || []}
 						selectedTokenCountIndices={selectedTokenCountIndices}

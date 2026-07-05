@@ -26,6 +26,10 @@ export function GetSessionDetail(arg1) {
   return window['go']['main']['App']['GetSessionDetail'](arg1);
 }
 
+export function GetSessionDetailByProvider(arg1, arg2) {
+  return window['go']['main']['App']['GetSessionDetailByProvider'](arg1, arg2);
+}
+
 export function Greet(arg1) {
   return window['go']['main']['App']['Greet'](arg1);
 }
