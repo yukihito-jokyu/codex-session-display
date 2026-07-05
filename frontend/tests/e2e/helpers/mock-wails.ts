@@ -1355,6 +1355,19 @@ export async function mockWailsAPI(
 				};
 			};
 
+			go.main.App.GetSessionDetailByProvider = async (
+				provider: string,
+				id: string,
+			) => {
+				(window as any).__getSessionDetailByProviderCalls =
+					(window as any).__getSessionDetailByProviderCalls || [];
+				(window as any).__getSessionDetailByProviderCalls.push({
+					provider,
+					id,
+				});
+				return go.main.App.GetSessionDetail(id);
+			};
+
 			go.main.App.OpenLogDirectory = async () => {
 				(window as any).__openLogDirectoryCalls =
 					(window as any).__openLogDirectoryCalls || 0;
