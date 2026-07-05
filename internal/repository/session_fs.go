@@ -293,6 +293,47 @@ func (r *SessionFSRepository) listClaudeSessions(ctx context.Context, year, mont
 		return nil, fmt.Errorf("failed to scan Claude sessions directory: %w", err)
 	}
 
+	// 親子関係を解決
+	childToParent := make(map[string]string)
+	for i := range allSessions {
+		for _, childID := range allSessions[i].ChildSessionIDs {
+			childToParent[childID] = allSessions[i].ID
+		}
+		if allSessions[i].ParentSessionID != nil {
+			childToParent[allSessions[i].ID] = *allSessions[i].ParentSessionID
+		}
+	}
+
+	parentToChildren := make(map[string]map[string]bool)
+	for i := range allSessions {
+		parentToChildren[allSessions[i].ID] = make(map[string]bool)
+		for _, cid := range allSessions[i].ChildSessionIDs {
+			parentToChildren[allSessions[i].ID][cid] = true
+		}
+	}
+
+	for cid, pid := range childToParent {
+		if parentToChildren[pid] == nil {
+			parentToChildren[pid] = make(map[string]bool)
+		}
+		parentToChildren[pid][cid] = true
+	}
+
+	for i := range allSessions {
+		if parentID, ok := childToParent[allSessions[i].ID]; ok {
+			pID := parentID
+			allSessions[i].ParentSessionID = &pID
+		}
+		if children, ok := parentToChildren[allSessions[i].ID]; ok && len(children) > 0 {
+			var childIDs []string
+			for cid := range children {
+				childIDs = append(childIDs, cid)
+			}
+			sort.Strings(childIDs)
+			allSessions[i].ChildSessionIDs = childIDs
+		}
+	}
+
 	var targetYear int
 	var targetMonth int
 
@@ -448,6 +489,13 @@ func (r *SessionFSRepository) readClaudeSessionSummary(ctx context.Context, path
 	sSummary.EncodedProject = &encodedProject
 	if sSummary.Timestamp == nil || *sSummary.Timestamp == "" {
 		sSummary.Timestamp = &modTimeStr
+	}
+
+	if sSummary.ParentSessionID == nil || *sSummary.ParentSessionID == "" {
+		parentID := getClaudeParentSessionID(path)
+		if parentID != "" {
+			sSummary.ParentSessionID = &parentID
+		}
 	}
 
 	return &sSummary, nil
@@ -714,4 +762,16 @@ func readParentThreadIDFromFile(filePath string) (string, error) {
 	}
 
 	return "", nil
+}
+
+// getClaudeParentSessionID はパス構造から親セッションIDを抽出して返します。
+// 例: ~/.claude/projects/project-name/parent-session-id/subagents/subagent-id.jsonl
+func getClaudeParentSessionID(path string) string {
+	path = filepath.Clean(path)
+	dir := filepath.Dir(path) // .../parent-session-id/subagents
+	if filepath.Base(dir) == "subagents" {
+		parentDir := filepath.Dir(dir) // .../parent-session-id
+		return filepath.Base(parentDir)
+	}
+	return ""
 }
