@@ -472,6 +472,7 @@ export namespace dto {
 	}
 	export class SessionSummary {
 	    id: string;
+	    provider?: string;
 	    file_path: string;
 	    cwd?: string;
 	    cli_version?: string;
@@ -492,6 +493,10 @@ export namespace dto {
 	    turn_count?: number;
 	    step_count?: number;
 	    duration_ms?: number;
+	    encoded_project?: string;
+	    message_count?: number;
+	    tool_call_count?: number;
+	    total_cost_usd?: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new SessionSummary(source);
@@ -500,6 +505,7 @@ export namespace dto {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.id = source["id"];
+	        this.provider = source["provider"];
 	        this.file_path = source["file_path"];
 	        this.cwd = source["cwd"];
 	        this.cli_version = source["cli_version"];
@@ -520,6 +526,10 @@ export namespace dto {
 	        this.turn_count = source["turn_count"];
 	        this.step_count = source["step_count"];
 	        this.duration_ms = source["duration_ms"];
+	        this.encoded_project = source["encoded_project"];
+	        this.message_count = source["message_count"];
+	        this.tool_call_count = source["tool_call_count"];
+	        this.total_cost_usd = source["total_cost_usd"];
 	    }
 	}
 	

@@ -6,6 +6,7 @@ import styles from "./SessionRow.module.css";
 
 export interface SessionSummary {
 	id: string;
+	provider?: "codex" | "claude" | string;
 	file_path: string;
 	cwd?: string | null;
 	cli_version?: string | null;
@@ -26,6 +27,10 @@ export interface SessionSummary {
 	turn_count?: number | null;
 	step_count?: number | null;
 	duration_ms?: number | null;
+	encoded_project?: string | null;
+	message_count?: number | null;
+	tool_call_count?: number | null;
+	total_cost_usd?: number | null;
 }
 
 interface SessionRowProps {

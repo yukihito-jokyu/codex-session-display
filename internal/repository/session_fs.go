@@ -28,8 +28,9 @@ var (
 
 // SessionFSRepository はローカルファイルシステムを使用して usecase.SessionRepository を実装します。
 type SessionFSRepository struct {
-	rootDir   string
-	cacheRepo usecase.CacheRepository
+	rootDir           string
+	claudeProjectsDir string
+	cacheRepo         usecase.CacheRepository
 }
 
 // NewSessionFSRepository は新しい SessionFSRepository を作成します。
@@ -40,9 +41,17 @@ func NewSessionFSRepository(rootDir string, cacheRepo usecase.CacheRepository) *
 	}
 }
 
+// SetClaudeProjectsDir は Claude Code transcript の projects ディレクトリを設定します。
+func (r *SessionFSRepository) SetClaudeProjectsDir(projectsDir string) {
+	r.claudeProjectsDir = projectsDir
+}
+
 // ListSessions はルートディレクトリをスキャンして .jsonl ファイルを探し、指定された年月および検索クエリでフィルタリングして SessionSummary オブジェクトを構築します。
 // year == 0 && month == 0 の場合は、自動的に最新のセッションが存在する年月を特定してその月分のみを返します。
-func (r *SessionFSRepository) ListSessions(ctx context.Context, year, month int, query string) ([]dto.SessionSummary, error) {
+func (r *SessionFSRepository) ListSessions(ctx context.Context, provider dto.SessionProvider, year, month int, query string) ([]dto.SessionSummary, error) {
+	if provider == dto.SessionProviderClaude {
+		return r.listClaudeSessions(year, month, query)
+	}
 	// ディレクトリが存在するか確認
 	if _, err := os.Stat(r.rootDir); errors.Is(err, os.ErrNotExist) {
 		return nil, nil // 空のリストを正常に返す
@@ -138,14 +147,16 @@ func (r *SessionFSRepository) ListSessions(ctx context.Context, year, month int,
 
 		// キャッシュから詳細情報をマージ
 		var sSummary dto.SessionSummary
-		cached, err := r.cacheRepo.GetSessionSummary(ctx, file.id)
+		cached, err := r.cacheRepo.GetSessionSummary(ctx, dto.SessionProviderCodex, file.id)
 		if err == nil && cached != nil {
 			sSummary = *cached
+			sSummary.Provider = dto.SessionProviderCodex
 			sSummary.Parsed = true
 		} else {
 			sSummary = dto.SessionSummary{
-				ID:     file.id,
-				Parsed: false,
+				ID:       file.id,
+				Provider: dto.SessionProviderCodex,
+				Parsed:   false,
 			}
 			// 未解析の場合、ファイルから親セッションIDをすばやく読み取る
 			if parentID, readErr := readParentThreadIDFromFile(file.path); readErr == nil && parentID != "" {
@@ -231,6 +242,184 @@ func (r *SessionFSRepository) ListSessions(ctx context.Context, year, month int,
 	}
 
 	return sessions, nil
+}
+
+func (r *SessionFSRepository) listClaudeSessions(year, month int, query string) ([]dto.SessionSummary, error) {
+	if r.claudeProjectsDir == "" {
+		return nil, nil
+	}
+	if _, err := os.Stat(r.claudeProjectsDir); errors.Is(err, os.ErrNotExist) {
+		return nil, nil
+	}
+
+	var sessions []dto.SessionSummary
+	err := filepath.WalkDir(r.claudeProjectsDir, func(path string, d fs.DirEntry, err error) error {
+		if err != nil {
+			return err
+		}
+		if d.IsDir() || !strings.HasSuffix(d.Name(), ".jsonl") {
+			return nil
+		}
+
+		summary, err := r.readClaudeSessionSummary(path)
+		if err != nil {
+			return nil
+		}
+		if summary == nil {
+			return nil
+		}
+
+		if summary.Timestamp != nil && year > 0 && month > 0 {
+			t, err := time.Parse(time.RFC3339Nano, *summary.Timestamp)
+			if err != nil || t.Year() != year || int(t.Month()) != month {
+				return nil
+			}
+		}
+
+		if query != "" && !matchesSessionQuery(summary, query) {
+			return nil
+		}
+
+		sessions = append(sessions, *summary)
+		return nil
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan Claude sessions directory: %w", err)
+	}
+	return sessions, nil
+}
+
+func (r *SessionFSRepository) readClaudeSessionSummary(path string) (*dto.SessionSummary, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	relPath, err := filepathRelFn(r.claudeProjectsDir, path)
+	if err != nil {
+		relPath = path
+	}
+	encodedProject := filepath.Base(filepath.Dir(path))
+	sessionID := strings.TrimSuffix(filepath.Base(path), ".jsonl")
+	modTimeStr := info.ModTime().UTC().Format(time.RFC3339)
+
+	var cwd *string
+	var timestamp *string
+	messageCount := 0
+	toolCallCount := 0
+	totalCostUSD := 0.0
+
+	scanner := bufio.NewScanner(file)
+	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+
+		var record claudeTranscriptRecord
+		if err := json.Unmarshal([]byte(line), &record); err != nil {
+			continue
+		}
+		if record.SessionID != "" {
+			sessionID = record.SessionID
+		}
+		if cwd == nil && record.Cwd != "" {
+			value := record.Cwd
+			cwd = &value
+		}
+		if timestamp == nil && record.Timestamp != "" {
+			value := record.Timestamp
+			timestamp = &value
+		}
+		if record.Type == "user" || record.Type == "assistant" {
+			messageCount++
+		}
+		totalCostUSD += record.CostUSD
+		toolCallCount += countClaudeToolUses(record.Message.Content)
+	}
+	if err := scanner.Err(); err != nil {
+		return nil, err
+	}
+
+	return &dto.SessionSummary{
+		ID:             sessionID,
+		Provider:       dto.SessionProviderClaude,
+		FilePath:       relPath,
+		Cwd:            cwd,
+		Timestamp:      timestamp,
+		FileSize:       info.Size(),
+		FileModifiedAt: &modTimeStr,
+		Parsed:         false,
+		EncodedProject: &encodedProject,
+		MessageCount:   &messageCount,
+		ToolCallCount:  &toolCallCount,
+		TotalCostUSD:   &totalCostUSD,
+	}, nil
+}
+
+type claudeTranscriptRecord struct {
+	Type      string  `json:"type"`
+	SessionID string  `json:"sessionId"`
+	Cwd       string  `json:"cwd"`
+	Timestamp string  `json:"timestamp"`
+	CostUSD   float64 `json:"costUSD"`
+	Message   struct {
+		Content json.RawMessage `json:"content"`
+	} `json:"message"`
+}
+
+func countClaudeToolUses(content json.RawMessage) int {
+	if len(content) == 0 {
+		return 0
+	}
+
+	var items []struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(content, &items); err == nil {
+		count := 0
+		for _, item := range items {
+			if item.Type == "tool_use" {
+				count++
+			}
+		}
+		return count
+	}
+
+	var item struct {
+		Type string `json:"type"`
+	}
+	if err := json.Unmarshal(content, &item); err == nil && item.Type == "tool_use" {
+		return 1
+	}
+	return 0
+}
+
+func matchesSessionQuery(summary *dto.SessionSummary, query string) bool {
+	lowerQuery := strings.ToLower(query)
+	if strings.Contains(strings.ToLower(summary.ID), lowerQuery) {
+		return true
+	}
+	if summary.Cwd != nil && strings.Contains(strings.ToLower(*summary.Cwd), lowerQuery) {
+		return true
+	}
+	if summary.Branch != nil && strings.Contains(strings.ToLower(*summary.Branch), lowerQuery) {
+		return true
+	}
+	if summary.ModelProvider != nil && strings.Contains(strings.ToLower(*summary.ModelProvider), lowerQuery) {
+		return true
+	}
+	if summary.EncodedProject != nil && strings.Contains(strings.ToLower(*summary.EncodedProject), lowerQuery) {
+		return true
+	}
+	return strings.Contains(string(summary.Provider), lowerQuery)
 }
 
 var errSessionFound = errors.New("session found")

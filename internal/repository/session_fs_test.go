@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -17,7 +18,7 @@ type mockCacheRepository struct {
 	err   error
 }
 
-func (m *mockCacheRepository) GetSessionSummary(ctx context.Context, sessionID string) (*dto.SessionSummary, error) {
+func (m *mockCacheRepository) GetSessionSummary(ctx context.Context, provider dto.SessionProvider, sessionID string) (*dto.SessionSummary, error) {
 	if m.err != nil {
 		return nil, m.err
 	}
@@ -27,15 +28,15 @@ func (m *mockCacheRepository) GetSessionSummary(ctx context.Context, sessionID s
 	return nil, errors.New("not found")
 }
 
-func (m *mockCacheRepository) GetSessionDetail(ctx context.Context, sessionID string) (*dto.SessionDetailResponse, error) {
+func (m *mockCacheRepository) GetSessionDetail(ctx context.Context, provider dto.SessionProvider, sessionID string) (*dto.SessionDetailResponse, error) {
 	return nil, errors.New("not implemented")
 }
 
-func (m *mockCacheRepository) GetSessionDetailModTime(ctx context.Context, sessionID string) (time.Time, error) {
+func (m *mockCacheRepository) GetSessionDetailModTime(ctx context.Context, provider dto.SessionProvider, sessionID string) (time.Time, error) {
 	return time.Time{}, errors.New("not implemented")
 }
 
-func (m *mockCacheRepository) SaveSessionDetail(ctx context.Context, sessionID string, detail *dto.SessionDetailResponse) error {
+func (m *mockCacheRepository) SaveSessionDetail(ctx context.Context, provider dto.SessionProvider, sessionID string, detail *dto.SessionDetailResponse) error {
 	return nil
 }
 
@@ -239,7 +240,7 @@ func TestSessionFSRepository_ListSessions(t *testing.T) {
 						close(stop)
 					}(time.Duration(i) * 3 * time.Microsecond)
 
-					_, _ = repo.ListSessions(context.Background(), 0, 0, "")
+					_, _ = repo.ListSessions(context.Background(), dto.SessionProviderCodex, 0, 0, "")
 					<-stop
 				}
 			},
@@ -312,7 +313,7 @@ func TestSessionFSRepository_ListSessions(t *testing.T) {
 				}
 
 				// 年月を 0, 0 にした場合は最新月 (2026年6月) が自動検出されて1件返ってくるべき
-				sessionsAuto, err := repo.ListSessions(context.Background(), 0, 0, "")
+				sessionsAuto, err := repo.ListSessions(context.Background(), dto.SessionProviderCodex, 0, 0, "")
 				if err != nil {
 					t.Fatalf("expected no error, got %v", err)
 				}
@@ -374,7 +375,7 @@ func TestSessionFSRepository_ListSessions(t *testing.T) {
 				}
 
 				// 2. ブランチ名部分一致の検索 (大文字小文字無視)
-				sessions2, err := repo.ListSessions(context.Background(), 0, 0, "FEATURE-TEST")
+				sessions2, err := repo.ListSessions(context.Background(), dto.SessionProviderCodex, 0, 0, "FEATURE-TEST")
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -383,7 +384,7 @@ func TestSessionFSRepository_ListSessions(t *testing.T) {
 				}
 
 				// 3. プロバイダー名部分一致の検索 (大文字小文字無視)
-				sessions3, err := repo.ListSessions(context.Background(), 0, 0, "OPENAI")
+				sessions3, err := repo.ListSessions(context.Background(), dto.SessionProviderCodex, 0, 0, "OPENAI")
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -495,7 +496,7 @@ func TestSessionFSRepository_ListSessions(t *testing.T) {
 			}
 
 			repo := NewSessionFSRepository(rootDir, cacheRepo)
-			sessions, err := repo.ListSessions(context.Background(), tt.year, tt.month, tt.query)
+			sessions, err := repo.ListSessions(context.Background(), dto.SessionProviderCodex, tt.year, tt.month, tt.query)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("expected error: %v, got: %v", tt.wantErr, err)
 			}
@@ -796,4 +797,61 @@ func TestSessionFSRepository_GetSessionModTime(t *testing.T) {
 			t.Error("expected error statting a broken symlink, got nil")
 		}
 	})
+}
+
+func TestSessionFSRepository_ListSessions_ClaudeProvider(t *testing.T) {
+	tmpDir := t.TempDir()
+	projectsDir := filepath.Join(tmpDir, "projects")
+	encodedProject := "-Users-test-project"
+	projectDir := filepath.Join(projectsDir, encodedProject)
+	if err := os.MkdirAll(projectDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	sessionID := "claude-session-1"
+	transcript := strings.Join([]string{
+		`{"type":"user","sessionId":"claude-session-1","cwd":"/Users/test/project","timestamp":"2026-06-02T10:00:00.000Z","message":{"content":"hello"}}`,
+		`{"type":"assistant","sessionId":"claude-session-1","cwd":"/Users/test/project","timestamp":"2026-06-02T10:00:03.000Z","costUSD":0.0123,"message":{"content":[{"type":"text","text":"hi"},{"type":"tool_use","name":"Read"}]}}`,
+		`{"type":"assistant","sessionId":"claude-session-1","cwd":"/Users/test/project","timestamp":"2026-06-02T10:00:05.000Z","costUSD":0.0200,"message":{"content":[{"type":"tool_use","name":"Bash"}]}}`,
+	}, "\n")
+	if err := os.WriteFile(filepath.Join(projectDir, sessionID+".jsonl"), []byte(transcript), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	repo := NewSessionFSRepository(filepath.Join(tmpDir, "codex"), &mockCacheRepository{})
+	repo.claudeProjectsDir = projectsDir
+
+	sessions, err := repo.ListSessions(context.Background(), dto.SessionProviderClaude, 2026, 6, "project")
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("expected 1 session, got %d", len(sessions))
+	}
+
+	got := sessions[0]
+	if got.Provider != dto.SessionProviderClaude {
+		t.Fatalf("expected claude provider, got %q", got.Provider)
+	}
+	if got.ID != sessionID {
+		t.Fatalf("expected session ID %q, got %q", sessionID, got.ID)
+	}
+	if got.EncodedProject == nil || *got.EncodedProject != encodedProject {
+		t.Fatalf("expected encoded project %q, got %v", encodedProject, got.EncodedProject)
+	}
+	if got.Cwd == nil || *got.Cwd != "/Users/test/project" {
+		t.Fatalf("expected cwd, got %v", got.Cwd)
+	}
+	if got.Timestamp == nil || *got.Timestamp != "2026-06-02T10:00:00.000Z" {
+		t.Fatalf("expected first timestamp, got %v", got.Timestamp)
+	}
+	if got.MessageCount == nil || *got.MessageCount != 3 {
+		t.Fatalf("expected message count 3, got %v", got.MessageCount)
+	}
+	if got.ToolCallCount == nil || *got.ToolCallCount != 2 {
+		t.Fatalf("expected tool call count 2, got %v", got.ToolCallCount)
+	}
+	if got.TotalCostUSD == nil || *got.TotalCostUSD != 0.0323 {
+		t.Fatalf("expected total cost 0.0323, got %v", got.TotalCostUSD)
+	}
 }

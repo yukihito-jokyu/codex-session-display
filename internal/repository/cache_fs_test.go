@@ -238,7 +238,7 @@ func TestCacheFSRepository_GetSessionSummary(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			summary, err := repo.GetSessionSummary(context.Background(), tt.sessionID)
+			summary, err := repo.GetSessionSummary(context.Background(), dto.SessionProviderCodex, tt.sessionID)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("expected error: %v, got: %v", tt.wantErr, err)
 			}
@@ -277,7 +277,7 @@ func TestCacheFSRepository_SaveAndGetSessionDetail(t *testing.T) {
 	}
 
 	// 1. Save detail
-	if err := repo.SaveSessionDetail(context.Background(), sessionID, detail); err != nil {
+	if err := repo.SaveSessionDetail(context.Background(), dto.SessionProviderCodex, sessionID, detail); err != nil {
 		t.Fatalf("failed to save session detail: %v", err)
 	}
 
@@ -288,7 +288,7 @@ func TestCacheFSRepository_SaveAndGetSessionDetail(t *testing.T) {
 	}
 
 	// GetSessionSummary should work using summary file
-	summary, err := repo.GetSessionSummary(context.Background(), sessionID)
+	summary, err := repo.GetSessionSummary(context.Background(), dto.SessionProviderCodex, sessionID)
 	if err != nil {
 		t.Fatalf("failed to get session summary: %v", err)
 	}
@@ -297,12 +297,12 @@ func TestCacheFSRepository_SaveAndGetSessionDetail(t *testing.T) {
 	}
 
 	// 2. Get detail
-	got, err := repo.GetSessionDetail(context.Background(), sessionID)
+	got, err := repo.GetSessionDetail(context.Background(), dto.SessionProviderCodex, sessionID)
 	if err != nil {
 		t.Fatalf("failed to get session detail: %v", err)
 	}
 
-	modTime, err := repo.GetSessionDetailModTime(context.Background(), sessionID)
+	modTime, err := repo.GetSessionDetailModTime(context.Background(), dto.SessionProviderCodex, sessionID)
 	if err != nil {
 		t.Fatalf("failed to get session detail mod time: %v", err)
 	}
@@ -315,12 +315,12 @@ func TestCacheFSRepository_SaveAndGetSessionDetail(t *testing.T) {
 	}
 
 	// 3. Get non-existent detail
-	_, err = repo.GetSessionDetail(context.Background(), "non-existent")
+	_, err = repo.GetSessionDetail(context.Background(), dto.SessionProviderCodex, "non-existent")
 	if err == nil {
 		t.Error("expected error for non-existent session detail, got nil")
 	}
 
-	_, err = repo.GetSessionDetailModTime(context.Background(), "non-existent")
+	_, err = repo.GetSessionDetailModTime(context.Background(), dto.SessionProviderCodex, "non-existent")
 	if err == nil {
 		t.Error("expected error for non-existent session detail mod time, got nil")
 	}
@@ -330,7 +330,7 @@ func TestCacheFSRepository_SaveAndGetSessionDetail(t *testing.T) {
 	if err := os.WriteFile(invalidJSONPath, []byte("{invalid}"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err = repo.GetSessionDetail(context.Background(), "invalid-json-detail")
+	_, err = repo.GetSessionDetail(context.Background(), dto.SessionProviderCodex, "invalid-json-detail")
 	if err == nil {
 		t.Error("expected error for invalid json session detail, got nil")
 	}
@@ -349,14 +349,14 @@ func TestCacheFSRepository_SaveAndGetSessionDetail(t *testing.T) {
 			},
 		},
 	}
-	err = repo.SaveSessionDetail(context.Background(), "invalid-marshal-session", invalidDetail)
+	err = repo.SaveSessionDetail(context.Background(), dto.SessionProviderCodex, "invalid-marshal-session", invalidDetail)
 	if err == nil {
 		t.Error("expected marshal error, got nil")
 	}
 
 	// 6. WriteFile error
 	badRepo := NewCacheFSRepository("/non-existent-dir-12345/sub")
-	err = badRepo.SaveSessionDetail(context.Background(), "any-session", detail)
+	err = badRepo.SaveSessionDetail(context.Background(), dto.SessionProviderCodex, "any-session", detail)
 	if err == nil {
 		t.Error("expected write file error, got nil")
 	}
@@ -376,7 +376,7 @@ func TestCacheFSRepository_SummaryPriorityAndFallback(t *testing.T) {
 	d, _ := json.Marshal(summaryData)
 	_ = os.WriteFile(filepath.Join(tmpDir, sessionID+".summary.json"), d, 0o644)
 
-	summary, err := repo.GetSessionSummary(context.Background(), sessionID)
+	summary, err := repo.GetSessionSummary(context.Background(), dto.SessionProviderCodex, sessionID)
 	if err != nil {
 		t.Fatalf("expected no error with summary.json only, got: %v", err)
 	}
@@ -408,7 +408,7 @@ func TestCacheFSRepository_SummaryPriorityAndFallback(t *testing.T) {
 	detailData, _ := json.Marshal(detail)
 	_ = os.WriteFile(filepath.Join(tmpDir, sessionIDFallback+".json"), detailData, 0o644)
 
-	summaryFallback, err := repo.GetSessionSummary(context.Background(), sessionIDFallback)
+	summaryFallback, err := repo.GetSessionSummary(context.Background(), dto.SessionProviderCodex, sessionIDFallback)
 	if err != nil {
 		t.Fatalf("expected no error with broken summary.json due to fallback, got: %v", err)
 	}
@@ -510,7 +510,7 @@ func TestCacheFSRepository_SaveSessionDetail_WithStatistics(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := repo.SaveSessionDetail(context.Background(), tt.sessionID, tt.detail)
+			err := repo.SaveSessionDetail(context.Background(), dto.SessionProviderCodex, tt.sessionID, tt.detail)
 			if err != nil {
 				t.Fatalf("SaveSessionDetail failed: %v", err)
 			}
@@ -581,7 +581,7 @@ func TestCacheFSRepository_GetSessionSummary_FallbackMerge(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(tmpDir, sessionID+".json"), detailData, 0o644)
 
 	// 3. GetSessionSummary を実行して、マージされた結果を検証
-	summary, err := repo.GetSessionSummary(context.Background(), sessionID)
+	summary, err := repo.GetSessionSummary(context.Background(), dto.SessionProviderCodex, sessionID)
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}
@@ -634,7 +634,7 @@ func TestCacheFSRepository_GetSessionSummary_FallbackNoDetail(t *testing.T) {
 	// 2. detail.json は作成しない
 
 	// 3. GetSessionSummary を実行して、エラーにならず元の情報が取得できることを検証
-	summary, err := repo.GetSessionSummary(context.Background(), sessionID)
+	summary, err := repo.GetSessionSummary(context.Background(), dto.SessionProviderCodex, sessionID)
 	if err != nil {
 		t.Fatalf("expected no error, got: %v", err)
 	}

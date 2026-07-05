@@ -27,11 +27,11 @@ type mockCacheRepositoryForDetail struct {
 	lastSaveID string
 }
 
-func (m *mockCacheRepositoryForDetail) GetSessionSummary(ctx context.Context, sessionID string) (*dto.SessionSummary, error) {
+func (m *mockCacheRepositoryForDetail) GetSessionSummary(ctx context.Context, provider dto.SessionProvider, sessionID string) (*dto.SessionSummary, error) {
 	return nil, errors.New("not implemented")
 }
 
-func (m *mockCacheRepositoryForDetail) GetSessionDetail(ctx context.Context, sessionID string) (*dto.SessionDetailResponse, error) {
+func (m *mockCacheRepositoryForDetail) GetSessionDetail(ctx context.Context, provider dto.SessionProvider, sessionID string) (*dto.SessionDetailResponse, error) {
 	if m.cache == nil {
 		return nil, errors.New("not found")
 	}
@@ -41,7 +41,7 @@ func (m *mockCacheRepositoryForDetail) GetSessionDetail(ctx context.Context, ses
 	return nil, errors.New("not found")
 }
 
-func (m *mockCacheRepositoryForDetail) GetSessionDetailModTime(ctx context.Context, sessionID string) (time.Time, error) {
+func (m *mockCacheRepositoryForDetail) GetSessionDetailModTime(ctx context.Context, provider dto.SessionProvider, sessionID string) (time.Time, error) {
 	if m.modTimes != nil {
 		if modTime, ok := m.modTimes[sessionID]; ok {
 			return modTime, nil
@@ -50,7 +50,7 @@ func (m *mockCacheRepositoryForDetail) GetSessionDetailModTime(ctx context.Conte
 	return time.Time{}, errors.New("not found")
 }
 
-func (m *mockCacheRepositoryForDetail) SaveSessionDetail(ctx context.Context, sessionID string, detail *dto.SessionDetailResponse) error {
+func (m *mockCacheRepositoryForDetail) SaveSessionDetail(ctx context.Context, provider dto.SessionProvider, sessionID string, detail *dto.SessionDetailResponse) error {
 	if m.saveErr != nil {
 		return m.saveErr
 	}
@@ -73,7 +73,7 @@ type mockSessionRepositoryForDetail struct {
 	sessions    []dto.SessionSummary
 }
 
-func (m *mockSessionRepositoryForDetail) ListSessions(ctx context.Context, year, month int, query string) ([]dto.SessionSummary, error) {
+func (m *mockSessionRepositoryForDetail) ListSessions(ctx context.Context, provider dto.SessionProvider, year, month int, query string) ([]dto.SessionSummary, error) {
 	if m.sessions != nil {
 		return m.sessions, nil
 	}

@@ -12,9 +12,11 @@ type mockSessionRepository struct {
 	sessions  []dto.SessionSummary
 	err       error
 	cacheRepo CacheRepository
+	provider  dto.SessionProvider
 }
 
-func (m *mockSessionRepository) ListSessions(ctx context.Context, year, month int, query string) ([]dto.SessionSummary, error) {
+func (m *mockSessionRepository) ListSessions(ctx context.Context, provider dto.SessionProvider, year, month int, query string) ([]dto.SessionSummary, error) {
+	m.provider = provider
 	if m.err != nil {
 		return nil, m.err
 	}
@@ -30,9 +32,10 @@ func (m *mockSessionRepository) ListSessions(ctx context.Context, year, month in
 
 		sSummary := s
 		if m.cacheRepo != nil {
-			cached, err := m.cacheRepo.GetSessionSummary(ctx, s.ID)
+			cached, err := m.cacheRepo.GetSessionSummary(ctx, provider, s.ID)
 			if err == nil && cached != nil {
 				sSummary.Cwd = cached.Cwd
+				sSummary.Provider = cached.Provider
 				sSummary.CliVersion = cached.CliVersion
 				sSummary.Originator = cached.Originator
 				sSummary.ModelProvider = cached.ModelProvider
@@ -82,11 +85,13 @@ func (m *mockSessionRepository) GetSessionModTime(ctx context.Context, sessionID
 }
 
 type mockCacheRepository struct {
-	cache map[string]*dto.SessionSummary
-	err   error
+	cache        map[string]*dto.SessionSummary
+	err          error
+	summaryCalls []string
 }
 
-func (m *mockCacheRepository) GetSessionSummary(ctx context.Context, sessionID string) (*dto.SessionSummary, error) {
+func (m *mockCacheRepository) GetSessionSummary(ctx context.Context, provider dto.SessionProvider, sessionID string) (*dto.SessionSummary, error) {
+	m.summaryCalls = append(m.summaryCalls, string(provider)+":"+sessionID)
 	if m.err != nil {
 		return nil, m.err
 	}
@@ -96,15 +101,15 @@ func (m *mockCacheRepository) GetSessionSummary(ctx context.Context, sessionID s
 	return nil, errors.New("not found")
 }
 
-func (m *mockCacheRepository) GetSessionDetail(ctx context.Context, sessionID string) (*dto.SessionDetailResponse, error) {
+func (m *mockCacheRepository) GetSessionDetail(ctx context.Context, provider dto.SessionProvider, sessionID string) (*dto.SessionDetailResponse, error) {
 	return nil, errors.New("not implemented")
 }
 
-func (m *mockCacheRepository) GetSessionDetailModTime(ctx context.Context, sessionID string) (time.Time, error) {
+func (m *mockCacheRepository) GetSessionDetailModTime(ctx context.Context, provider dto.SessionProvider, sessionID string) (time.Time, error) {
 	return time.Time{}, errors.New("not implemented")
 }
 
-func (m *mockCacheRepository) SaveSessionDetail(ctx context.Context, sessionID string, detail *dto.SessionDetailResponse) error {
+func (m *mockCacheRepository) SaveSessionDetail(ctx context.Context, provider dto.SessionProvider, sessionID string, detail *dto.SessionDetailResponse) error {
 	return nil
 }
 
@@ -300,7 +305,7 @@ func TestListSessionsUseCase_Execute(t *testing.T) {
 			}
 
 			uc := NewListSessionsUseCase(sessionRepo, cacheRepo)
-			results, err := uc.Execute(context.Background(), "", 0, 0)
+			results, err := uc.Execute(context.Background(), dto.SessionProviderCodex, "", 0, 0)
 			if (err != nil) != tt.wantErr {
 				t.Fatalf("expected error: %v, got: %v", tt.wantErr, err)
 			}
@@ -308,5 +313,39 @@ func TestListSessionsUseCase_Execute(t *testing.T) {
 				tt.verify(t, results)
 			}
 		})
+	}
+}
+
+func TestListSessionsUseCase_ExecutePassesProviderToRepositories(t *testing.T) {
+	timestamp := "2026-05-23T12:00:00Z"
+	cacheRepo := &mockCacheRepository{
+		cache: map[string]*dto.SessionSummary{
+			"same-session-id": {
+				ID:        "same-session-id",
+				Provider:  dto.SessionProviderClaude,
+				Timestamp: &timestamp,
+			},
+		},
+	}
+	sessionRepo := &mockSessionRepository{
+		sessions: []dto.SessionSummary{
+			{ID: "same-session-id", Timestamp: &timestamp},
+		},
+		cacheRepo: cacheRepo,
+	}
+
+	uc := NewListSessionsUseCase(sessionRepo, cacheRepo)
+	results, err := uc.Execute(context.Background(), dto.SessionProviderClaude, "", 0, 0)
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+	if sessionRepo.provider != dto.SessionProviderClaude {
+		t.Fatalf("expected provider %q, got %q", dto.SessionProviderClaude, sessionRepo.provider)
+	}
+	if len(cacheRepo.summaryCalls) != 1 || cacheRepo.summaryCalls[0] != "claude:same-session-id" {
+		t.Fatalf("expected provider-scoped cache lookup, got %v", cacheRepo.summaryCalls)
+	}
+	if len(results) != 1 || results[0].Provider != dto.SessionProviderClaude {
+		t.Fatalf("expected claude summary, got %+v", results)
 	}
 }

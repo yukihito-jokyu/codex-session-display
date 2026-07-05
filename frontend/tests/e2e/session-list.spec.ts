@@ -23,6 +23,34 @@ test.describe("セッション一覧画面 E2E テスト", () => {
 		await expect(page.locator("text=sess-003")).not.toBeVisible();
 	});
 
+	test("Codex / Claude Code を切り替えて一覧表示できること", async ({
+		page,
+	}) => {
+		await expect(page.getByRole("button", { name: "Codex" })).toBeVisible();
+		await expect(
+			page.getByRole("button", { name: "Claude Code" }),
+		).toBeVisible();
+		await expect(page.locator("text=~/.codex/sessions")).toBeVisible();
+
+		await page.getByRole("button", { name: "Claude Code" }).click();
+
+		await expect(page.locator("text=~/.claude/projects")).toBeVisible();
+		await expect(page.locator("text=claude-s")).toBeVisible();
+		await expect(page.locator("text=sess-001")).not.toBeVisible();
+
+		const calls = await page.evaluate(() => {
+			return (
+				window as unknown as {
+					__listSessionsCalls: Array<{ provider: string }>;
+				}
+			).__listSessionsCalls;
+		});
+		expect(calls.some((call) => call.provider === "claude")).toBe(true);
+
+		await page.getByRole("button", { name: "Codex" }).click();
+		await expect(page.locator("text=sess-001")).toBeVisible();
+	});
+
 	test("サブエージェントセッションが親セッションの下にネストして表示され、展開・折りたたみ可能であること", async ({
 		page,
 	}) => {

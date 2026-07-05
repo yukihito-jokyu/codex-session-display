@@ -32,13 +32,17 @@ func NewCacheFSRepository(cacheDir string) *CacheFSRepository {
 
 // GetSessionSummary はキャッシュファイルを読み込み、解析されたメタデータを含む SessionSummary を返します。
 // まず軽量な .summary.json の読み込みを試み、なければ .json から読み込んで summary を抽出します。
-func (r *CacheFSRepository) GetSessionSummary(ctx context.Context, sessionID string) (*dto.SessionSummary, error) {
-	summaryPath := filepath.Join(r.cacheDir, sessionID+".summary.json")
+func (r *CacheFSRepository) GetSessionSummary(ctx context.Context, provider dto.SessionProvider, sessionID string) (*dto.SessionSummary, error) {
+	cacheID := cacheSessionID(provider, sessionID)
+	summaryPath := filepath.Join(r.cacheDir, cacheID+".summary.json")
 
 	if data, err := os.ReadFile(summaryPath); err == nil {
 		var summary dto.SessionSummary
 		if unmarshalErr := json.Unmarshal(data, &summary); unmarshalErr == nil {
 			summary.Parsed = true
+			if summary.Provider == "" {
+				summary.Provider = provider
+			}
 			logger.Info("cache read successful (summary)", "session_id", sessionID)
 
 			// 統計情報が不足している場合、詳細キャッシュから集計してマージする
@@ -50,7 +54,7 @@ func (r *CacheFSRepository) GetSessionSummary(ctx context.Context, sessionID str
 				summary.StepCount == nil ||
 				summary.DurationMs == nil {
 				logger.Info("statistics missing in summary cache, falling back to detail cache for merge", "session_id", sessionID)
-				if detail, err := r.GetSessionDetail(ctx, sessionID); err == nil {
+				if detail, err := r.GetSessionDetail(ctx, provider, sessionID); err == nil {
 					var inputTokensSum int64
 					var outputTokensSum int64
 					var reasoningTokensSum int64
@@ -90,7 +94,7 @@ func (r *CacheFSRepository) GetSessionSummary(ctx context.Context, sessionID str
 		}
 	}
 
-	cachePath := r.cachePath(sessionID)
+	cachePath := r.cachePath(provider, sessionID)
 	data, err := os.ReadFile(cachePath)
 	if err != nil {
 		return nil, err
@@ -115,8 +119,9 @@ func (r *CacheFSRepository) GetSessionSummary(ctx context.Context, sessionID str
 
 	if metaNode == nil {
 		summary := &dto.SessionSummary{
-			ID:     sessionID,
-			Parsed: true,
+			ID:       sessionID,
+			Provider: provider,
+			Parsed:   true,
 		}
 		logger.Info("cache read successful without sessionMeta", "session_id", sessionID)
 		return summary, nil
@@ -126,17 +131,18 @@ func (r *CacheFSRepository) GetSessionSummary(ctx context.Context, sessionID str
 	cwd := getStringPtr(m, "cwd")
 	cliVer := getStringPtr(m, "cli_version")
 	orig := getStringPtr(m, "originator")
-	provider := getStringPtr(m, "model_provider")
+	modelProvider := getStringPtr(m, "model_provider")
 	branch := getStringPtr(m, "git_branch")
 	source := getStringPtr(m, "source")
 	timestamp := getStringPtr(m, "timestamp")
 
 	summary := &dto.SessionSummary{
 		ID:              sessionID,
+		Provider:        provider,
 		Cwd:             cwd,
 		CliVersion:      cliVer,
 		Originator:      orig,
-		ModelProvider:   provider,
+		ModelProvider:   modelProvider,
 		Branch:          branch,
 		Source:          source,
 		Timestamp:       timestamp,
@@ -167,8 +173,8 @@ func getStringPtr(m map[string]interface{}, key string) *string {
 }
 
 // GetSessionDetailModTime はキャッシュファイルの最終更新日時を返します。
-func (r *CacheFSRepository) GetSessionDetailModTime(ctx context.Context, sessionID string) (time.Time, error) {
-	info, err := os.Stat(r.cachePath(sessionID))
+func (r *CacheFSRepository) GetSessionDetailModTime(ctx context.Context, provider dto.SessionProvider, sessionID string) (time.Time, error) {
+	info, err := os.Stat(r.cachePath(provider, sessionID))
 	if err != nil {
 		return time.Time{}, err
 	}
@@ -176,8 +182,8 @@ func (r *CacheFSRepository) GetSessionDetailModTime(ctx context.Context, session
 }
 
 // GetSessionDetail はキャッシュファイルを読み込み、SessionDetailResponse を返します。
-func (r *CacheFSRepository) GetSessionDetail(ctx context.Context, sessionID string) (*dto.SessionDetailResponse, error) {
-	cachePath := r.cachePath(sessionID)
+func (r *CacheFSRepository) GetSessionDetail(ctx context.Context, provider dto.SessionProvider, sessionID string) (*dto.SessionDetailResponse, error) {
+	cachePath := r.cachePath(provider, sessionID)
 
 	data, err := os.ReadFile(cachePath)
 	if err != nil {
@@ -194,8 +200,8 @@ func (r *CacheFSRepository) GetSessionDetail(ctx context.Context, sessionID stri
 
 // SaveSessionDetail は SessionDetailResponse をキャッシュファイルに書き込みます。
 // 同時に、軽量な .summary.json も保存します。
-func (r *CacheFSRepository) SaveSessionDetail(ctx context.Context, sessionID string, detail *dto.SessionDetailResponse) error {
-	cachePath := r.cachePath(sessionID)
+func (r *CacheFSRepository) SaveSessionDetail(ctx context.Context, provider dto.SessionProvider, sessionID string, detail *dto.SessionDetailResponse) error {
+	cachePath := r.cachePath(provider, sessionID)
 
 	data, err := json.Marshal(detail)
 	if err != nil {
@@ -218,13 +224,15 @@ func (r *CacheFSRepository) SaveSessionDetail(ctx context.Context, sessionID str
 	var summary dto.SessionSummary
 	if metaNode == nil {
 		summary = dto.SessionSummary{
-			ID:     sessionID,
-			Parsed: true,
+			ID:       sessionID,
+			Provider: provider,
+			Parsed:   true,
 		}
 	} else {
 		m := metaNode.Data.Meta
 		summary = dto.SessionSummary{
 			ID:              sessionID,
+			Provider:        provider,
 			Cwd:             getStringPtr(m, "cwd"),
 			CliVersion:      getStringPtr(m, "cli_version"),
 			Originator:      getStringPtr(m, "originator"),
@@ -266,7 +274,7 @@ func (r *CacheFSRepository) SaveSessionDetail(ctx context.Context, sessionID str
 		return fmt.Errorf("failed to marshal summary cache JSON: %w", err)
 	}
 
-	summaryPath := filepath.Join(r.cacheDir, sessionID+".summary.json")
+	summaryPath := filepath.Join(r.cacheDir, cacheSessionID(provider, sessionID)+".summary.json")
 	if err := os.WriteFile(summaryPath, summaryData, 0o644); err != nil {
 		return fmt.Errorf("failed to write summary cache file: %w", err)
 	}
@@ -275,6 +283,13 @@ func (r *CacheFSRepository) SaveSessionDetail(ctx context.Context, sessionID str
 	return nil
 }
 
-func (r *CacheFSRepository) cachePath(sessionID string) string {
-	return filepath.Join(r.cacheDir, sessionID+".json")
+func (r *CacheFSRepository) cachePath(provider dto.SessionProvider, sessionID string) string {
+	return filepath.Join(r.cacheDir, cacheSessionID(provider, sessionID)+".json")
+}
+
+func cacheSessionID(provider dto.SessionProvider, sessionID string) string {
+	if provider == "" || provider == dto.SessionProviderCodex {
+		return sessionID
+	}
+	return string(provider) + "-" + sessionID
 }

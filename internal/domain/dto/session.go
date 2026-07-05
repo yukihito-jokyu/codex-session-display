@@ -2,29 +2,42 @@ package dto
 
 import "codex-session-display/internal/domain/model"
 
+// SessionProvider はセッションログの提供元を表します。
+type SessionProvider string
+
+const (
+	SessionProviderCodex  SessionProvider = "codex"
+	SessionProviderClaude SessionProvider = "claude"
+)
+
 // SessionSummary はセッション一覧内の単一のセッションエントリーを表します。
 type SessionSummary struct {
-	ID              string   `json:"id"`
-	FilePath        string   `json:"file_path"`
-	Cwd             *string  `json:"cwd"`
-	CliVersion      *string  `json:"cli_version"`
-	Originator      *string  `json:"originator"`
-	ModelProvider   *string  `json:"model_provider"`
-	Branch          *string  `json:"branch"`
-	Source          *string  `json:"source"`
-	Timestamp       *string  `json:"timestamp"`
-	FileSize        int64    `json:"file_size"`
-	FileModifiedAt  *string  `json:"file_modified_at"`
-	Parsed          bool     `json:"parsed"`
-	ParentSessionID *string  `json:"parent_session_id,omitempty"`
-	ChildSessionIDs []string `json:"child_session_ids,omitempty"`
-	TotalTokens     *int64   `json:"total_tokens,omitempty"`
-	InputTokens     *int64   `json:"input_tokens,omitempty"`
-	OutputTokens    *int64   `json:"output_tokens,omitempty"`
-	ReasoningTokens *int64   `json:"reasoning_tokens,omitempty"`
-	TurnCount       *int     `json:"turn_count,omitempty"`
-	StepCount       *int     `json:"step_count,omitempty"`
-	DurationMs      *int64   `json:"duration_ms,omitempty"`
+	ID              string          `json:"id"`
+	Provider        SessionProvider `json:"provider,omitempty"`
+	FilePath        string          `json:"file_path"`
+	Cwd             *string         `json:"cwd"`
+	CliVersion      *string         `json:"cli_version"`
+	Originator      *string         `json:"originator"`
+	ModelProvider   *string         `json:"model_provider"`
+	Branch          *string         `json:"branch"`
+	Source          *string         `json:"source"`
+	Timestamp       *string         `json:"timestamp"`
+	FileSize        int64           `json:"file_size"`
+	FileModifiedAt  *string         `json:"file_modified_at"`
+	Parsed          bool            `json:"parsed"`
+	ParentSessionID *string         `json:"parent_session_id,omitempty"`
+	ChildSessionIDs []string        `json:"child_session_ids,omitempty"`
+	TotalTokens     *int64          `json:"total_tokens,omitempty"`
+	InputTokens     *int64          `json:"input_tokens,omitempty"`
+	OutputTokens    *int64          `json:"output_tokens,omitempty"`
+	ReasoningTokens *int64          `json:"reasoning_tokens,omitempty"`
+	TurnCount       *int            `json:"turn_count,omitempty"`
+	StepCount       *int            `json:"step_count,omitempty"`
+	DurationMs      *int64          `json:"duration_ms,omitempty"`
+	EncodedProject  *string         `json:"encoded_project,omitempty"`
+	MessageCount    *int            `json:"message_count,omitempty"`
+	ToolCallCount   *int            `json:"tool_call_count,omitempty"`
+	TotalCostUSD    *float64        `json:"total_cost_usd,omitempty"`
 }
 
 // TokenBadgeData は React Flow のノード上に表示するトークンバッジのデータを表します。

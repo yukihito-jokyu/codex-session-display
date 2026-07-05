@@ -14,7 +14,7 @@ type SessionParser interface {
 
 // SessionRepository はセッションログをスキャンするためのインターフェースを定義します。
 type SessionRepository interface {
-	ListSessions(ctx context.Context, year, month int, query string) ([]dto.SessionSummary, error)
+	ListSessions(ctx context.Context, provider dto.SessionProvider, year, month int, query string) ([]dto.SessionSummary, error)
 	GetSessionFilePath(ctx context.Context, sessionID string) (string, error)
 	GetSessionIDByFilePath(ctx context.Context, filePath string) (string, error)
 	GetSessionModTime(ctx context.Context, sessionID string) (time.Time, error)
@@ -22,8 +22,8 @@ type SessionRepository interface {
 
 // CacheRepository は解析されたセッションキャッシュの読み書きを行うためのインターフェースを定義します。
 type CacheRepository interface {
-	GetSessionSummary(ctx context.Context, sessionID string) (*dto.SessionSummary, error)
-	GetSessionDetail(ctx context.Context, sessionID string) (*dto.SessionDetailResponse, error)
-	GetSessionDetailModTime(ctx context.Context, sessionID string) (time.Time, error)
-	SaveSessionDetail(ctx context.Context, sessionID string, detail *dto.SessionDetailResponse) error
+	GetSessionSummary(ctx context.Context, provider dto.SessionProvider, sessionID string) (*dto.SessionSummary, error)
+	GetSessionDetail(ctx context.Context, provider dto.SessionProvider, sessionID string) (*dto.SessionDetailResponse, error)
+	GetSessionDetailModTime(ctx context.Context, provider dto.SessionProvider, sessionID string) (time.Time, error)
+	SaveSessionDetail(ctx context.Context, provider dto.SessionProvider, sessionID string, detail *dto.SessionDetailResponse) error
 }

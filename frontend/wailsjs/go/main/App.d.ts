@@ -20,6 +20,8 @@ export function HandleOpenSessionFile(arg1:string):Promise<void>;
 
 export function ListSessions(arg1:string,arg2:number,arg3:number):Promise<Array<dto.SessionSummary>>;
 
+export function ListSessionsByProvider(arg1:string,arg2:string,arg3:number,arg4:number):Promise<Array<dto.SessionSummary>>;
+
 export function OpenLogDirectory():Promise<void>;
 
 export function ResolveSessionIDFromPath(arg1:string):Promise<string>;

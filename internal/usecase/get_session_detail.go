@@ -706,10 +706,10 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 	logger.Info("GetSessionDetailUseCase start", "session_id", sessionID)
 
 	// 1. キャッシュの確認
-	if cached, err := uc.cacheRepo.GetSessionDetail(ctx, sessionID); err == nil && cached != nil {
+	if cached, err := uc.cacheRepo.GetSessionDetail(ctx, dto.SessionProviderCodex, sessionID); err == nil && cached != nil {
 		if cached.CacheSchemaVersion == dto.CurrentSessionDetailCacheSchemaVersion {
 			sessionModTime, sessionModErr := uc.sessionRepo.GetSessionModTime(ctx, sessionID)
-			cacheModTime, cacheModErr := uc.cacheRepo.GetSessionDetailModTime(ctx, sessionID)
+			cacheModTime, cacheModErr := uc.cacheRepo.GetSessionDetailModTime(ctx, dto.SessionProviderCodex, sessionID)
 			if sessionModErr == nil && cacheModErr == nil && !sessionModTime.After(cacheModTime) {
 				logger.Info("cache hit, returning cached session detail", "session_id", sessionID)
 				return cached, nil
@@ -1868,7 +1868,7 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 	seenChildSessionIDs := make(map[string]bool)
 
 	// 2. 他のセッションの一覧を取得し、親子関係を逆引きで解決
-	allSessions, err := uc.sessionRepo.ListSessions(ctx, 0, 0, "")
+	allSessions, err := uc.sessionRepo.ListSessions(ctx, dto.SessionProviderCodex, 0, 0, "")
 	if err == nil {
 		// リスト走査により、自身を親とする子セッションIDを検索
 		for i := range allSessions {
@@ -2043,7 +2043,7 @@ func (uc *GetSessionDetailUseCase) Execute(ctx context.Context, sessionID string
 	}
 
 	// 9. キャッシュへの保存
-	if cacheErr := uc.cacheRepo.SaveSessionDetail(ctx, sessionID, res); cacheErr != nil {
+	if cacheErr := uc.cacheRepo.SaveSessionDetail(ctx, dto.SessionProviderCodex, sessionID, res); cacheErr != nil {
 		logger.Error("failed to save session detail to cache", "session_id", sessionID, "error", cacheErr)
 	}
 

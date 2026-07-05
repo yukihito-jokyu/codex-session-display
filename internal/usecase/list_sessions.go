@@ -21,8 +21,8 @@ func NewListSessionsUseCase(sessionRepo SessionRepository, cacheRepo CacheReposi
 }
 
 // Execute はセッションをスキャンし、指定された年月と検索クエリでフィルタリングして、それらをタイムスタンプの降順でソートして返します。
-func (uc *ListSessionsUseCase) Execute(ctx context.Context, query string, year, month int) ([]dto.SessionSummary, error) {
-	summaries, err := uc.sessionRepo.ListSessions(ctx, year, month, query)
+func (uc *ListSessionsUseCase) Execute(ctx context.Context, provider dto.SessionProvider, query string, year, month int) ([]dto.SessionSummary, error) {
+	summaries, err := uc.sessionRepo.ListSessions(ctx, provider, year, month, query)
 	if err != nil {
 		return nil, err
 	}

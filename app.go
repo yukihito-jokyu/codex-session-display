@@ -50,6 +50,7 @@ func NewApp() (*App, error) {
 		home = "."
 	}
 	sessionsDir := filepath.Join(home, ".codex", "sessions")
+	claudeProjectsDir := resolveClaudeProjectsDir(home)
 	cacheDir := filepath.Join(home, ".codex-display")
 
 	// キャッシュディレクトリが存在することを確認します。
@@ -60,6 +61,7 @@ func NewApp() (*App, error) {
 
 	cacheRepo := repository.NewCacheFSRepository(cacheDir)
 	sessionRepo := repository.NewSessionFSRepository(sessionsDir, cacheRepo)
+	sessionRepo.SetClaudeProjectsDir(claudeProjectsDir)
 	listSessionsUC := usecase.NewListSessionsUseCase(sessionRepo, cacheRepo)
 	getSessionDetailUC := usecase.NewGetSessionDetailUseCase(sessionRepo, cacheRepo, repository.NewJSONLParser())
 
@@ -80,6 +82,13 @@ func NewApp() (*App, error) {
 	return app, nil
 }
 
+func resolveClaudeProjectsDir(home string) string {
+	if configDir := os.Getenv("CLAUDE_CONFIG_DIR"); configDir != "" {
+		return filepath.Join(configDir, "projects")
+	}
+	return filepath.Join(home, ".claude", "projects")
+}
+
 // startup はアプリ起動時に呼び出されます。ランタイムメソッドを呼び出せるように
 // コンテキストが保存されます。
 func (a *App) startup(ctx context.Context) {
@@ -98,10 +107,19 @@ func (a *App) Greet(name string) string {
 	return fmt.Sprintf("Hello %s, It's show time!", name)
 }
 
-// ListSessions は指定された検索クエリと年月でフィルタリングされたセッションの一覧を返します。
+// ListSessions は指定された検索クエリと年月でフィルタリングされたCodexセッションの一覧を返します。
 func (a *App) ListSessions(query string, year, month int) ([]dto.SessionSummary, error) {
-	logger.Info("ListSessions start", "query", query, "year", year, "month", month)
-	res, err := a.listSessionsUC.Execute(a.ctx, query, year, month)
+	return a.ListSessionsByProvider(string(dto.SessionProviderCodex), query, year, month)
+}
+
+// ListSessionsByProvider は指定されたprovider、検索クエリ、年月でフィルタリングされたセッションの一覧を返します。
+func (a *App) ListSessionsByProvider(provider, query string, year, month int) ([]dto.SessionSummary, error) {
+	sessionProvider := dto.SessionProvider(provider)
+	if sessionProvider == "" {
+		sessionProvider = dto.SessionProviderCodex
+	}
+	logger.Info("ListSessions start", "provider", sessionProvider, "query", query, "year", year, "month", month)
+	res, err := a.listSessionsUC.Execute(a.ctx, sessionProvider, query, year, month)
 	if err != nil {
 		appErr := &dto.AppError{
 			Code:    "INTERNAL_ERROR",

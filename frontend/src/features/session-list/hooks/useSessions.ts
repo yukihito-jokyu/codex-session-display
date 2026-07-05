@@ -1,12 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { GetSessionDetail, ListSessions } from "wailsjs/go/main/App";
+import { GetSessionDetail, ListSessionsByProvider } from "wailsjs/go/main/App";
 import { EventsOn } from "wailsjs/runtime/runtime";
 import type { SessionSummary } from "../../../components/ui/DateTree/SessionRow";
+
+export type SessionProvider = "codex" | "claude";
 
 export function useSessions() {
 	const [sessions, setSessions] = useState<SessionSummary[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
+	const [provider, setProvider] = useState<SessionProvider>(() => {
+		const saved = sessionStorage.getItem("session_list_provider");
+		return saved === "claude" ? "claude" : "codex";
+	});
 
 	const [searchQuery, setSearchQuery] = useState(() => {
 		return sessionStorage.getItem("session_list_query") || "";
@@ -30,6 +36,7 @@ export function useSessions() {
 
 	// 直近で実際にフェッチされた（またはフェッチによって解決された）パラメータを保持して重複リクエストを防止する
 	const lastFetchedRef = useRef<{
+		provider: SessionProvider;
 		query: string;
 		year: number;
 		month: number;
@@ -50,7 +57,13 @@ export function useSessions() {
 	currentMonthRef.current = currentMonth;
 
 	const fetchSessions = useCallback(
-		(query: string, year: number, month: number, isSilent = false) => {
+		(
+			nextProvider: SessionProvider,
+			query: string,
+			year: number,
+			month: number,
+			isSilent = false,
+		) => {
 			if (!isSilent) {
 				setLoading(true);
 				// 非サイレント更新（通常のフェッチ）の場合はキューと解析状態をクリアする
@@ -61,9 +74,9 @@ export function useSessions() {
 				failedSessionIdsRef.current = new Set();
 			}
 			setError(null);
-			lastFetchedRef.current = { query, year, month };
+			lastFetchedRef.current = { provider: nextProvider, query, year, month };
 
-			ListSessions(query, year, month)
+			ListSessionsByProvider(nextProvider, query, year, month)
 				.then((data) => {
 					setSessions(data || []);
 					if (!isSilent) {
@@ -90,6 +103,7 @@ export function useSessions() {
 						// 解決された年月で lastFetchedRef.current を更新し、直後の useEffect トリガーによる
 						// 重複フェッチ（同一クエリ、同一の解決後年月）をスキップできるようにする
 						lastFetchedRef.current = {
+							provider: nextProvider,
 							query,
 							year: resolvedYear,
 							month: resolvedMonth,
@@ -115,6 +129,7 @@ export function useSessions() {
 		// すでに同じパラメータでフェッチが完了または実行中の場合はスキップ
 		if (
 			lastFetchedRef.current &&
+			lastFetchedRef.current.provider === provider &&
 			lastFetchedRef.current.query === searchQuery &&
 			lastFetchedRef.current.year === targetYear &&
 			lastFetchedRef.current.month === targetMonth
@@ -122,8 +137,22 @@ export function useSessions() {
 			return;
 		}
 
-		fetchSessions(searchQuery, targetYear, targetMonth);
-	}, [searchQuery, currentYear, currentMonth, fetchSessions]);
+		fetchSessions(provider, searchQuery, targetYear, targetMonth);
+	}, [provider, searchQuery, currentYear, currentMonth, fetchSessions]);
+
+	useEffect(() => {
+		sessionStorage.setItem("session_list_provider", provider);
+	}, [provider]);
+
+	const prevProviderRef = useRef<SessionProvider>(provider);
+	useEffect(() => {
+		if (prevProviderRef.current === provider) {
+			return;
+		}
+		prevProviderRef.current = provider;
+		sessionStorage.removeItem("session_list_expanded_paths");
+		sessionStorage.removeItem("session_list_collapsed_dirs");
+	}, [provider]);
 
 	// 状態が変更されたら sessionStorage を更新する
 	useEffect(() => {
@@ -269,6 +298,7 @@ export function useSessions() {
 					// キューと実行中タスクの両方が空になったらサイレントリフレッシュ
 					if (activeCountRef.current === 0 && queueRef.current.length === 0) {
 						fetchSessions(
+							provider,
 							searchQuery,
 							currentYearRef.current || 0,
 							currentMonthRef.current || 0,
@@ -277,7 +307,7 @@ export function useSessions() {
 					}
 				});
 		}
-	}, [searchQuery, fetchSessions, updateParsingIds]);
+	}, [provider, searchQuery, fetchSessions, updateParsingIds]);
 
 	const parseSessions = useCallback(
 		(ids: string[], priority = false) => {
@@ -313,8 +343,8 @@ export function useSessions() {
 	const retry = useCallback(() => {
 		// リトライ時はキャッシュを無視して強制的に最新化するため、lastFetchedRef をクリアしてフェッチする
 		lastFetchedRef.current = null;
-		fetchSessions(searchQuery, currentYear || 0, currentMonth || 0);
-	}, [fetchSessions, searchQuery, currentYear, currentMonth]);
+		fetchSessions(provider, searchQuery, currentYear || 0, currentMonth || 0);
+	}, [provider, fetchSessions, searchQuery, currentYear, currentMonth]);
 
 	// 新規セッションがロードされたことを検知し、未解析なら自動的にバックグラウンド解析に投入する
 	const prevSessionsRef = useRef<SessionSummary[]>([]);
@@ -348,6 +378,7 @@ export function useSessions() {
 	useEffect(() => {
 		const unsubscribe = EventsOn("session-dir-changed", () => {
 			fetchSessions(
+				provider,
 				searchQueryRef.current,
 				currentYearRef.current || 0,
 				currentMonthRef.current || 0,
@@ -357,10 +388,12 @@ export function useSessions() {
 		return () => {
 			unsubscribe();
 		};
-	}, [fetchSessions]);
+	}, [provider, fetchSessions]);
 
 	return {
 		sessions,
+		provider,
+		setProvider,
 		loading,
 		error,
 		searchQuery,

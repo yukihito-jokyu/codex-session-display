@@ -136,6 +136,46 @@ func TestApp_GetLogFilePath(t *testing.T) {
 	}
 }
 
+func TestResolveClaudeProjectsDir(t *testing.T) {
+	originalClaudeConfigDir := os.Getenv("CLAUDE_CONFIG_DIR")
+	defer func() {
+		_ = os.Setenv("CLAUDE_CONFIG_DIR", originalClaudeConfigDir)
+	}()
+
+	tests := []struct {
+		name            string
+		claudeConfigDir string
+		home            string
+		want            string
+	}{
+		{
+			name:            "uses CLAUDE_CONFIG_DIR projects when set",
+			claudeConfigDir: "/tmp/custom-claude",
+			home:            "/tmp/home",
+			want:            filepath.Join("/tmp/custom-claude", "projects"),
+		},
+		{
+			name: "falls back to home claude projects",
+			home: "/tmp/home",
+			want: filepath.Join("/tmp/home", ".claude", "projects"),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if tt.claudeConfigDir == "" {
+				_ = os.Unsetenv("CLAUDE_CONFIG_DIR")
+			} else {
+				_ = os.Setenv("CLAUDE_CONFIG_DIR", tt.claudeConfigDir)
+			}
+			got := resolveClaudeProjectsDir(tt.home)
+			if got != tt.want {
+				t.Fatalf("expected %q, got %q", tt.want, got)
+			}
+		})
+	}
+}
+
 func TestApp_ResolveSessionIDFromPath(t *testing.T) {
 	t.Parallel()
 
@@ -282,7 +322,7 @@ type stubSessionRepository struct {
 	errByPath       map[string]error
 }
 
-func (s *stubSessionRepository) ListSessions(ctx context.Context, year, month int, query string) ([]dto.SessionSummary, error) {
+func (s *stubSessionRepository) ListSessions(ctx context.Context, provider dto.SessionProvider, year, month int, query string) ([]dto.SessionSummary, error) {
 	return nil, nil
 }
 
