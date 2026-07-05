@@ -27,7 +27,7 @@ Wails（Go + React）によるデスクトップアプリケーション。ロ�
 - **リアルタイム監視**: セッションの実行中ライブ表示は行わない（既存のJSONLファイルの解析のみ）
 - **JSONLの編集・操作**: 解析対象のJSONLファイルを変更・削除しない（読み取り専用）
 - **複数セッションの同時表示**: 一度に1セッションのみ表示する
-- **Codex以外のツール対応**: Claude Code、Aider等の他のAIコーディングツールのセッション形式には対応しない
+- **詳細解析対象外のツール対応**: Claude Code は一覧表示のみ対応し、詳細画面のReact Flow解析はCodexセッションを対象とする。Aider等の他ツールには対応しない
 - **認証・認可**: ローカル単一ユーザー前提のため、ログイン機能やアクセス制御は不要
 - **多言語対応**: UI言語は日本語固定
 
@@ -39,7 +39,7 @@ Wails（Go + React）によるデスクトップアプリケーション。ロ�
 
 | 要件               | 内容                                                             |
 | ------------------ | ---------------------------------------------------------------- |
-| 自動読込           | `~/.codex/sessions` ディレクトリ配下のセッションを自動で検出する |
+| 自動読込           | Codex は `~/.codex/sessions`、Claude Code は `$CLAUDE_CONFIG_DIR/projects` または `~/.claude/projects` 配下のセッションを自動で検出する |
 | 一覧表示           | セッション一覧をUIに表示する                                     |
 | セッション選択     | ユーザーが特定のセッションを選択して詳細を表示する               |
 | 単一セッション表示 | 複数セッションの同時表示は行わない                               |
@@ -54,7 +54,7 @@ Wails（Go + React）によるデスクトップアプリケーション。ロ�
 
 #### セッション一覧の表示項目
 
-一覧には `session_meta` レコードから以下の情報を表示する。ただし `session_meta` の解析はJSONLファイルの読込が必要であるため、未解析のセッションでは解析が必要な項目に「解析前」と表示する。ファイルパスから取得可能な情報（タイムスタンプ等）は常に表示する。
+一覧には provider を持たせ、Codex / Claude Code を切り替えて表示する。Codex は `session_meta` レコードから以下の情報を表示する。ただし `session_meta` の解析はJSONLファイルの読込が必要であるため、未解析のセッションでは解析が必要な項目に「解析前」と表示する。ファイルパスから取得可能な情報（タイムスタンプ等）は常に表示する。Claude Code は transcript の `sessionId`, `cwd`, `timestamp`, `message`, `costUSD` と `projects/<encoded-cwd>` ディレクトリ名から、プロジェクト・日付・セッション単位の一覧情報を構築する。
 
 | 表示項目           | データソース             | 解析前の表示     | 備考            |
 | ------------------ | ------------------------ | ---------------- | --------------- |
@@ -715,11 +715,17 @@ GoバックエンドはWailsのバインディング生成を通じてReactフ�
 
 #### ListSessions()
 
-セッション一覧を取得する。ディレクトリ構造（年/月/日）でグループ化して返す。
+Codexセッション一覧を取得する。ディレクトリ構造（年/月/日）でグループ化して返す。
+
+#### ListSessionsByProvider(provider, query, year, month)
+
+provider に応じたセッション一覧を取得する。`provider` は `codex` または `claude`。Codex は `~/.codex/sessions`、Claude Code は `$CLAUDE_CONFIG_DIR/projects` を優先し、未設定時は `~/.claude/projects` を探索する。
 
 **戻り値:** `SessionSummary` の配列
 
 - `parsed`: 解析済みかどうか。`false` の場合、`cwd` / `cli_version` / `originator` / `model_provider` / `branch` は `null`
+- `provider`: `codex` または `claude`
+- Claude Code では `encoded_project`, `message_count`, `tool_call_count`, `total_cost_usd` を返す
 - フロントエンドは `parsed === false` の項目に「解析前」と表示する
 
 #### GetSessionDetail(id)

@@ -26,6 +26,7 @@
 | フィールド     | 型               | 説明                                       |
 | -------------- | ---------------- | ------------------------------------------ |
 | ID             | 文字列           | セッションの一意識別子（UUID）             |
+| Provider       | 文字列           | セッション提供元（`codex` / `claude`）     |
 | FilePath       | 文字列           | セッションファイルの相対パス               |
 | Cwd            | 文字列またはnull | 作業ディレクトリ                           |
 | CliVersion     | 文字列またはnull | Codex CLIのバージョン                      |
@@ -37,6 +38,10 @@
 | FileSize       | 整数             | ファイルサイズ（バイト）                   |
 | FileModifiedAt | 文字列またはnull | ファイル最終更新日時                       |
 | Parsed         | 真偽値           | キャッシュが存在する（パース済み）かどうか |
+| EncodedProject | 文字列またはnull | Claude Code の `projects/<encoded-cwd>` 名 |
+| MessageCount   | 整数またはnull   | Claude Code transcript の会話メッセージ数  |
+| ToolCallCount  | 整数またはnull   | Claude Code transcript の tool_use 件数     |
+| TotalCostUSD   | 数値またはnull   | Claude Code transcript の costUSD 合計      |
 
 #### 2.1.2 トークン内訳（TokenBreakdown）
 
@@ -722,7 +727,7 @@ NodeHeightの使い分け基準:
 
 ### 2.8 セッションスキャン処理
 
-`~/.codex/sessions` 配下をスキャンし、セッション一覧を生成する。
+provider に応じてセッション一覧を生成する。Codex は `~/.codex/sessions`、Claude Code は `$CLAUDE_CONFIG_DIR/projects` を優先し、未設定時は `~/.claude/projects` をスキャンする。
 
 #### 2.8.1 ファイル名フォーマット
 
@@ -772,11 +777,23 @@ UUIDは常に末尾36文字（固定長）のため、文字列操作で抽出�
   8. 日付降順でソートして返す
 ```
 
+#### 2.8.4 Claude Code transcript の走査
+
+Claude Code は `projects/<encoded-cwd>/*.jsonl` を走査し、transcript 内の軽量メタデータから `SessionSummary` を構築する。
+
+1. `CLAUDE_CONFIG_DIR` が設定されていれば `$CLAUDE_CONFIG_DIR/projects` を探索する
+2. 未設定時は `~/.claude/projects` を探索する
+3. 各JSONLの `sessionId` をID、`cwd` を作業ディレクトリ、最初の `timestamp` を開始時刻として採用する
+4. `message.role` が `user` または `assistant` の行を `MessageCount` に集計する
+5. `message.content` 内の `tool_use` ブロックを `ToolCallCount` に集計する
+6. 行ごとの `costUSD` を合算して `TotalCostUSD` に設定する
+7. `Parsed` は `false` とし、詳細画面のReact Flow解析対象には含めない
+
 ### 2.9 キャッシュ管理
 
 #### 2.9.1 キャッシュの場所
 
-`~/.codex-display/{sessionID}.json`。ファイルの中身はセッション詳細API（`GET /api/sessions/:id`）のレスポンスと同一形式。
+`~/.codex-display/{cacheKey}.json`。Codex の既存キャッシュは互換性維持のため `{sessionID}.json` を使い、Claude Code など provider を区別する必要がある場合は `claude-{sessionID}.json` のように provider を含むキーを使う。ファイルの中身はセッション詳細API（`GET /api/sessions/:id`）のレスポンスと同一形式。
 
 #### 2.9.2 再パース要否の判定
 
@@ -799,11 +816,14 @@ UUIDは常に末尾36文字（固定長）のため、文字列操作で抽出�
 
 Wailsアプリケーションのエントリポイントとなる構造体。バックエンドの各機能をフロントエンドに公開する。
 
-#### 2.10.2 セッション一覧メソッド（ListSessions）
+#### 2.10.2 セッション一覧メソッド（ListSessions / ListSessionsByProvider）
 
-1. セッションスキャンを実行
-2. `[]SessionSummary` を返す
-3. エラー時は `AppError` を返す
+`ListSessions(query, year, month)` は後方互換のCodex一覧メソッドとして扱う。新しい一覧画面は `ListSessionsByProvider(provider, query, year, month)` を呼び、`provider` に `codex` または `claude` を指定する。
+
+1. provider に応じたセッションスキャンを実行
+2. `query`, `year`, `month` で絞り込む
+3. `[]SessionSummary` を返す
+4. エラー時は `AppError` を返す
 
 #### 2.10.3 セッション詳細メソッド（GetSessionDetail）
 
@@ -1571,11 +1591,17 @@ type AppError struct {
 
 ### 4.2 ListSessions()
 
-**概要:** セッション一覧を取得する
+**概要:** Codexセッション一覧を取得する後方互換メソッド
 
-**Goシグネチャ:** `func (a *App) ListSessions() ([]SessionSummary, error)`
+**Goシグネチャ:** `func (a *App) ListSessions(query string, year int, month int) ([]SessionSummary, error)`
 
-**引数:** なし
+**引数:**
+
+| name  | 型   | 説明                         |
+| ----- | ---- | ---------------------------- |
+| query | 文字列 | 検索文字列                   |
+| year  | 整数 | 対象年。0の場合は絞り込みなし |
+| month | 整数 | 対象月。0の場合は絞り込みなし |
 
 **戻り値:** `[]SessionSummary`（§2.1.1参照）
 
@@ -1585,7 +1611,26 @@ type AppError struct {
 | -------------- | ------------------------ |
 | INTERNAL_ERROR | ディレクトリ読み込み失敗 |
 
-### 4.3 GetSessionDetail(id)
+### 4.3 ListSessionsByProvider(provider, query, year, month)
+
+**概要:** provider に応じたセッション一覧を取得する
+
+**Goシグネチャ:** `func (a *App) ListSessionsByProvider(provider string, query string, year int, month int) ([]SessionSummary, error)`
+
+**引数:**
+
+| name     | 型     | 説明                                      |
+| -------- | ------ | ----------------------------------------- |
+| provider | 文字列 | `codex` または `claude`。空文字は `codex` |
+| query    | 文字列 | 検索文字列                                |
+| year     | 整数   | 対象年。0の場合は絞り込みなし             |
+| month    | 整数   | 対象月。0の場合は絞り込みなし             |
+
+**戻り値:** `[]SessionSummary`（§2.1.1参照）
+
+Claude Code の場合、`encoded_project`, `message_count`, `tool_call_count`, `total_cost_usd` を設定し、`parsed` は `false` とする。
+
+### 4.4 GetSessionDetail(id)
 
 **概要:** セッション詳細（React Flow形式）を取得する
 
@@ -1860,7 +1905,9 @@ IPCエラーは `AppError` 構造体（§4.1参照）で返す。
 
 ### 7.1 キャッシュファイル形式
 
-キャッシュ先: `~/.codex-display/{sessionID}.json`
+キャッシュ先: `~/.codex-display/{cacheKey}.json`
+
+Codex の既存キャッシュは互換性維持のため `{sessionID}.json` を使う。Claude Code など provider を分離する必要があるキャッシュは `{provider}-{sessionID}.json` を使い、異なる provider の同一IDが衝突しないようにする。
 
 ファイルの中身は `GetSessionDetail` の戻り値と同一形式。
 
