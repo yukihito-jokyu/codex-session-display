@@ -787,7 +787,18 @@ Claude Code は `projects/<encoded-cwd>/*.jsonl` を走査し、transcript 内�
 4. `message.role` が `user` または `assistant` の行を `MessageCount` に集計する
 5. `message.content` 内の `tool_use` ブロックを `ToolCallCount` に集計する
 6. 行ごとの `costUSD` を合算して `TotalCostUSD` に設定する
-7. `Parsed` は `false` とし、詳細画面のReact Flow解析対象には含めない
+7. `Parsed` は `false` とし、詳細取得時に transcript 全体を正規化して `SessionDetailResponse` を構築する
+
+#### 2.8.5 Claude Code transcript の詳細正規化
+
+Claude Code の詳細取得では、Codex 固有の `session_meta` / `turn_context` 構造に依存せず、transcript の top-level record を出現順に正規化する。
+
+1. `user` の text content をターン境界として扱う
+2. `assistant.message.content` の `thinking` は reasoning、`text` は assistant message、`tool_use` は action node と timeline item に変換する
+3. `tool_result.tool_use_id` は対応する `tool_use.id` と照合し、対応 edge と timeline detail を作る
+4. usage は `message.id` 単位で重複排除して `TokenCountEntry` と `Statistics.total_tokens` に反映する
+5. `cache_read_input_tokens` と `total_cost_usd` は `TranscriptStats` に保持する
+6. provider は `claude`、キャッシュキーは provider 付きで保存する
 
 ### 2.9 キャッシュ管理
 
@@ -825,15 +836,17 @@ Wailsアプリケーションのエントリポイントとなる構造体。バ
 3. `[]SessionSummary` を返す
 4. エラー時は `AppError` を返す
 
-#### 2.10.3 セッション詳細メソッド（GetSessionDetail）
+#### 2.10.3 セッション詳細メソッド（GetSessionDetail / GetSessionDetailByProvider）
 
-1. セッションIDを受け取る
-2. キャッシュの再パース要否をチェック
+`GetSessionDetail(id)` は後方互換の Codex 詳細メソッドとして扱う。新しい詳細画面は `GetSessionDetailByProvider(provider, id)` を呼び、`provider` に `codex` または `claude` を指定する。
+
+1. provider とセッションIDを受け取る
+2. provider 別キャッシュの再パース要否をチェック
 3. キャッシュが有効 → キャッシュから読み込んで返す
 4. キャッシュなし/期限切れ:
    a. スキャナからファイルパスを特定
    b. パーサーでJSONLをパース
-   c. FlowGraphを生成
+   c. Codex は FlowGraph を生成し、Claude Code は transcript を `SessionDetailResponse` へ正規化する
    d. 統計情報を生成
    e. token_countエントリを構築
    f. レイアウト計算を実行
@@ -948,6 +961,7 @@ Wailsの起動・ビルドプロセス（`wails dev` または `wails build`）�
 | ---------------- | --------------------------------------------- | --------------------- |
 | ListSessions     | `() ([]SessionSummary, error)`                | SessionSummaryの配列  |
 | GetSessionDetail | `(id string) (*SessionDetailResponse, error)` | SessionDetailResponse |
+| GetSessionDetailByProvider | `(provider string, id string) (*SessionDetailResponse, error)` | SessionDetailResponse |
 | ExportStatsImage | `(id string) error`                           | (保留) なし           |
 
 #### 3.3.1 バインディング生成
@@ -983,7 +997,8 @@ Wailsの起動・ビルドプロセス（`wails dev` または `wails build`）�
 | TokenCountEntry       | index, turn_index, bound_to_node_id, model_context_window, last_token_usage（TokenDetail）, total_token_usage（TokenDetail）                       |
 | ConversationTimelineItem | selection_id, node_id, node_ids, token_count_indices, kind, label, role, body, timestamp, record_count, collapsible, details, last_token_usage, token_count_count, total_token_usage |
 | ConversationTimelineTurn | index, turn_id, pseudo, duration_ms, consumed_tokens, items |
-| SessionDetailResponse | id, cache_schema_version, parsed_at, nodes, edges, statistics, token_counts, timeline（ConversationTimelineTurnの配列） |
+| TranscriptStats     | message_count, tool_call_count, tool_result_count, cache_read_input_tokens, total_cost_usd |
+| SessionDetailResponse | id, provider, cache_schema_version, parsed_at, nodes, edges, statistics, token_counts, timeline（ConversationTimelineTurnの配列）, transcript_stats |
 
 #### 3.4.2 React Flow関連の型
 
@@ -1630,16 +1645,20 @@ type AppError struct {
 
 Claude Code の場合、`encoded_project`, `message_count`, `tool_call_count`, `total_cost_usd` を設定し、`parsed` は `false` とする。
 
-### 4.4 GetSessionDetail(id)
+### 4.4 GetSessionDetail(id) / GetSessionDetailByProvider(provider, id)
 
 **概要:** セッション詳細（React Flow形式）を取得する
 
-**Goシグネチャ:** `func (a *App) GetSessionDetail(id string) (*SessionDetailResponse, error)`
+**Goシグネチャ:**
+
+- `func (a *App) GetSessionDetail(id string) (*SessionDetailResponse, error)`
+- `func (a *App) GetSessionDetailByProvider(provider string, id string) (*SessionDetailResponse, error)`
 
 **引数:**
 
 | パラメータ | 型     | 説明                 |
 | ---------- | ------ | -------------------- |
+| provider   | 文字列 | `codex` または `claude`。`GetSessionDetail` では省略され `codex` 固定 |
 | id         | 文字列 | セッションID（UUID） |
 
 **戻り値:** `SessionDetailResponse`（§3.4.1参照）
