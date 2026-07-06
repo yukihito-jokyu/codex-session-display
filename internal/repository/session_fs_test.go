@@ -1006,3 +1006,78 @@ func TestSessionFSRepository_ListSessions_ClaudeCacheHitWithMismatchID(t *testin
 		t.Errorf("expected session to be parsed (cache hit), but got parsed = false")
 	}
 }
+
+func TestSessionFSRepository_ListSessions_ClaudeSubagent_RealDataStructure(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	projectsDir := filepath.Join(tmpDir, "claude-projects")
+	projectDir := filepath.Join(projectsDir, "my-project")
+	parentSessionID := "parent-session-1"
+	subagentSessionID := "subagent-session-1"
+
+	// Create directories
+	parentDir := filepath.Join(projectDir, parentSessionID)
+	subagentsDir := filepath.Join(parentDir, "subagents")
+	if err := os.MkdirAll(subagentsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// Write parent transcript
+	parentTranscript := strings.Join([]string{
+		`{"type":"user","sessionId":"parent-session-1","cwd":"/Users/test/project","timestamp":"2026-06-02T10:00:00.000Z","message":{"content":"hello"}}`,
+	}, "\n")
+	if err := os.WriteFile(filepath.Join(projectDir, parentSessionID+".jsonl"), []byte(parentTranscript), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Write subagent transcript with real Claude Code structure (sessionId is parent's, agentId is subagent's)
+	subagentTranscript := strings.Join([]string{
+		`{"type":"user","sessionId":"parent-session-1","agentId":"subagent-session-1","cwd":"/Users/test/project","timestamp":"2026-06-02T10:01:00.000Z","message":{"content":"sub task"}}`,
+	}, "\n")
+	if err := os.WriteFile(filepath.Join(subagentsDir, "agent-"+subagentSessionID+".jsonl"), []byte(subagentTranscript), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	repo := NewSessionFSRepository(filepath.Join(tmpDir, "codex"), &mockCacheRepository{})
+	repo.claudeProjectsDir = projectsDir
+
+	sessions, err := repo.ListSessions(context.Background(), dto.SessionProviderClaude, 2026, 6, "")
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	// We expect both parent and subagent sessions to be present in the returned sessions list
+	if len(sessions) != 2 {
+		t.Fatalf("expected 2 sessions, got %d", len(sessions))
+	}
+
+	var parent, subagent *dto.SessionSummary
+	for i := range sessions {
+		switch sessions[i].ID {
+		case parentSessionID:
+			parent = &sessions[i]
+		case subagentSessionID:
+			subagent = &sessions[i]
+		}
+	}
+
+	if parent == nil {
+		t.Fatal("parent session not found")
+	}
+	if subagent == nil {
+		t.Fatal("subagent session not found")
+	}
+
+	// Verify Parent-Child relations are resolved
+	if parent.ParentSessionID != nil {
+		t.Errorf("parent should not have a parent ID, got %v", *parent.ParentSessionID)
+	}
+	if len(parent.ChildSessionIDs) != 1 || parent.ChildSessionIDs[0] != subagentSessionID {
+		t.Errorf("expected parent to have child session ID %q, got %v", subagentSessionID, parent.ChildSessionIDs)
+	}
+
+	if subagent.ParentSessionID == nil || *subagent.ParentSessionID != parentSessionID {
+		t.Errorf("expected subagent to point to parent session ID %q, got %v", parentSessionID, subagent.ParentSessionID)
+	}
+}

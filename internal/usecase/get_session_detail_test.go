@@ -3646,6 +3646,108 @@ func TestGetSessionDetailUseCase_ClaudeSubagents(t *testing.T) {
 	}
 }
 
+func TestGetSessionDetailUseCase_ClaudeSubagents_RealDataStructure(t *testing.T) {
+	t.Parallel()
+
+	tmpDir := t.TempDir()
+	parentPath := filepath.Join(tmpDir, "claude-parent.jsonl")
+
+	parentTranscript := strings.Join([]string{
+		`{"type":"user","sessionId":"claude-parent","cwd":"/repo","timestamp":"2026-06-01T00:00:00.000Z","message":{"role":"user","content":"サブを起動して"}}`,
+		`{"type":"assistant","sessionId":"claude-parent","timestamp":"2026-06-01T00:00:01.000Z","message":{"id":"msg-1","role":"assistant","usage":{"input_tokens":10,"output_tokens":5},"content":[{"type":"tool_use","id":"tool-agent-1","name":"Agent","input":{"description":"Review","subagent_type":"test-helper"}}]}}`,
+		`{"type":"user","sessionId":"claude-parent","timestamp":"2026-06-01T00:00:05.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tool-agent-1","content":"done"}]},"toolUseResult":{"agentId":"claude-child-123","agentType":"test-helper"}}`,
+	}, "\n")
+
+	if err := os.WriteFile(parentPath, []byte(parentTranscript), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	sessionRepo := &mockSessionRepositoryForDetail{
+		paths: map[string]string{
+			"claude-parent":    parentPath,
+			"claude-child-123": "/path/to/claude-child-123.jsonl",
+		},
+		sessions: []dto.SessionSummary{
+			{
+				ID:       "claude-parent",
+				Provider: dto.SessionProviderClaude,
+			},
+			{
+				ID:              "claude-child-123",
+				ParentSessionID: getStringPtrRef("claude-parent"),
+				TotalTokens:     getInt64PtrRef(150),
+				InputTokens:     getInt64PtrRef(100),
+				OutputTokens:    getInt64PtrRef(50),
+				TurnCount:       getIntPtrRef(3),
+				StepCount:       getIntPtrRef(5),
+				DurationMs:      getInt64PtrRef(12000),
+			},
+		},
+	}
+	cacheRepo := &mockCacheRepositoryForDetail{}
+	parser := repository.NewJSONLParser()
+
+	uc := usecase.NewGetSessionDetailUseCase(sessionRepo, cacheRepo, parser)
+	res, err := uc.ExecuteByProvider(context.Background(), dto.SessionProviderClaude, "claude-parent")
+	if err != nil {
+		t.Fatalf("ExecuteByProvider() error = %v", err)
+	}
+
+	// Verify Parent-Child relations and Subagents are populated
+	if len(res.ChildSessionIDs) != 1 || res.ChildSessionIDs[0] != "claude-child-123" {
+		t.Errorf("ChildSessionIDs = %v, want [claude-child-123]", res.ChildSessionIDs)
+	}
+
+	if len(res.Subagents) != 1 {
+		t.Fatalf("len(Subagents) = %d, want 1", len(res.Subagents))
+	}
+	sub := res.Subagents[0]
+	if sub.ID != "claude-child-123" || sub.Nickname != "test-helper" || sub.TotalTokens != 150 || sub.InputTokens != 100 || sub.OutputTokens != 50 || *sub.TurnCount != 3 || *sub.StepCount != 5 || *sub.DurationMs != 12000 {
+		t.Errorf("Subagent detail mismatch: %+v", sub)
+	}
+
+	// Verify collabAgent node is created
+	var foundCollabNode bool
+	for _, node := range res.Nodes {
+		if node.Type == "collabAgent" {
+			foundCollabNode = true
+			if node.Data.Meta["new_thread_id"] != "claude-child-123" {
+				t.Errorf("incorrect new_thread_id in node meta: %v", node.Data.Meta)
+			}
+			if node.Data.Meta["provider"] != "claude" {
+				t.Errorf("incorrect provider in node meta: %v", node.Data.Meta)
+			}
+		}
+	}
+	if !foundCollabNode {
+		t.Error("collabAgent node not found in response nodes")
+	}
+
+	// Verify timeline item is kind "collab"
+	var foundCollabTimelineItem bool
+	for _, turn := range res.Timeline {
+		for _, item := range turn.Items {
+			if item.Kind == "collab" {
+				foundCollabTimelineItem = true
+				if item.Label != "サブエージェント起動" {
+					t.Errorf("incorrect timeline item label: %q", item.Label)
+				}
+				threadIDDetail := findTimelineDetail(item.Details, "Thread ID")
+				if threadIDDetail == nil || threadIDDetail.Value != "claude-child-123" {
+					t.Errorf("incorrect Thread ID detail in timeline item: %v", item.Details)
+				}
+				providerDetail := findTimelineDetail(item.Details, "Provider")
+				if providerDetail == nil || providerDetail.Value != "claude" {
+					t.Errorf("incorrect Provider detail in timeline item: %v", item.Details)
+				}
+			}
+		}
+	}
+	if !foundCollabTimelineItem {
+		t.Error("collab timeline item not found in response timeline")
+	}
+}
+
 func findTimelineDetail(details []dto.TimelineItemDetail, label string) *dto.TimelineItemDetail {
 	for i := range details {
 		if details[i].Label == label {

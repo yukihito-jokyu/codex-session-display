@@ -444,7 +444,9 @@ func (r *SessionFSRepository) readClaudeSessionSummary(ctx context.Context, path
 			if err := json.Unmarshal([]byte(line), &record); err != nil {
 				continue
 			}
-			if record.SessionID != "" {
+			if record.AgentID != "" {
+				sessionID = record.AgentID
+			} else if record.SessionID != "" {
 				sessionID = record.SessionID
 			}
 			if cwd == nil && record.Cwd != "" {
@@ -508,6 +510,7 @@ func (r *SessionFSRepository) readClaudeSessionSummary(ctx context.Context, path
 type claudeTranscriptRecord struct {
 	Type      string  `json:"type"`
 	SessionID string  `json:"sessionId"`
+	AgentID   string  `json:"agentId"`
 	Cwd       string  `json:"cwd"`
 	Timestamp string  `json:"timestamp"`
 	CostUSD   float64 `json:"costUSD"`
@@ -642,6 +645,9 @@ func readClaudeSessionIDFromFile(filePath string) (string, error) {
 		var record claudeTranscriptRecord
 		if err := json.Unmarshal([]byte(line), &record); err != nil {
 			continue
+		}
+		if record.AgentID != "" {
+			return record.AgentID, nil
 		}
 		if record.SessionID != "" {
 			return record.SessionID, nil
