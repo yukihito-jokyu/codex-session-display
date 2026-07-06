@@ -724,17 +724,22 @@ func resolveFunctionCallOutputs(filePath, turnID string, callBatch, outputBatch 
 }
 
 type claudeDetailRecord struct {
-	Type       string          `json:"type"`
-	UUID       string          `json:"uuid"`
-	ParentUUID string          `json:"parentUuid"`
-	SessionID  string          `json:"sessionId"`
-	Cwd        string          `json:"cwd"`
-	Timestamp  string          `json:"timestamp"`
-	CostUSD    float64         `json:"costUSD"`
-	TotalCost  *float64        `json:"total_cost_usd"`
-	Message    claudeMessage   `json:"message"`
-	GitBranch  string          `json:"gitBranch"`
-	Version    string          `json:"version"`
+	Type          string        `json:"type"`
+	UUID          string        `json:"uuid"`
+	ParentUUID    string        `json:"parentUuid"`
+	SessionID     string        `json:"sessionId"`
+	AgentID       string        `json:"agentId"`
+	Cwd           string        `json:"cwd"`
+	Timestamp     string        `json:"timestamp"`
+	CostUSD       float64       `json:"costUSD"`
+	TotalCost     *float64      `json:"total_cost_usd"`
+	Message       claudeMessage `json:"message"`
+	GitBranch     string        `json:"gitBranch"`
+	Version       string        `json:"version"`
+	ToolUseResult *struct {
+		AgentID   string `json:"agentId"`
+		AgentType string `json:"agentType"`
+	} `json:"toolUseResult"`
 	RawMessage json.RawMessage `json:"-"`
 }
 
@@ -969,7 +974,9 @@ func (uc *GetSessionDetailUseCase) buildClaudeSessionDetail(ctx context.Context,
 		if err := json.Unmarshal([]byte(record.Raw), &claudeRecord); err != nil {
 			continue
 		}
-		if claudeRecord.SessionID != "" {
+		if claudeRecord.AgentID != "" {
+			sessionID = claudeRecord.AgentID
+		} else if claudeRecord.SessionID != "" {
 			sessionID = claudeRecord.SessionID
 		}
 		if claudeRecord.Timestamp != "" {
@@ -1038,6 +1045,52 @@ func (uc *GetSessionDetailUseCase) buildClaudeSessionDetail(ctx context.Context,
 						Target: nodeID,
 						Type:   "default",
 					})
+				}
+				if (strings.EqualFold(name, "agent") || strings.EqualFold(name, "Agent")) && claudeRecord.ToolUseResult != nil && claudeRecord.ToolUseResult.AgentID != "" {
+					aid := claudeRecord.ToolUseResult.AgentID
+					atype := claudeRecord.ToolUseResult.AgentType
+					// Update the tool use node in nodes slice
+					sourceID := toolUseNodeByID[item.ToolUseID]
+					for idx := range nodes {
+						if nodes[idx].ID != sourceID {
+							continue
+						}
+						nodes[idx].Type = "collabAgent"
+						nodes[idx].Data.Label = "サブエージェント起動"
+						if nodes[idx].Data.Meta == nil {
+							nodes[idx].Data.Meta = make(map[string]interface{})
+						}
+						nodes[idx].Data.Meta["new_thread_id"] = aid
+						nodes[idx].Data.Meta["provider"] = "claude"
+						nodes[idx].Data.Meta["agent_type"] = atype
+						break
+					}
+
+					// Also update the timeline item
+					for idx := range currentItems {
+						if currentItems[idx].NodeID != sourceID {
+							continue
+						}
+						currentItems[idx].Kind = "collab"
+						currentItems[idx].Label = "サブエージェント起動"
+						currentItems[idx].Body = fmt.Sprintf("Role: %s, Thread ID: %s", atype, aid)
+						currentItems[idx].Details = []dto.TimelineItemDetail{
+							{Label: "Thread ID", Value: aid},
+							{Label: "Provider", Value: "claude"},
+						}
+						if atype != "" {
+							currentItems[idx].Details = append(currentItems[idx].Details, dto.TimelineItemDetail{Label: "Role", Value: atype})
+						}
+						break
+					}
+					// Also update seenChildSessionIDs
+					if !seenChildSessionIDs[aid] {
+						seenChildSessionIDs[aid] = true
+						childSessionIDs = append(childSessionIDs, aid)
+					}
+					if atype != "" {
+						childSpawnedTypes[aid] = atype
+					}
 				}
 			}
 		case "assistant":
