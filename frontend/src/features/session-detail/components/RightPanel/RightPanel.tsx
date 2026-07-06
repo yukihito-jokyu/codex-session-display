@@ -448,7 +448,10 @@ export function RightPanel({
 				input,
 				output: usage ? Number(usage.output_tokens) : 0,
 				reasoning: usage ? Number(usage.reasoning_output_tokens) : 0,
-				cached: usage ? Number(usage.cached_input_tokens) : 0,
+				cached: usage
+					? Number(usage.cached_input_tokens) +
+						Number(usage.cache_creation_input_tokens || 0)
+					: 0,
 				contextUsage: calculateContextUsage(
 					input,
 					Number(entry.model_context_window),
@@ -989,7 +992,8 @@ export function RightPanel({
 									<th>Input</th>
 									<th>Output</th>
 									<th>Reasoning</th>
-									<th>Cached</th>
+									<th>Cached Read</th>
+									<th>Cached Write</th>
 								</tr>
 							</thead>
 							<tbody>
@@ -1013,7 +1017,7 @@ export function RightPanel({
 										<React.Fragment key={entry.index}>
 											{showSeparator && (
 												<tr className={styles.separatorRow}>
-													<td colSpan={6} className={styles.separatorCell}>
+													<td colSpan={7} className={styles.separatorCell}>
 														Turn #{entry.turn_index + 1}
 													</td>
 												</tr>
@@ -1068,6 +1072,13 @@ export function RightPanel({
 												<td>
 													{usage
 														? formatNumber(Number(usage.cached_input_tokens))
+														: "-"}
+												</td>
+												<td>
+													{usage
+														? formatNumber(
+																Number(usage.cache_creation_input_tokens),
+															)
 														: "-"}
 												</td>
 											</tr>
