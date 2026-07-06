@@ -405,6 +405,10 @@ func (r *SessionFSRepository) readClaudeSessionSummary(ctx context.Context, path
 	}
 	encodedProject := filepath.Base(filepath.Dir(path))
 	sessionID := strings.TrimSuffix(filepath.Base(path), ".jsonl")
+	// ファイル名からではなく、ファイルに記録されている本来のセッションIDを読み出す
+	if embeddedID, err := readClaudeSessionIDFromFile(path); err == nil && embeddedID != "" {
+		sessionID = embeddedID
+	}
 	modTimeStr := info.ModTime().UTC().Format(time.RFC3339)
 
 	var sSummary dto.SessionSummary

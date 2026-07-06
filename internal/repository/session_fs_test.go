@@ -954,3 +954,55 @@ func TestSessionFSRepository_ListSessions_ClaudeSubagent(t *testing.T) {
 		t.Errorf("expected subagent to point to parent session ID %q, got %v", parentSessionID, subagent.ParentSessionID)
 	}
 }
+
+func TestSessionFSRepository_ListSessions_ClaudeCacheHitWithMismatchID(t *testing.T) {
+	tmpDir := t.TempDir()
+	projectsDir := filepath.Join(tmpDir, "projects")
+	projectDir := filepath.Join(projectsDir, "-Users-test-project")
+	if err := os.MkdirAll(projectDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	// ファイル名と内部の sessionId が異なるファイルを作成
+	filename := "mismatch-filename.jsonl"
+	internalSessionID := "claude-internal-session-1"
+	transcript := `{"type":"user","sessionId":"` + internalSessionID + `","cwd":"/Users/test/project","timestamp":"2026-06-02T10:00:00.000Z","message":{"content":"hello"}}`
+	if err := os.WriteFile(filepath.Join(projectDir, filename), []byte(transcript), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// 内部IDである "claude-internal-session-1" をキーとするキャッシュを準備
+	cachedSummary := &dto.SessionSummary{
+		ID:        internalSessionID,
+		Provider:  dto.SessionProviderClaude,
+		Parsed:    true,
+		Cwd:       func(s string) *string { return &s }("/Users/test/project"),
+		Timestamp: func(s string) *string { return &s }("2026-06-02T10:00:00.000Z"),
+	}
+
+	mockCache := &mockCacheRepository{
+		cache: map[string]*dto.SessionSummary{
+			internalSessionID: cachedSummary,
+		},
+	}
+
+	repo := NewSessionFSRepository(filepath.Join(tmpDir, "codex"), mockCache)
+	repo.claudeProjectsDir = projectsDir
+
+	sessions, err := repo.ListSessions(context.Background(), dto.SessionProviderClaude, 2026, 6, "")
+	if err != nil {
+		t.Fatalf("expected no error, got %v", err)
+	}
+
+	if len(sessions) != 1 {
+		t.Fatalf("expected 1 session, got %d", len(sessions))
+	}
+
+	got := sessions[0]
+	if got.ID != internalSessionID {
+		t.Errorf("expected session ID %q, got %q", internalSessionID, got.ID)
+	}
+	if !got.Parsed {
+		t.Errorf("expected session to be parsed (cache hit), but got parsed = false")
+	}
+}
