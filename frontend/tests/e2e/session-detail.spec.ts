@@ -760,8 +760,8 @@ test.describe("セッション詳細画面 E2E テスト", () => {
 
 		// トークンカウントログテーブルが表示されていることを確認
 		await expect(page.locator("text=Token Count Log")).toBeVisible();
-		// テーブルヘッダー
-		await expect(page.locator("th:has-text('Cached')")).toBeVisible();
+		await expect(page.locator("th:has-text('Cached Read')")).toBeVisible();
+		await expect(page.locator("th:has-text('Cached Write')")).toBeVisible();
 	});
 
 	test("TOKEN COUNT LOG の行をクリックした際に、対応するノードが選択されて詳細パネルが表示されること", async ({

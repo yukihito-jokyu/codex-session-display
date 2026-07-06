@@ -687,6 +687,7 @@ export namespace model {
 	    output_tokens: number;
 	    reasoning_output_tokens: number;
 	    cached_input_tokens: number;
+	    cache_creation_input_tokens: number;
 	
 	    static createFrom(source: any = {}) {
 	        return new TokenDetail(source);
@@ -699,6 +700,7 @@ export namespace model {
 	        this.output_tokens = source["output_tokens"];
 	        this.reasoning_output_tokens = source["reasoning_output_tokens"];
 	        this.cached_input_tokens = source["cached_input_tokens"];
+	        this.cache_creation_input_tokens = source["cache_creation_input_tokens"];
 	    }
 	}
 

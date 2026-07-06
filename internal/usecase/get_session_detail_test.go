@@ -296,9 +296,9 @@ func TestGetSessionDetailUseCase_Execute(t *testing.T) {
 				filePath := filepath.Join(tmpDir, "claude-session-1.jsonl")
 				logs := []string{
 					`{"type":"user","uuid":"user-1","parentUuid":null,"sessionId":"claude-session-1","cwd":"/repo","timestamp":"2026-06-01T00:00:00.000Z","message":{"role":"user","content":"調査して"}}`,
-					`{"type":"assistant","uuid":"assistant-1","parentUuid":"user-1","sessionId":"claude-session-1","timestamp":"2026-06-01T00:00:01.000Z","message":{"id":"msg-1","role":"assistant","usage":{"input_tokens":10,"cache_read_input_tokens":3,"output_tokens":7},"content":[{"type":"thinking","thinking":"方針を考える"},{"type":"text","text":"確認します"},{"type":"tool_use","id":"tool-1","name":"Read","input":{"file_path":"README.md"}}]}}`,
+					`{"type":"assistant","uuid":"assistant-1","parentUuid":"user-1","sessionId":"claude-session-1","timestamp":"2026-06-01T00:00:01.000Z","message":{"id":"msg-1","role":"assistant","usage":{"input_tokens":0,"cache_read_input_tokens":0,"cache_creation_input_tokens":0,"output_tokens":0},"content":[{"type":"thinking","thinking":"方針を考える"},{"type":"text","text":"確認します"},{"type":"tool_use","id":"tool-1","name":"Read","input":{"file_path":"README.md"}}]}}`,
 					`{"type":"user","uuid":"tool-result-1","parentUuid":"assistant-1","sessionId":"claude-session-1","timestamp":"2026-06-01T00:00:02.000Z","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tool-1","content":"README content"}]}}`,
-					`{"type":"assistant","uuid":"assistant-1-dup","parentUuid":"tool-result-1","sessionId":"claude-session-1","timestamp":"2026-06-01T00:00:03.000Z","message":{"id":"msg-1","role":"assistant","usage":{"input_tokens":10,"cache_read_input_tokens":3,"output_tokens":7},"content":[{"type":"text","text":"完了しました"}]}}`,
+					`{"type":"assistant","uuid":"assistant-1-dup","parentUuid":"tool-result-1","sessionId":"claude-session-1","timestamp":"2026-06-01T00:00:03.000Z","message":{"id":"msg-1","role":"assistant","usage":{"input_tokens":10,"cache_read_input_tokens":3,"cache_creation_input_tokens":5,"output_tokens":7},"content":[{"type":"text","text":"完了しました"}]}}`,
 					`{"type":"result","uuid":"result-1","parentUuid":"assistant-1-dup","sessionId":"claude-session-1","timestamp":"2026-06-01T00:00:04.000Z","total_cost_usd":0.125}`,
 				}
 				if err := os.WriteFile(filePath, []byte(strings.Join(logs, "\n")), 0o644); err != nil {
@@ -321,8 +321,23 @@ func TestGetSessionDetailUseCase_Execute(t *testing.T) {
 				if res.TranscriptStats == nil {
 					t.Fatal("expected transcript stats")
 				}
-				if res.Statistics.TotalTokens != 17 {
-					t.Errorf("TotalTokens = %d, want 17", res.Statistics.TotalTokens)
+				if res.Statistics.TotalTokens != 25 {
+					t.Errorf("TotalTokens = %d, want 25", res.Statistics.TotalTokens)
+				}
+				if len(res.Statistics.Turns) != 1 {
+					t.Fatalf("Turns length = %d, want 1", len(res.Statistics.Turns))
+				}
+				if res.Statistics.Turns[0].ConsumedTokens.TotalTokens != 25 {
+					t.Errorf("Turn ConsumedTotalTokens = %d, want 25", res.Statistics.Turns[0].ConsumedTokens.TotalTokens)
+				}
+				if res.Statistics.Turns[0].ConsumedTokens.InputTokens != 18 {
+					t.Errorf("Turn ConsumedInputTokens = %d, want 18", res.Statistics.Turns[0].ConsumedTokens.InputTokens)
+				}
+				if len(res.TokenCounts) == 0 {
+					t.Fatal("expected token counts")
+				}
+				if res.TokenCounts[0].LastTokenUsage.CacheCreationInputTokens != 5 {
+					t.Errorf("TokenCounts[0].LastTokenUsage.CacheCreationInputTokens = %d, want 5", res.TokenCounts[0].LastTokenUsage.CacheCreationInputTokens)
 				}
 				if res.Statistics.ToolCallCount != 1 {
 					t.Errorf("ToolCallCount = %d, want 1", res.Statistics.ToolCallCount)

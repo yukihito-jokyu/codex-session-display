@@ -831,10 +831,26 @@ func (uc *GetSessionDetailUseCase) buildClaudeSessionDetail(ctx context.Context,
 	toolCallCount := 0
 	toolResultCount := 0
 	var totalCostUSD *float64
-	var totalInputTokens, totalOutputTokens, totalCacheReadTokens int64
-	seenUsageMessageIDs := make(map[string]bool)
+	var totalInputTokens, totalOutputTokens, totalCacheReadTokens, totalCacheCreationTokens int64
+	messageMaxUsage := make(map[string]claudeUsage)
+	messageTokenCountIndex := make(map[string]int)
 	toolUseNodeByID := make(map[string]string)
 	toolUseNameByID := make(map[string]string)
+
+	type turnUsage struct {
+		inputTokens         int64
+		outputTokens        int64
+		cacheReadTokens     int64
+		cacheCreationTokens int64
+		toolCallCount       int
+		tokenCountCount     int
+	}
+	var turnUsages []turnUsage
+	ensureTurnUsageSize := func(idx int) {
+		for len(turnUsages) <= idx {
+			turnUsages = append(turnUsages, turnUsage{})
+		}
+	}
 
 	parentSessionID := getClaudeParentSessionID(filePath)
 	var childSessionIDs []string
@@ -889,13 +905,24 @@ func (uc *GetSessionDetailUseCase) buildClaudeSessionDetail(ctx context.Context,
 	}
 	startTurn := func(record *model.TypedRecord, body string) {
 		if turnIndex >= 0 {
+			var consumed dto.TokenBreakdown
+			if turnIndex < len(turnUsages) {
+				u := turnUsages[turnIndex]
+				consumed = dto.TokenBreakdown{
+					TotalTokens:  u.inputTokens + u.outputTokens,
+					InputTokens:  u.inputTokens,
+					OutputTokens: u.outputTokens,
+				}
+			}
 			timeline = append(timeline, dto.ConversationTimelineTurn{
-				Index: turnIndex,
-				Items: currentItems,
+				Index:          turnIndex,
+				Items:          currentItems,
+				ConsumedTokens: consumed,
 			})
 			currentItems = nil
 		}
 		turnIndex++
+		ensureTurnUsageSize(turnIndex)
 		nodeID := fmt.Sprintf("node-%d", record.LineNumber)
 		addNode(nodeID, "userMessage", "turn", "User Message", "👤", body, body, harnessX, turnIndex, nil)
 		addTimelineItem(record, nodeID, "conversation", "User", "user", body, nil)
@@ -993,28 +1020,76 @@ func (uc *GetSessionDetailUseCase) buildClaudeSessionDetail(ctx context.Context,
 			value := *claudeRecord.TotalCost
 			totalCostUSD = &value
 		}
-		if claudeRecord.Message.Usage != nil && claudeRecord.Message.ID != "" && !seenUsageMessageIDs[claudeRecord.Message.ID] {
-			seenUsageMessageIDs[claudeRecord.Message.ID] = true
+		if claudeRecord.Message.Usage != nil && claudeRecord.Message.ID != "" {
 			usage := claudeRecord.Message.Usage
-			totalInputTokens += usage.InputTokens
-			totalOutputTokens += usage.OutputTokens
-			totalCacheReadTokens += usage.CacheReadInputTokens
-			tokenCounts = append(tokenCounts, dto.TokenCountEntry{
-				Index:     len(tokenCounts),
-				TurnIndex: turnIndex,
-				LastTokenUsage: &model.TokenDetail{
-					TotalTokens:       usage.InputTokens + usage.OutputTokens,
-					InputTokens:       usage.InputTokens,
-					OutputTokens:      usage.OutputTokens,
-					CachedInputTokens: usage.CacheReadInputTokens,
-				},
-				TotalTokenUsage: &model.TokenDetail{
-					TotalTokens:       totalInputTokens + totalOutputTokens,
-					InputTokens:       totalInputTokens,
-					OutputTokens:      totalOutputTokens,
-					CachedInputTokens: totalCacheReadTokens,
-				},
-			})
+			prev := messageMaxUsage[claudeRecord.Message.ID]
+
+			if usage.InputTokens > prev.InputTokens || usage.OutputTokens > prev.OutputTokens || usage.CacheReadInputTokens > prev.CacheReadInputTokens || usage.CacheCreationTokens > prev.CacheCreationTokens {
+				diffInput := usage.InputTokens - prev.InputTokens
+				diffOutput := usage.OutputTokens - prev.OutputTokens
+				diffCacheRead := usage.CacheReadInputTokens - prev.CacheReadInputTokens
+				diffCacheCreation := usage.CacheCreationTokens - prev.CacheCreationTokens
+
+				totalInputTokens += diffInput + diffCacheRead + diffCacheCreation
+				totalOutputTokens += diffOutput
+				totalCacheReadTokens += diffCacheRead
+				totalCacheCreationTokens += diffCacheCreation
+
+				if turnIndex >= 0 {
+					ensureTurnUsageSize(turnIndex)
+					turnUsages[turnIndex].inputTokens += diffInput + diffCacheRead + diffCacheCreation
+					turnUsages[turnIndex].outputTokens += diffOutput
+					turnUsages[turnIndex].cacheReadTokens += diffCacheRead
+					turnUsages[turnIndex].cacheCreationTokens += diffCacheCreation
+				}
+
+				messageMaxUsage[claudeRecord.Message.ID] = *usage
+
+				lastInputTokens := usage.InputTokens + usage.CacheReadInputTokens + usage.CacheCreationTokens
+				lastTotalTokens := lastInputTokens + usage.OutputTokens
+
+				if idx, exists := messageTokenCountIndex[claudeRecord.Message.ID]; exists {
+					tokenCounts[idx].LastTokenUsage = &model.TokenDetail{
+						TotalTokens:              lastTotalTokens,
+						InputTokens:              lastInputTokens,
+						OutputTokens:             usage.OutputTokens,
+						CachedInputTokens:        usage.CacheReadInputTokens,
+						CacheCreationInputTokens: usage.CacheCreationTokens,
+					}
+					tokenCounts[idx].TotalTokenUsage = &model.TokenDetail{
+						TotalTokens:              totalInputTokens + totalOutputTokens,
+						InputTokens:              totalInputTokens,
+						OutputTokens:             totalOutputTokens,
+						CachedInputTokens:        totalCacheReadTokens,
+						CacheCreationInputTokens: totalCacheCreationTokens,
+					}
+				} else {
+					idx := len(tokenCounts)
+					messageTokenCountIndex[claudeRecord.Message.ID] = idx
+					if turnIndex >= 0 {
+						ensureTurnUsageSize(turnIndex)
+						turnUsages[turnIndex].tokenCountCount++
+					}
+					tokenCounts = append(tokenCounts, dto.TokenCountEntry{
+						Index:     idx,
+						TurnIndex: turnIndex,
+						LastTokenUsage: &model.TokenDetail{
+							TotalTokens:              lastTotalTokens,
+							InputTokens:              lastInputTokens,
+							OutputTokens:             usage.OutputTokens,
+							CachedInputTokens:        usage.CacheReadInputTokens,
+							CacheCreationInputTokens: usage.CacheCreationTokens,
+						},
+						TotalTokenUsage: &model.TokenDetail{
+							TotalTokens:              totalInputTokens + totalOutputTokens,
+							InputTokens:              totalInputTokens,
+							OutputTokens:             totalOutputTokens,
+							CachedInputTokens:        totalCacheReadTokens,
+							CacheCreationInputTokens: totalCacheCreationTokens,
+						},
+					})
+				}
+			}
 		}
 
 		switch claudeRecord.Type {
@@ -1155,6 +1230,10 @@ func (uc *GetSessionDetailUseCase) buildClaudeSessionDetail(ctx context.Context,
 
 					addNode(nodeID, nodeType, "action", item.Name, "🛠️", body, body, branchX, turnIndex, meta)
 					toolCallCount++
+					if turnIndex >= 0 {
+						ensureTurnUsageSize(turnIndex)
+						turnUsages[turnIndex].toolCallCount++
+					}
 					toolUseNodeByID[item.ID] = nodeID
 					toolUseNameByID[item.ID] = item.Name
 					addTimelineItem(record, nodeID, kind, label, "", body, details)
@@ -1171,14 +1250,19 @@ func (uc *GetSessionDetailUseCase) buildClaudeSessionDetail(ctx context.Context,
 		}
 	}
 	if turnIndex >= 0 {
+		var consumed dto.TokenBreakdown
+		if turnIndex < len(turnUsages) {
+			u := turnUsages[turnIndex]
+			consumed = dto.TokenBreakdown{
+				TotalTokens:  u.inputTokens + u.outputTokens,
+				InputTokens:  u.inputTokens,
+				OutputTokens: u.outputTokens,
+			}
+		}
 		timeline = append(timeline, dto.ConversationTimelineTurn{
-			Index: turnIndex,
-			Items: currentItems,
-			ConsumedTokens: dto.TokenBreakdown{
-				TotalTokens:  totalInputTokens + totalOutputTokens,
-				InputTokens:  totalInputTokens,
-				OutputTokens: totalOutputTokens,
-			},
+			Index:          turnIndex,
+			Items:          currentItems,
+			ConsumedTokens: consumed,
 		})
 	}
 	if len(tokenCounts) > 0 && lastNodeID != "" {
@@ -1286,6 +1370,20 @@ func (uc *GetSessionDetailUseCase) buildClaudeSessionDetail(ctx context.Context,
 		parentSessionIDPtr = &parentSessionID
 	}
 
+	turnsStats := make([]dto.TurnStatistics, len(turnUsages))
+	for idx, u := range turnUsages {
+		turnsStats[idx] = dto.TurnStatistics{
+			Index: idx,
+			ConsumedTokens: dto.TokenBreakdown{
+				TotalTokens:  u.inputTokens + u.outputTokens,
+				InputTokens:  u.inputTokens,
+				OutputTokens: u.outputTokens,
+			},
+			TokenCountCount: u.tokenCountCount,
+			ToolCallCount:   u.toolCallCount,
+		}
+	}
+
 	return &dto.SessionDetailResponse{
 		ID:                 sessionID,
 		Provider:           dto.SessionProviderClaude,
@@ -1298,16 +1396,7 @@ func (uc *GetSessionDetailUseCase) buildClaudeSessionDetail(ctx context.Context,
 			ToolCallCount:   toolCallCount,
 			TokenCountCount: len(tokenCounts),
 			TurnCount:       turnIndex + 1,
-			Turns: []dto.TurnStatistics{{
-				Index: turnIndex,
-				ConsumedTokens: dto.TokenBreakdown{
-					TotalTokens:  totalInputTokens + totalOutputTokens,
-					InputTokens:  totalInputTokens,
-					OutputTokens: totalOutputTokens,
-				},
-				TokenCountCount: len(tokenCounts),
-				ToolCallCount:   toolCallCount,
-			}},
+			Turns:           turnsStats,
 		},
 		TokenCounts: tokenCounts,
 		Timeline:    timeline,

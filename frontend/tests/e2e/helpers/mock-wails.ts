@@ -709,6 +709,7 @@ export async function mockWailsAPI(
 									output_tokens: 200,
 									reasoning_output_tokens: 0,
 									cached_input_tokens: 0,
+									cache_creation_input_tokens: 0,
 								},
 								total_token_usage: {
 									total_tokens: 1000,
@@ -716,6 +717,7 @@ export async function mockWailsAPI(
 									output_tokens: 200,
 									reasoning_output_tokens: 0,
 									cached_input_tokens: 0,
+									cache_creation_input_tokens: 0,
 								},
 							},
 						],
@@ -1100,6 +1102,7 @@ export async function mockWailsAPI(
 								output_tokens: 5000,
 								reasoning_output_tokens: 1000,
 								cached_input_tokens: 5000,
+								cache_creation_input_tokens: 0,
 							},
 							total_token_usage: {
 								total_tokens: 20000,
@@ -1107,6 +1110,7 @@ export async function mockWailsAPI(
 								output_tokens: 5000,
 								reasoning_output_tokens: 1000,
 								cached_input_tokens: 5000,
+								cache_creation_input_tokens: 0,
 							},
 						},
 						{
@@ -1120,6 +1124,7 @@ export async function mockWailsAPI(
 								output_tokens: 5000,
 								reasoning_output_tokens: 1000,
 								cached_input_tokens: 5000,
+								cache_creation_input_tokens: 0,
 							},
 							total_token_usage: {
 								total_tokens: 50000,
@@ -1127,6 +1132,7 @@ export async function mockWailsAPI(
 								output_tokens: 10000,
 								reasoning_output_tokens: 2000,
 								cached_input_tokens: 10000,
+								cache_creation_input_tokens: 0,
 							},
 						},
 						{
@@ -1140,6 +1146,7 @@ export async function mockWailsAPI(
 								output_tokens: 20000,
 								reasoning_output_tokens: 8000,
 								cached_input_tokens: 20000,
+								cache_creation_input_tokens: 0,
 							},
 							total_token_usage: {
 								total_tokens: 150000,
@@ -1147,6 +1154,7 @@ export async function mockWailsAPI(
 								output_tokens: 30000,
 								reasoning_output_tokens: 10000,
 								cached_input_tokens: 30000,
+								cache_creation_input_tokens: 0,
 							},
 						},
 						{
@@ -1168,6 +1176,7 @@ export async function mockWailsAPI(
 								output_tokens: 300,
 								reasoning_output_tokens: 100,
 								cached_input_tokens: 200,
+								cache_creation_input_tokens: 0,
 							},
 							total_token_usage: {
 								total_tokens: 151200,
@@ -1175,6 +1184,7 @@ export async function mockWailsAPI(
 								output_tokens: 30300,
 								reasoning_output_tokens: 10100,
 								cached_input_tokens: 30200,
+								cache_creation_input_tokens: 0,
 							},
 						},
 						{
@@ -1188,6 +1198,7 @@ export async function mockWailsAPI(
 								output_tokens: 200,
 								reasoning_output_tokens: 50,
 								cached_input_tokens: 100,
+								cache_creation_input_tokens: 0,
 							},
 							total_token_usage: {
 								total_tokens: 152000,
@@ -1195,6 +1206,7 @@ export async function mockWailsAPI(
 								output_tokens: 30500,
 								reasoning_output_tokens: 10150,
 								cached_input_tokens: 30300,
+								cache_creation_input_tokens: 0,
 							},
 						},
 					],

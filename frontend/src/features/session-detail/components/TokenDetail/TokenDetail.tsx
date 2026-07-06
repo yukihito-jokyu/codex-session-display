@@ -38,8 +38,14 @@ export function TokenDetail({ entries, latestUsage }: TokenDetailProps) {
 						<strong>{formatNumber(latestUsage.reasoning_output_tokens)}</strong>
 					</div>
 					<div className={styles.tokenSummaryItem}>
-						<span>Cached</span>
+						<span>Cached Read</span>
 						<strong>{formatNumber(latestUsage.cached_input_tokens)}</strong>
+					</div>
+					<div className={styles.tokenSummaryItem}>
+						<span>Cached Write</span>
+						<strong>
+							{formatNumber(latestUsage.cache_creation_input_tokens)}
+						</strong>
 					</div>
 				</div>
 			)}
@@ -72,8 +78,14 @@ export function TokenDetail({ entries, latestUsage }: TokenDetailProps) {
 									</strong>
 								</div>
 								<div>
-									<span>Cached</span>
+									<span>Cached Read</span>
 									<strong>{formatNumber(usage?.cached_input_tokens)}</strong>
+								</div>
+								<div>
+									<span>Cached Write</span>
+									<strong>
+										{formatNumber(usage?.cache_creation_input_tokens)}
+									</strong>
 								</div>
 							</div>
 						</div>
